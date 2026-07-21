@@ -18,12 +18,14 @@ tagged unions that have no ABAP analogue. A line-by-line transliteration is ther
 neither possible nor desirable.
 
 The realistic approach is to **re-implement QuickJS's *architecture* in idiomatic OO
-ABAP, using the C source as the authoritative specification** — same bytecode design,
-same atom/shape model, same built-in semantics — while replacing C-specific machinery
-(reference counting, pointer arithmetic, computed-goto dispatch) with ABAP-native
-equivalents (managed references / GC, index-based buffers, `CASE` dispatch).
+ABAP, using a pinned QuickJS release and commit as the authoritative reference** — the
+same bytecode concepts, atom/shape model, and built-in algorithms — while replacing
+C-specific machinery (reference counting, pointer arithmetic, computed-goto dispatch)
+with ABAP-native equivalents (managed references / GC, index-based buffers, explicit
+VM frames, `CASE` dispatch). Exact serialized-bytecode compatibility is not a goal.
 
-Correctness is achievable. The two hard truths to set expectations:
+Correctness is achievable **within an explicit, versioned feature profile**. The two
+hard truths to set expectations:
 
 1. **Scope is large.** The core (`quickjs.c`) is ~61k lines of C. A *useful embedded
    scripting engine* (core language + common built-ins) is a matter of person-months;
@@ -34,9 +36,12 @@ Correctness is achievable. The two hard truths to set expectations:
    scripting — the likely use cases for JS-on-ABAP — but it is not a general-purpose
    high-throughput runtime.
 
-The verification story is unusually strong: via abaplint's transpiler the ABAP runs as
-JS on Node for fast CI, *and* runs unchanged on a real ABAP stack. (There is a pleasing
-irony in a JS engine written in ABAP, transpiled to JS, and validated by running JS.)
+The transpiler provides a valuable **fast structural test loop**, but it is not a semantic
+substitute for a real ABAP stack. Node can mask exactly the host differences that matter
+here: exceptional floating-point values, UTF-16 edge cases, PCRE behavior, case mapping,
+and garbage collection. CI therefore has two lanes: frequent transpiled tests and a
+mandatory real-ABAP compatibility suite for every release (plus scheduled runs while
+developing host-sensitive components).
 
 ---
 
@@ -51,7 +56,7 @@ irony in a JS engine written in ABAP, transpiled to JS, and validated by running
 | `libregexp.c/.h` | ~113 KB | Own regex engine (compiler + backtracking VM) | **Not ported** — PCRE shim (§5) |
 | `libunicode.c/.h` | ~64 KB | Case mapping, identifier classes, normalization | **Mostly not ported** — use ABAP/PCRE (§5) |
 | `libunicode-table.h` | ~252 KB | Generated Unicode data tables | Mostly replaced; keep only a small ID_Start/Continue table (+ optional normalization data) |
-| `dtoa.c/.h` | ~45 KB | Correct double↔string (`Number.toString`, parsing), radix 2–36; uses internal bignum for exact rounding | **Deferred** (Phase 8): interim stopgap first; faithful port later, pulls in a mini-bignum |
+| `dtoa.c/.h` | ~45 KB | Correct double↔string (`Number.toString`, parsing), radix 2–36; uses internal bignum for exact rounding | **Deferred** (Phase 9): interim literal parser in Phase 1 and formatter in Phase 5; faithful port later, pulls in a mini-bignum |
 | `cutils.c/.h` | ~18 KB | dbuf, UTF-8, sort, bit helpers | Fold into ABAP utils |
 | `quickjs-libc.c/.h` | ~125 KB | `std`/`os` host modules (files, timers, exec) | Reimplement selectively w/ ABAP APIs |
 | `qjs.c`, `qjsc.c` | — | CLI REPL / AOT compiler | Optional (an ABAP report front-end) |
@@ -68,7 +73,7 @@ BigFloat/BigDecimal have been removed. This *reduces* scope versus older QuickJS
 > This can be revisited later (a `zcl_qjs_bigint` bignum class) if a concrete need
 > appears. **Caveat:** cutting the *JS `BigInt` feature* does **not** remove the need
 > for arbitrary-precision integers *inside* `dtoa` — but since the faithful `dtoa` port
-> is itself **deferred** (interim stopgap first; see §7 Phase 5/8), that internal
+> is itself **deferred** (interim stopgaps first; see §7 Phases 1, 5, and 9), that internal
 > big-integer helper is deferred with it.
 
 **Deployable ABAP scope** ≈ `quickjs.c` + `dtoa` + relevant `cutils`. `libregexp` and
@@ -83,36 +88,47 @@ a small identifier-classification table (and, optionally, normalization data).
 
 - **Language target:** the ABAP subset supported by the **abaplint transpiler** /
   **open-abap**, so the engine runs both on Node (CI) and on a real ABAP stack.
-  Configure the accepted syntax/rules in `abaplint.jsonc`. ABAP Cloud (RAP/Steampunk)
-  compatibility is a worthwhile stretch goal (avoid non-released statements).
+  Configure the accepted syntax/rules in `abaplint.jsonc` and pin all npm dependencies.
+- **Supported-system contract:** before implementation, record the minimum SAP_BASIS
+  release, Unicode-only requirement, supported kernel/PCRE versions, and the exact
+  open-abap version. ABAP Cloud is a separate adapter/profile, not an assumed property:
+  weak-reference, explicit-GC, and codepage APIs must be checked for release status and
+  replaced or feature-gated where unavailable.
 - **Object model:** OO ABAP — classes (`zcl_qjs_*`), interfaces (`zif_qjs_*`),
   `CX_*` exceptions. No global state beyond a runtime instance.
 - **Toolchain / dev loop:** abaplint (lint) + transpiler (ABAP→JS) + open-abap runner;
-  `CL_ABAP_UNIT_ASSERT` for tests; GitHub Actions for CI.
+  `CL_ABAP_UNIT_ASSERT` for tests; GitHub Actions for CI. Node is the fast lane; real
+  ABAP is the semantic authority for host-sensitive behavior.
 - **Naming:** proposed prefix `zcl_qjs_` / `zif_qjs_` / `zcx_qjs_` (adjust to taste).
+
+Phase 0 must run a **host-capability probe** on both targets for: NaN/±Infinity/-0
+representation, arithmetic traps, UTF-16 indexing and lone surrogates, UTF conversion,
+case mapping, PCRE selection/capture offsets/flags, weak-reference collection after an
+explicit GC request, and availability of every proposed standard class. A failed probe
+changes the design or disables a feature; it is not papered over by the transpiled lane.
 
 ---
 
 ## 4. The hard part — C↔ABAP impedance mismatches
 
-These decide the whole design and must be settled in Phase 1.
+These decide the whole design and must be settled in Phases 0–1.
 
 | QuickJS (C) mechanism | Problem in ABAP | Chosen ABAP approach |
 |---|---|---|
-| `JSValue` = NaN-boxed / tagged union | No unions, no NaN boxing | A value **struct/class** `zcl_qjs_value`: an integer `tag` + typed payload fields (`i`/`f`/`ref`). Objects/strings held via `REF TO`. |
-| Reference counting (`JS_DupValue`/`JS_FreeValue`) + cycle GC | ABAP is garbage-collected; manual refcounts are meaningless and pervasive | **Drop refcounting entirely**; rely on ABAP GC. Removes ~thousands of dup/free call sites. |
-| Weak references (`WeakRef`, `WeakMap`, `WeakSet`, `FinalizationRegistry`) | ABAP GC exposes no collection hook to the port | **Use `CL_ABAP_WEAK_REFERENCE`** — a genuine weak-ref primitive (open-abap backs it with a JS `WeakRef` via `@KERNEL`, so it is truly weak on both Node and on-stack). `WeakRef`→direct wrapper; `WeakMap`/`WeakSet`→weak keys + lazy sweep; `FinalizationRegistry`→polling. See §5 + Risks. |
+| `JSValue` = NaN-boxed / tagged union | No unions, no NaN boxing; ABAP `f` cannot carry every JS numeric state | A **flat tagged structure** `zcl_qjs_value=>ty_value`, not one object per primitive. It has `tag` + typed payload fields. The Number payload is `{ kind, finite_value }`, where `kind` distinguishes finite, NaN, +Infinity, -Infinity, and -0. Objects/strings use `REF TO`. Benchmark this representation in Phase 1. |
+| Reference counting (`JS_DupValue`/`JS_FreeValue`) + cycle GC | ABAP is garbage-collected; manual object refcounts are unnecessary, but runtime-owned intern/caches remain GC roots | Drop object/value refcounting and rely on ABAP GC. Explicitly design retention, reclamation, and quotas for atom tables, shape-transition caches, modules, compiled functions, and host resources. |
+| Weak references (`WeakRef`, `WeakMap`, `WeakSet`, `FinalizationRegistry`) | ABAP has weak references, but availability/GC control varies by target and weak maps require ephemerons for full semantics | Use `CL_ABAP_WEAK_REFERENCE` only after the Phase 0 capability probe. `WeakRef`→direct wrapper; weak collections→weak keys + lazy sweep; `FinalizationRegistry`→best-effort polling. Feature-gate targets where the primitive is absent or behavior differs. See §5 + Risks. |
 | Computed-goto / switch dispatch in `JS_CallInternal` | No computed goto; giant `switch` legal but must be structured | Single `CASE opcode` loop; opcode bodies as inlined blocks or helper methods. |
 | `goto` (error unwinding, fast paths) | No `goto` in ABAP | Restructure with loops, early `RETURN`, and `TRY/CATCH` for the exception paths. |
 | Pointer arithmetic (lexer, bytecode reader, buffers) | No pointers | Index-based access over ABAP `string`/`xstring`/internal tables; a `dbuf`-like `zcl_qjs_bytebuf`. |
 | 32-bit int wraparound, `ToInt32`/`ToUint32`, `<<`/`>>>`/`&` | ABAP `i` is signed 4-byte; uint32 overflows it; bitops are on byte fields | Use `int8` (8-byte) for intermediate math; implement JS integer coercion + bit ops explicitly (via `int8` masking or `xstring` `BIT-*`). |
-| IEEE-754 semantics: `1/0=Infinity`, `0/0=NaN`, no traps | ABAP arithmetic on `f` can raise `CX_SY_ARITHMETIC_*` / zero-divide | **Guard every arithmetic op**; produce JS NaN/±Infinity results instead of exceptions. Centralize in a numeric helper. |
-| Strings = UTF-16 code units, 8/16-bit rope optimization | ABAP `string` abstracts code units; astral/surrogate handling is fiddly | Model strings as **UTF-16 code-unit sequences** (backed by `string`, with a code-unit access layer). BMP-first; correct surrogate pairs for `charCodeAt`/`codePointAt`/iteration. Skip the 8/16-bit storage optimization. |
-| `libunicode` (case mapping, `\p{}` props, identifier classes, normalization) | Large code + 252 KB of generated tables | **Mostly not ported** — delegate to ABAP standard facilities: `to_upper`/`to_lower` + `cl_abap_char_utilities` for case; **PCRE2 `\p{…}`** (already adopted) for regex properties + case-insensitive match; `cl_abap_codepage`/`cl_abap_conv_*` for UTF-8↔UTF-16. Residual: a small generated **ID_Start/ID_Continue** table for the lexer, and normalization data if `normalize` is implemented (§5). |
+| IEEE-754 semantics: `1/0=Infinity`, `0/0=NaN`, signed zero, no traps | ABAP arithmetic on `f` can raise `CX_SY_ARITHMETIC_*`; exceptional values and -0 cannot be assumed representable | Route every numeric operation through a helper over the explicit Number-kind representation. Never allow an ABAP arithmetic exception to escape as JS behavior. Differential-test the full special-value matrix on both hosts. |
+| Strings = UTF-16 code units, 8/16-bit rope optimization | ABAP `string` behavior for lone surrogates/conversion must be proven on every target | Model strings as **UTF-16 code-unit sequences** behind an abstraction. Phase 0 decides whether `string` is a safe backing; otherwise use an `xstring`/16-bit-unit table. Correct code-unit access is required from the first slice; code-point iteration can follow. Skip the 8/16-bit storage optimization. |
+| `libunicode` (case mapping, `\p{}` props, identifier classes, normalization) | Large code + 252 KB of generated tables | **Mostly not ported** — use validated host adapters for case/UTF conversion and the explicit PCRE adapter for supported regex properties. Generate a pinned **ID_Start/ID_Continue** table plus deterministic case corrections. Normalization remains unsupported until implemented (§5). |
 | BigInt (arbitrary precision integers) | No native bignum in ABAP | **Out of scope** (see §2). If revived: a `zcl_qjs_bigint` bignum class. |
-| Regex engine (`libregexp` bytecode backtracker) | ABAP has PCRE, but JS regex semantics differ | **Decided: shim to ABAP PCRE** (`CL_ABAP_REGEX`/`CL_ABAP_MATCHER`, `... PCRE ...`). `libregexp` is *not* ported. A translation layer maps JS pattern/flag syntax to PCRE and JS `RegExp.prototype.*` semantics onto ABAP matching; known JS↔PCRE divergences are documented, not chased. |
-| Deep C recursion (`JS_CallInternal` per JS call; recursive-descent parser) | ABAP call stack depth is limited | VM loop is iterative; bound native recursion, surface a JS `RangeError` ("stack overflow") before ABAP aborts; consider explicit call-stack table. |
-| Function pointers (built-in dispatch, class methods) | No function pointers | Dynamic dispatch: interface-typed handler objects, or `CALL METHOD (name)` keyed by atom/opcode. |
+| Regex engine (`libregexp` bytecode backtracker) | ABAP has PCRE, but JS regex semantics differ | **Decided: explicit PCRE adapter first** (`CL_ABAP_REGEX`/`CL_ABAP_MATCHER`, PCRE mode). A translation layer owns JS syntax and `RegExp.prototype` state. Supported constructs must agree across hosts; known gaps are rejected and documented. Port `libregexp` later only if required. |
+| Deep C recursion (`JS_CallInternal` per JS call; recursive-descent parser) | ABAP call stack depth is limited; generators/async later need suspendable frames | The VM has an **explicit frame table from Phase 2** and never uses ABAP recursion for JS calls. Bound parser recursion separately and surface the appropriate JS error before an ABAP abort. |
+| Function pointers (built-in dispatch, class methods) | No function pointers | Prefer typed handler interfaces (`zif_qjs_callable`, exotic-object hooks) and numeric built-in IDs with `CASE` dispatch. Avoid dynamic method-name calls on hot paths. |
 
 ---
 
@@ -120,27 +136,32 @@ These decide the whole design and must be settled in Phase 1.
 
 **Re-implement, don't transliterate.** Treat the C as an executable specification:
 
-- Reuse QuickJS's **opcode set** (`quickjs-opcode.h`) verbatim so the VM is a faithful
-  port and bytecode-level test vectors from QuickJS can validate it.
+- Generate constants and operand metadata from the pinned QuickJS
+  **opcode set** (`quickjs-opcode.h`). Preserve opcode semantics where practical, but do
+  not promise compatibility with QuickJS's version-bound serialized bytecode.
 - Reuse the **atom table**, **shape** model, and **built-in algorithms** (which
   themselves track the ECMAScript spec), reading `quickjs.c` function-by-function.
 - Replace machinery, not meaning: GC, dispatch, buffers, value boxing become ABAP-native.
+- Maintain a tiny patched QuickJS reference tool that emits **normalized JSON
+  disassembly** (symbolic opcodes/atoms, constants, scopes, and stack metadata). This,
+  plus behavior, is the compiler oracle; raw serialized bytes and numeric atom IDs are
+  not compared.
 
-**Settled sub-decision — memory management.** zqjs **drops QuickJS's reference
-counting and cycle collector entirely** and leans on the ABAP kernel's garbage
-collector. Every `JS_DupValue`/`JS_FreeValue` call site in the C source is simply
-*not* ported; `JSValue` becomes a plain ABAP value/`REF TO` that the GC reclaims when
-unreferenced. Consequences the design must own: (a) no deterministic finalization
-order — anything QuickJS did in a free hook (e.g. closing a resource) moves to explicit
-`close()`/`dispose` semantics; (b) weak-collection features are built on
-`CL_ABAP_WEAK_REFERENCE` rather than on internal collector hooks (next decision).
-Net effect: a large, pervasive simplification of the port.
+**Settled sub-decision — memory management.** zqjs drops QuickJS's object/value
+reference counting and cycle collector and leans on the ABAP kernel's garbage
+collector. `JS_DupValue`/`JS_FreeValue` call sites are not mechanically ported.
+This does **not** make ownership disappear: runtime tables can keep data reachable
+forever. The design must define which atom, shape transition, bytecode, module, and host
+resource tables are strong, weak, bounded, or cleared at checkpoints/runtime disposal.
+Anything QuickJS did in a finalizer (for example closing a resource) moves to explicit
+`close()`/`dispose` semantics. Atom count, object count/estimated bytes, bytecode size,
+and job-queue length have configurable limits from the first embedded milestone.
 
-**Settled sub-decision — weak references (`CL_ABAP_WEAK_REFERENCE`).** ABAP *does*
-provide a real weak-reference primitive, and open-abap implements it with a JS
-`WeakRef` via `@KERNEL` — so `get( )` returns `INITIAL` once the target is collected,
-genuinely weak on **both** the transpiled-Node and on-stack runtimes. zqjs builds all
-four JS weak features on it, so they collect for real (not a leaking strong-ref shim):
+**Conditional sub-decision — weak references (`CL_ABAP_WEAK_REFERENCE`).** ABAP
+provides a weak-reference primitive, but zqjs enables it only on target adapters that
+pass the Phase 0 collection probe. The pinned open-abap implementation is inspected and
+tested rather than assumed. On a conforming target, zqjs builds the weak features as
+follows:
 
 - **`WeakRef`** → thin wrapper: hold one `CL_ABAP_WEAK_REFERENCE`; `deref()` = `get( )`
   (mapping `INITIAL`→`undefined`).
@@ -153,27 +174,34 @@ four JS weak features on it, so they collect for real (not a leaking strong-ref 
   callback with `held_value`. The spec permits lazy/never finalization, so polling is
   conforming.
 
-Known limitations (documented, not chased): (i) **no true ephemeron semantics** — a
-`WeakMap` value that strongly references its own key can over-retain (memory only, not
-observable); (ii) **GC timing is non-deterministic** — test262 cases that force GC via
-`$262.gc()` are mapped to host GC where available (`global.gc()` on Node), otherwise
-skip-listed.
+Known limitations: (i) there is **no true ephemeron semantics** — a `WeakMap` value that
+strongly references its key can over-retain it, which can affect weak-reference and
+finalization observations under forced GC; (ii) GC timing is non-deterministic;
+(iii) explicit GC may be unavailable or unreleased on some targets. Test262 cases that
+require `$262.gc()` run only on adapters with a verified host-GC hook and are otherwise
+reported as unsupported, not silently counted as passes. Weak collections are therefore
+an optional conformance profile, not a resolved core feature.
 
-**Settled sub-decision — regex.** zqjs does **not** port `libregexp`; it shims to
-ABAP's PCRE engine behind a JS-semantics translation layer (see §4 and Phase 7).
+**Settled sub-decision — regex.** zqjs does **not** initially port `libregexp`; it shims
+to an explicitly selected PCRE adapter behind a JS-semantics translation layer (see §4
+and Phase 7). The Node and on-stack adapters must pass the same contract suite; the
+default `CL_ABAP_REGEX` mode must never be assumed to be PCRE. Unsupported syntax is
+rejected deterministically instead of being accepted with approximate meaning.
 
-**Settled sub-decision — Unicode (use ABAP standard facilities, don't port
+**Settled sub-decision — Unicode (validated host adapters first, don't initially port
 `libunicode`).** The bulk of `libunicode` (and its 252 KB of tables) is replaced by
-what ABAP already provides:
+host behavior only where the cross-host contract proves it, with generated corrections
+for deterministic results:
 
-- **Case conversion** (`toLowerCase`/`toUpperCase`, `toLocale*`) → ABAP `to_upper`/
-  `to_lower` built-ins + `cl_abap_char_utilities`. *Caveat:* JS uses locale-independent
-  full case mapping with special cases (`ß`→`SS`, Greek final sigma, Turkish dotless i)
-  that plain `to_upper` may not reproduce; verify against test262 and patch the handful
-  of divergent code points with a tiny special-casing table.
+- **Case conversion** (`toLowerCase`/`toUpperCase`) → start with ABAP `to_upper`/
+  `to_lower`, but validate the complete supported Unicode mapping on both hosts. Use a
+  generated patch table where host mappings or Unicode versions differ. `toLocale*` is
+  separately feature-gated by declared locale support; it is not aliased blindly to the
+  locale-independent methods.
 - **RegExp Unicode property escapes `\p{…}`/`\P{…}` and case-insensitive matching** →
-  delegated to the **PCRE2 engine already chosen** (kernel PCRE2 supports `\p{…}`), so
-  no property database is ported.
+  delegated to the explicit PCRE adapter only for property names and Unicode behavior
+  proven by the pinned contract. The initial profile ports no separate property database;
+  unsupported properties are rejected.
 - **UTF-8 ↔ UTF-16 / codepage** (source decoding, `TextEncoder`/`TextDecoder`) →
   `cl_abap_codepage` / `cl_abap_conv_*`.
 
@@ -183,29 +211,32 @@ Two residual gaps that ABAP standard classes do **not** cover cleanly:
    clean standard class, and a per-char PCRE call would be too slow. → Keep **one small
    generated ABAP table** (a tiny fraction of `libunicode-table.h`).
 2. **`String.prototype.normalize`** (NFC/NFD/NFKC/NFKD) — no standard ABAP normalization
-   class exists and none is in open-abap today. → **Deferred**; options when needed:
-   generate just the normalization data, or add a normalization class to open-abap.
+   class exists and none is in open-abap today. → **Deferred**; the method is absent or
+   throws a documented unsupported-feature error. It must never silently no-op. Options
+   when implemented: generate the normalization data or add an open-abap class.
 
 **Settled sub-decision — direct-to-bytecode (no AST).** zqjs follows QuickJS's
 fused parse+codegen: the parser emits bytecode as it recognizes each grammar
 production, with **no intermediate parse tree**, followed by a **second pass** that
 resolves variables/closures and rewrites/patches the bytecode (QuickJS's
-`resolve_variables`/`resolve_labels` stage). This keeps the front end faithful to
-the C source and the opcode stream directly comparable to native QuickJS output. To
-offset the loss of an AST's debuggability, a **bytecode disassembler is built early**
-(Phase 2 deliverable) and disassembly snapshots are the primary front-end test.
+`resolve_variables`/`resolve_labels` stage). To offset the loss of an AST's
+debuggability, a bytecode disassembler and normalized QuickJS reference oracle are built
+early. Direct `eval`, the `Function` constructor, strict/sloppy mode, `with`, and Annex B
+all change scope resolution, so their supported status is fixed before that pass is
+designed.
 
 ---
 
 ## 6. Proposed ABAP architecture
 
 ```
-zif_qjs_value            " value handle: tag + payload
-zcl_qjs_runtime          " JSRuntime: heap-wide state, atom table, shapes, GC policy, job queue
+zcl_qjs_value            " ty_value: flat tag + payload; static constructors/conversions
+zcl_qjs_number           " finite f + explicit NaN/±Infinity/-0 kinds and JS arithmetic
+zcl_qjs_runtime          " heap state, atoms/shapes, budgets, job queue, adapter capabilities
 zcl_qjs_context          " JSContext: global object, intrinsics, per-realm state
 zcl_qjs_atoms            " string<->atom interning; predefined atoms
 zcl_qjs_string           " UTF-16 code-unit string + operations
-zcl_qjs_dtoa             " double<->string (ECMAScript formatting/parsing), radix 2-36; interim stopgap -> faithful port in Phase 8
+zcl_qjs_dtoa             " double<->string; interim parser/formatter -> optional faithful port in Phase 9
 zcl_qjs_mpb              " internal big-integer (limb array) for exact dtoa rounding (deferred with dtoa)
 zcl_qjs_shape            " hidden class: property-name/flags layout, shared
 zcl_qjs_object           " JSObject: shape + property values, prototype, class id, exotic hooks
@@ -214,10 +245,15 @@ zcl_qjs_parser           " recursive-descent parser, emits bytecode directly (no
 zcl_qjs_emitter          " bytecode buffer + label/reloc handling (zcl_qjs_bytebuf)
 zcl_qjs_disasm           " bytecode disassembler (debug + front-end test oracle)
 zcl_qjs_function         " JSFunctionBytecode: code, constants, locals, closure vars
-zcl_qjs_vm               " JS_CallInternal: the CASE-dispatch interpreter loop + stack
+zif_qjs_callable         " typed call interface for bytecode and host functions
+zcl_qjs_completion       " normal/return/throw/break/continue completion representation
+zcx_qjs_throw            " internal ABAP unwinder carrying a thrown JS value where needed
+zcl_qjs_vm               " CASE-dispatch loop, explicit operand/frame stacks, step budget
+zif_qjs_host_adapter     " PCRE/Unicode/clock/GC/cancellation and capability boundary
+zcl_qjs_limits           " instruction, stack, atom, object, bytecode, and queue budgets
 zcl_qjs_weakref          " WeakRef/WeakMap/WeakSet/FinalizationRegistry on CL_ABAP_WEAK_REFERENCE
 zcl_qjs_builtin_*        " Object, Array, String, Number, Math, JSON, Date, RegExp, Map, ...
-zcx_qjs_*                " host-side exceptions (distinct from thrown JS values)
+zcx_qjs_host_*           " host/configuration failures, distinct from thrown JS values
 zcl_qjs                  " public facade: eval_string(), call(), value marshalling
 ```
 
@@ -225,9 +261,14 @@ Public API sketch:
 
 ```abap
 DATA(rt) = zcl_qjs=>create_runtime( ).
-DATA(result) = rt->eval( `1 + 2 * 3` ).      " -> zif_qjs_value
-DATA(n) = result->as_number( ).              " -> 7 (ABAP f)
+DATA(result) = rt->eval( `1 + 2 * 3` ).      " -> zcl_qjs_value=>ty_value
+DATA(n) = zcl_qjs_value=>as_finite_number( result ). " -> 7 (ABAP f)
 ```
+
+Internal values stay flat on operand/local tables to avoid allocating an ABAP object for
+every primitive. References remain references when the structure is copied. Phase 1
+benchmarks stack push/pop, calls, and arithmetic against an object-wrapper alternative;
+changing the representation after the VM exists would be expensive, so measure early.
 
 ---
 
@@ -236,129 +277,180 @@ DATA(n) = result->as_number( ).              " -> 7 (ABAP f)
 Each phase is independently testable and delivers standalone value. Check items off as
 completed.
 
-### Phase 0 — Scaffolding & toolchain
-- [ ] Repo layout, `package.json`, `abaplint.jsonc` (choose syntax level + rules).
-- [ ] Wire abaplint transpiler + open-abap runner; GitHub Actions CI.
-- [ ] Skeleton `zcl_qjs` facade + one `CL_ABAP_UNIT_ASSERT` test that runs on Node CI.
-- [ ] Test-harness skeleton: feed a JS source string, capture result/`console.log`.
-- **Exit:** green CI on a trivial transpiled+run unit test.
+### Phase 0 — Scope, reproducibility & host proof
+- [ ] Fix the supported language profile: strict/sloppy mode, direct `eval`, `Function`,
+      `with`, Annex B, modules, and the explicitly excluded/deferred features. BigInt,
+      `Intl`, SharedArrayBuffer/Atomics, and tail calls start outside the core profile;
+      record `Proxy`, TypedArray/ArrayBuffer/DataView, and async-generator status too.
+- [ ] Pin the QuickJS release **and commit**, test262 commit, Unicode version, npm
+      dependencies, open-abap version, minimum SAP_BASIS/kernel, and PCRE baseline.
+      Preserve upstream MIT notices for derived/generated material.
+- [ ] Repo layout, lockfile, `abaplint.jsonc`, transpiler/open-abap runner, and CI.
+- [ ] Run the host-capability probe from §3 on Node and a representative real ABAP
+      stack; publish its result as a target matrix.
+- [ ] Minimal test262 ingestion: front matter, harness includes, positive/negative parse
+      and runtime tests, feature filtering, and reasoned unsupported/skip reporting.
+      Async and module harness support grows when those features arrive.
+- [ ] Build/pin a small QuickJS reference utility that emits normalized JSON
+      disassembly. Generate `zif_qjs_opcodes`, operand metadata, predefined atoms, and
+      `ID_Start`/`ID_Continue` ranges from pinned upstream inputs.
+- [ ] Skeleton public facade and one unit test passing in both CI lanes.
+- **Exit:** reproducible green builds, a published capability/profile manifest, a real
+      ABAP smoke test, generated inputs, and one test262 test reported correctly.
 
-### Phase 1 — Core data model (values, atoms, strings)
-- [ ] `zif_qjs_value` + tag constants mirroring QuickJS (`INT`, `FLOAT64`, `BOOL`,
-      `NULL`, `UNDEFINED`, `STRING`, `OBJECT`, `SYMBOL`, `EXCEPTION`, ...). No `BIG_INT`.
-- [ ] `zcl_qjs_string`: UTF-16 code-unit model, `length`, code-unit access, concat.
-- [ ] `zcl_qjs_atoms`: string↔atom interning; load predefined atoms (`quickjs-atom.h`).
-- [ ] Central numeric helper: JS `ToNumber`/`ToInt32`/`ToUint32`, NaN/Infinity handling,
-      guarded arithmetic (no ABAP arithmetic exceptions leak).
-- **Exit:** construct/inspect every primitive; atom round-trip; guarded math unit-tested
-      against IEEE edge cases (`1/0`, `0/0`, `-0`, overflow).
+### Phase 1 — Runtime invariants
+- [ ] `zcl_qjs_value=>ty_value`: flat tagged representation for `INT`, `NUMBER`, `BOOL`,
+      `NULL`, `UNDEFINED`, `STRING`, `OBJECT`, `SYMBOL`, and internal sentinels. No
+      `BIG_INT`; benchmark it against object wrappers before freezing the VM API.
+- [ ] `zcl_qjs_number`: explicit finite/NaN/+Infinity/-Infinity/-0 kinds; guarded JS
+      arithmetic, comparison, `ToNumber`/`ToInt32`/`ToUint32`, and an **interim parser**
+      for decimal and `0x`/`0o`/`0b` literals. Validate it against a named boundary
+      corpus and tag every exact-rounding divergence pending Phase 9. No ABAP arithmetic
+      exception may leak.
+- [ ] `zcl_qjs_string`: choose its backing from the Phase 0 probe; implement exact
+      UTF-16 length/code-unit access, lone-surrogate preservation, concat, and equality.
+- [ ] `zcl_qjs_completion`/`zcx_qjs_throw`: define normal, return, throw, break, and
+      continue propagation, keeping host/configuration failures separate.
+- [ ] Runtime/context shell, symbols, atom interning, and explicit retention rules.
+      Predefined atoms may be permanent; dynamic atoms and shape caches need lifecycle
+      policy and quotas.
+- [ ] `zcl_qjs_limits` and cancellation checks: instruction, frame/operand stack,
+      parser depth, atoms, objects/estimated bytes, source/bytecode size, and job queue.
+- [ ] Minimal callable/object cells needed by the first VM slice.
+- **Exit:** every primitive and special Number state round-trips; arithmetic/coercion,
+      string/code-unit, completion, atom-lifecycle, and limit tests pass on both hosts.
 
-### Phase 2 — Front end: lexer & parser → bytecode
-- [ ] `zcl_qjs_lexer`: tokens, keywords, literals (numbers/strings/regex tokens),
-      ASI rules, template-literal tokenizing.
-- [ ] `zcl_qjs_parser`: expressions (precedence), statements, functions, blocks —
-      **emitting bytecode directly during the parse, no AST** (QuickJS-style).
-- [ ] `zcl_qjs_emitter` + `zcl_qjs_bytebuf`: emit QuickJS opcodes, labels, jumps.
-- [ ] **Pass 2** — variable/closure resolution + bytecode rewrite/patch (scopes,
-      `var`/`let`/`const`, TDZ markers, arg/local/closure slot assignment,
-      label fixups); mirrors QuickJS `resolve_variables`/`resolve_labels`.
-- [ ] `zcl_qjs_disasm`: bytecode disassembler (debug + test oracle), built here.
-- **Exit:** parse + emit bytecode for a corpus; disassembly snapshots match expected.
+### Phase 2 — First end-to-end vertical slice
+- [ ] Minimal lexer for identifiers, numeric/string literals, `+ - * /`, parentheses,
+      and end-of-input. Regex literal scanning is parser-directed when added later.
+- [ ] Direct-emitting expression parser plus `zcl_qjs_emitter`/byte buffer.
+- [ ] `zcl_qjs_function` and `zcl_qjs_disasm`; normalized snapshots compare with the
+      pinned QuickJS reference at the logical-instruction level.
+- [ ] `zcl_qjs_vm`: `CASE` dispatch, operand stack, **explicit frame table**, program
+      counter, and budget/cancellation checkpoint.
+- [ ] Minimal push, arithmetic, return, and required conversion opcodes.
+- **Exit:** `1 + 2 * 3` runs through source→lexer→parser→bytecode→VM on both hosts, has a
+      normalized reference snapshot, and terminates under a deliberately tiny budget.
 
-### Phase 3 — The VM (bytecode interpreter) — *the core*
-- [ ] Port `quickjs-opcode.h` → `zif_qjs_opcodes` constants + operand widths.
-- [ ] `zcl_qjs_vm`: operand stack, frames, locals/args, `CASE`-dispatch loop.
-- [ ] Implement the minimal opcode subset: push/pop, arithmetic, comparisons, local
-      get/set, control flow (jumps), function call/return, closures.
-- [ ] Stack-depth guard → JS `RangeError`.
-- **Exit:** run real scripts — arithmetic, `if`/`while`/`for`, recursion (fibonacci),
-      closures/counters — with correct results.
+### Phase 3 — Core language, one vertical slice at a time
+- [ ] Expand tokens/grammar incrementally: comparisons, assignments, blocks,
+      `if`, loops, `break`/`continue`, ASI, and functions. Add template/regex lexical
+      modes only with the parser productions that consume them.
+- [ ] Pass 2: `var`/`let`/`const`, TDZ, args/locals/closure slots, labels, and closure
+      capture. Its rules follow the language profile fixed in Phase 0.
+- [ ] Expand the same explicit-frame VM: locals/args, jumps, calls/returns, closures,
+      lexical environments, and stack metadata verification.
+- [ ] Exceptions end-to-end now: `throw`, `try/catch/finally`, internal TypeError/
+      RangeError/SyntaxError creation, and abrupt-completion unwinding.
+- [ ] Enforce instruction/stack/parser/allocation limits in all new paths.
+- **Exit:** arithmetic, `if`/`while`/`for`, recursion, closure counters, and caught/finally
+      exceptions pass their test262 subsets and host-differential tests.
 
-### Phase 4 — Objects, shapes, prototypes
-- [ ] `zcl_qjs_shape` (hidden classes, shared) + `zcl_qjs_object` (props, prototype,
-      class id, property flags: writable/enumerable/configurable).
-- [ ] Property get/set/define/delete; getters/setters; prototype-chain lookup.
-- [ ] `Array` (start generic; fast-array optimization later); `arguments`.
-- [ ] `new`, constructors, `this` binding.
-- **Exit:** object/array literals, property access, prototypal inheritance, `instanceof`.
+### Phase 4 — Objects, prototypes & the embedding API
+- [ ] `zcl_qjs_shape` + `zcl_qjs_object`: property keys/flags, prototype, class id,
+      transition-cache ownership, and exotic hooks.
+- [ ] Property get/set/define/delete; accessors; prototype lookup; ordinary arrays and
+      `arguments`; object/array literals.
+- [ ] Functions become ordinary callable objects; implement `this`, `new`, constructors,
+      `instanceof`, and callable/constructable distinction.
+- [ ] Host-function registration through `zif_qjs_callable`, ABAP↔JS marshalling,
+      explicit host-resource disposal, error translation, and cancellation.
+- [ ] Stabilize the public `eval`/`call` API and define runtime/context disposal.
+- **Exit:** an ABAP caller registers a function, passes structured values, runs object/
+      prototype/constructor code, receives results, catches JS errors, and hits budgets.
+      This is the first credible embedded-engine milestone.
 
 ### Phase 5 — Core built-ins & number formatting
-- [ ] Number↔string — **interim stopgap** (`zcl_qjs_dtoa`); the faithful `dtoa.c` port
-      is **deferred** to Phase 8. Interim gets common cases right without a bignum:
-  - [ ] `String(n)`/`toString()` default: integers exact; doubles via
-        **shortest-round-trip search** — format at increasing precision through ABAP
-        conversion, parse back, take the shortest that reproduces the value — then apply
-        the ECMAScript exponent/format-shape rules.
-  - [ ] `parseFloat`/`Number()`/literals: ABAP decimal parse + manual `0x`/`0o`/`0b`.
-  - [ ] **Documented divergences** (await exact port): `toFixed`/`toPrecision` rounding
-        at large magnitudes, arbitrary-radix fractional output; affected test262 cases
-        go on the skip-list.
-- [ ] Priority built-ins: `Object`, `Function`, `Array`, `String`, `Number`,
-      `Boolean`, `Math`, `JSON`, `Symbol`, `Error` hierarchy.
-- [ ] Then: `Map`, `Set`, `Reflect`, `Date`; `WeakMap`/`WeakSet` on
-      `CL_ABAP_WEAK_REFERENCE` (weak keys + lazy sweep — see §5).
-- **Exit:** rising test262 pass rate on built-in sections; JSON round-trips; correct
-      number formatting across the tricky cases.
+- [ ] Interim Number→string implementation: integers exact; finite doubles use a
+      locale-independent shortest-round-trip search over verified ABAP conversion, then
+      ECMAScript exponent/shape rules. Keep special Number kinds explicit.
+- [ ] Document and tag known interim divergences (`toFixed`/`toPrecision` extremes,
+      arbitrary-radix fractions); they are unsupported/expected failures, not passes.
+- [ ] Priority built-ins: global functions, `Object`, `Function`, `Array`, `String`,
+      `Number`, `Boolean`, `Math`, `JSON`, `Symbol`, and the `Error` hierarchy.
+- [ ] Then `Map`, `Set`, and `Reflect`. Keep `Date`, weak collections, Proxy, and binary
+      data in explicit later/deferred feature groups rather than silently omitting them.
+- **Exit:** JSON and the declared core built-in profile pass published test262 subsets;
+      Number formatting passes a named corpus with every remaining divergence listed.
 
 ### Phase 6 — Advanced language features
-- [ ] Exceptions end-to-end: `try/catch/finally`, `throw`, error unwinding in the VM.
-- [ ] Destructuring, spread/rest, default params, template literals, computed keys.
-- [ ] Classes (fields, `#private`, static, inheritance, `super`).
-- [ ] Iterators + `for..of`; **generators** (VM suspend/resume — significant).
-- [ ] **Promises** + microtask/job queue; **async/await**.
-- [ ] **ES modules** (parse, link, evaluate; import/export, dynamic `import()`).
-- [ ] `WeakRef` + `FinalizationRegistry` on `CL_ABAP_WEAK_REFERENCE` (direct wrapper +
-      polling at job-queue drain — see §5).
-- **Exit:** each feature group passes its test262 subset.
+- [ ] Destructuring, spread/rest, default parameters, template literals, computed keys.
+- [ ] Classes (fields, private fields, static elements, inheritance, `super`).
+- [ ] Iterators and `for..of`; generators by suspending the existing explicit frames.
+- [ ] Promises + bounded microtask/job queue; async functions/`await`; then async
+      generators if included in the profile.
+- [ ] ES modules: parse/link/evaluate, host resolver/loader, import/export, and dynamic
+      `import()`. Add module test262 harness support here.
+- [ ] Direct `eval` and `Function` construction only if the Phase 0 profile includes
+      them; verify their scope-resolution effects explicitly.
+- **Exit:** each enabled feature group has a named test262 denominator, pass rate, limits,
+      and host-integration tests.
 
-### Phase 7 — Regex & Unicode
-- [ ] Unicode (**use ABAP facilities** — §5): wire `to_upper`/`to_lower` (+ special-case
-      patch table) for String case ops; rely on PCRE2 `\p{…}` for regex properties;
-      `cl_abap_codepage`/`cl_abap_conv_*` for UTF conversions.
-  - [ ] Generate the one small **ID_Start/ID_Continue** table for the lexer.
-  - [ ] `String.prototype.normalize` — **deferred** (no standard class); stub that
-        throws/no-ops until normalization data or an open-abap class is added.
-- [ ] Regex (**PCRE shim** — decided): `zcl_qjs_regexp` wrapping `CL_ABAP_MATCHER`/
-      `CL_ABAP_REGEX` (`PCRE`). Sub-tasks:
-  - [ ] **Pattern translation** JS source → PCRE: named groups `(?<name>…)`,
-        lookbehind, `\uXXXX`/`\u{…}` → `\x{…}`, character-class and escape differences.
-  - [ ] **Flag mapping** `i`/`m`/`s`/`u` → PCRE options; **`g`** and sticky **`y`**
-        emulated by driving matches from `lastIndex` (anchored for `y`); `d` (indices)
-        and `v` best-effort.
-  - [ ] **`RegExp.prototype` semantics** on top: `exec`/`test`/`Symbol.match`/
-        `matchAll`/`Symbol.replace`/`Symbol.split`, `lastIndex` bookkeeping, capture
-        arrays + named groups object.
-  - [ ] **Divergence doc + skip-list**: record JS↔PCRE gaps rather than chase them;
-        reflect them in the test262 skip-list.
-- [ ] (BigInt is out of scope — see §2.)
-- **Exit:** the supported regex / `u`-flag test262 subset passes; divergences documented.
+### Phase 7 — Regex & deterministic Unicode behavior
+- [ ] Unicode: wire case conversion through the host adapter plus generated corrections;
+      validate the pinned Unicode version and both hosts. Locale variants advertise only
+      the locales actually supported. Use verified codepage adapters for UTF conversion.
+- [ ] `String.prototype.normalize` stays absent/explicitly unsupported until real
+      NFC/NFD/NFKC/NFKD support exists; never implement it as a no-op.
+- [ ] `zcl_qjs_regexp` uses an **explicit PCRE adapter** (`create_pcre` or target
+      equivalent), not the default regex mode. Run one adapter contract suite on Node
+      and on-stack.
+  - [ ] Translate supported JS escapes/classes/groups to the pinned PCRE dialect.
+  - [ ] Map `i`/`m`/`s`/`u`; implement `g` and sticky `y` by exact start-position and
+        `lastIndex` rules. Implement `d` only if reliable capture offsets are exposed.
+  - [ ] Reject unsupported `v` constructs and other known gaps with `SyntaxError` rather
+        than approximate them.
+  - [ ] Implement `exec`/`test`/`Symbol.match`/`matchAll`/`replace`/`split`, capture and
+        named-group objects, zero-length advancement, and `lastIndex` bookkeeping.
+- **Exit:** the declared regex/Unicode profile passes its cross-host contract and test262
+      subsets; engine/Unicode-version divergences are published.
 
-### Phase 8 — Conformance, performance, packaging
-- [ ] **Faithful `dtoa.c` port** (deferred from Phase 5): `js_dtoa`/`js_atod` with the
-      internal `zcl_qjs_mpb` big-integer for exact rounding across FIXED/PRECISION,
-      radix 2–36, and all round-trip edge cases; removes the interim divergences +
-      their skip-list entries. (Needed only if exact number-formatting conformance is a
-      goal — the interim stopgap suffices for typical scripting.)
-- [ ] ABAP **test262 runner**; track and publish pass-rate over time.
-- [ ] Performance: fast arrays, atom/shape inline caches, fewer allocations, hot-path
-      opcode tuning; benchmark suite.
-- [ ] Public API polish: ABAP↔JS value marshalling, host-function registration,
-      resource limits (instruction/step budget, memory guard).
-- [ ] Docs, examples, and an optional `qjs`-style ABAP REPL report.
-- **Exit:** documented, versioned engine with a stated conformance level.
+### Phase 8 — Host-sensitive and remaining feature groups
+- [ ] `Date` with a declared clock/time-zone adapter and deterministic tests.
+- [ ] WeakMap/WeakSet/WeakRef/FinalizationRegistry only on targets whose weak-reference
+      and forced-GC capabilities passed Phase 0; publish the ephemeron limitation.
+- [ ] Evaluate and separately scope `Proxy`, TypedArray, ArrayBuffer, DataView, URI
+      functions, and other remaining standard built-ins. Do not hide them inside a total
+      pass-rate denominator.
+- **Exit:** every feature is enabled, explicitly deferred, or explicitly unsupported in
+      the profile manifest, with host capability requirements and test results.
+
+### Phase 9 — Conformance, exact formatting, performance & packaging
+- [ ] Optional faithful `dtoa.c`/`js_atod` port with `zcl_qjs_mpb`, exact rounding for
+      FIXED/PRECISION and radix 2–36, and removal of the interim expected failures.
+- [ ] Complete the evolving test262 runner for all enabled async/module features. Publish
+      both the **raw** pass rate and the profile pass rate with unsupported/skip reasons.
+- [ ] Differential fuzzing against pinned QuickJS and another engine; minimize and retain
+      failures as regression tests.
+- [ ] Performance: fast arrays, atom/shape inline caches with bounded ownership, fewer
+      allocations, opcode tuning, and a reproducible benchmark suite.
+- [ ] Documentation, versioned compatibility/profile manifest, examples, licensing, and
+      optional `qjs`-style ABAP REPL report.
+- **Exit:** documented, versioned engine with reproducible builds, enforced limits, a
+      stated conformance profile, raw/profile test results, and dual-host release gates.
 
 ---
 
 ## 8. Testing & conformance strategy
 
-- **Golden vectors:** compile the same scripts with native QuickJS (`qjsc`/dump) and
-  compare bytecode/behavior to catch divergence at the VM boundary.
-- **Unit tests:** `CL_ABAP_UNIT_ASSERT` per class; run on Node via the transpiler for
-  fast feedback, and periodically on a real ABAP stack.
-- **test262:** the canonical measure. Start with language basics, expand per phase,
-  maintain a skip-list with reasons, and treat pass-rate as the north-star metric.
-- **Differential fuzzing (later):** random small programs, compare output vs. native
-  QuickJS/Node.
+- **Normalized reference oracle:** compile with the pinned, instrumented QuickJS helper
+  and compare symbolic disassembly, constants, scopes, stack metadata, and behavior.
+  Serialized byte arrays and numeric atom IDs are deliberately excluded.
+- **Unit tests:** `CL_ABAP_UNIT_ASSERT` per class. Node/transpiler runs are frequent and
+  fast; host-sensitive tests run on a real ABAP stack on a schedule and are mandatory
+  release gates.
+- **Cross-host contract:** the host adapter has one shared suite for special Numbers,
+  UTF-16/codepages, case mapping, regex, time zones, weak references/GC, and exceptions.
+  A Node pass cannot waive a real-ABAP failure.
+- **test262:** ingest it in Phase 0 and expand harness capabilities per phase. Report four
+  outcomes separately: pass, fail, explicitly unsupported, and infrastructure skip.
+  Publish both raw totals and totals within the declared zqjs profile; pin the test262
+  commit so rates remain comparable.
+- **Limit/adversarial tests:** infinite loops, deep syntax/calls, atom/property floods,
+  huge source/bytecode, promise storms, and hostile regex inputs must terminate through
+  the declared budget/error mechanism without an ABAP dump.
+- **Differential fuzzing:** random small programs and generated bytecode compare against
+  pinned QuickJS and a second engine; minimized failures become regression tests.
 
 ---
 
@@ -366,10 +458,12 @@ completed.
 
 | Milestone | Capability | Rough scale |
 |---|---|---|
-| M1 (Phases 0–3) | Core language runs (expressions, control flow, functions, closures) | weeks–months |
-| M2 (Phases 4–5) | Objects + common built-ins → *usable embedded scripting engine* | months |
+| M0 (Phases 0–2) | Reproducible dual-host proof; first expression runs end-to-end under limits | weeks |
+| M1 (Phase 3) | Core language, closures, explicit frames, and catchable exceptions | weeks–months |
+| M2 (Phases 4–5) | Objects, host API, limits, marshalling, common built-ins → *usable embedded engine* | months |
 | M3 (Phase 6) | Classes, generators, promises/async, modules | months |
-| M4 (Phase 7–8) | Regex/Unicode + conformance & performance hardening | ongoing / multi-person-year to broad parity |
+| M4 (Phases 7–8) | Declared regex/Unicode and host-sensitive feature profiles | months–ongoing |
+| M5 (Phase 9) | Exact formatting, broad conformance, performance and packaging | ongoing / multi-person-year to broad parity |
 
 Estimates assume the C source is used as spec throughout. **M2 is the pragmatic
 "ship something useful" line.**
@@ -378,52 +472,64 @@ Estimates assume the C source is used as spec throughout. **M2 is the pragmatic
 
 ## 10. Risks & mitigations
 
-- **Performance** — inherent to an ABAP interpreter. *Mitigate:* shape-based caches,
-  fast arrays, step budgets; set expectations (light scripting, not compute).
-- **Floating-point traps** — ABAP raising on arithmetic that JS defines as NaN/Infinity.
-  *Mitigate:* one guarded numeric layer, fuzzed against IEEE edge cases early.
+- **Performance** — inherent to an ABAP interpreter. *Mitigate:* benchmark the flat value
+  representation before freezing it; later add bounded shape caches and fast arrays.
+  Set expectations (light scripting, not compute).
+- **JavaScript Number representation** — ABAP `f` cannot be assumed to preserve
+  NaN/±Infinity/-0 and raises on operations JavaScript defines. *Mitigate:* explicit
+  Number kinds plus one guarded numeric layer, with a cross-host special-value matrix and
+  fuzzing from Phase 1.
 - **Number formatting fidelity** — ABAP native float→string ≠ ECMAScript shortest
   round-trip. *Interim (chosen):* shortest-round-trip-by-search stopgap — correct for
-  typical scripting, with documented edge-case divergences on the skip-list. *Full fix
-  (deferred, Phase 8):* faithful `dtoa` + `zcl_qjs_mpb` bignum; do **not** substitute
-  `decfloat34`/`WRITE`. Differential-test against Node when the exact port lands.
+  a named verified corpus, with documented expected failures. *Full fix (optional,
+  Phase 9):* faithful `dtoa` + `zcl_qjs_mpb`; do **not** substitute `decfloat34`/`WRITE`.
 - **UTF-16 correctness** — surrogate pairs, astral code points. *Mitigate:* explicit
-  code-unit model + targeted tests; BMP-first, then astral.
-- **Weak references** (WeakRef/WeakMap/WeakSet/FinalizationRegistry) — **resolved**:
-  built on `CL_ABAP_WEAK_REFERENCE` (real weak semantics on both runtimes; see §5).
-  Residual: no true ephemeron semantics (over-retention only, not observable) and
-  non-deterministic GC timing (map `$262.gc()` to host GC where available, else
-  skip-list). *Depends on* open-abap continuing to back the class with a JS `WeakRef`.
+  code-unit model and host probe; lone surrogates and code-unit access are correct from
+  Phase 1 rather than hidden behind a BMP-only period.
+- **GC does not reclaim reachable caches** — strong atom/shape/module tables can grow for
+  the runtime lifetime even after value refcounting is removed. *Mitigate:* document
+  ownership, use weak/bounded tables where valid, expose disposal, and enforce quotas.
+- **Weak references** — target availability, forced-GC access, nondeterministic timing,
+  and lack of ephemeron semantics prevent a universal implementation claim. *Mitigate:*
+  capability-gate the entire weak profile, test the pinned adapter, publish the
+  limitation, and never count unsupported forced-GC cases as passes.
 - **Scope creep** — ES2025 is huge. *Mitigate:* phase gates, test262 pass-rate targets,
-  explicit deferral list (**BigInt**, Atomics, `Intl`/ECMA-402, tail calls).
+  a versioned feature/profile manifest, and explicit exclusions rather than an ambiguous
+  “almost ES2025” claim.
+- **Transpiler semantic masking** — Node can make code pass with JavaScript Numbers,
+  RegExp, Unicode, or GC behavior that the ABAP kernel does not share. *Mitigate:* a
+  host-adapter boundary, shared capability suite, and mandatory real-ABAP release gate.
 - **Regex fidelity (PCRE shim)** — the chosen shim diverges from JS in edge cases
   (`u`/`v` Unicode semantics, sticky `y`, `d` indices, some class/escape differences),
   and behavior may differ between the transpiled-Node runtime and a real ABAP PCRE2
-  stack. *Mitigate:* keep JS semantics (`lastIndex`, groups) in the shim, not in the
-  raw match; document divergences + skip-list; validate on both runtimes. Porting
-  `libregexp` remains a fallback only if a concrete requirement demands full fidelity.
+  stack. *Mitigate:* select PCRE explicitly, keep JS state semantics in the shim, use one
+  cross-host contract, and reject unsupported constructs. Porting `libregexp` remains a
+  fallback if a concrete requirement demands full fidelity.
 - **Unicode via ABAP facilities** — `to_upper`/`to_lower` may diverge from JS full
   case mapping (`ß`→`SS`, final sigma, Turkish `i`), and `String.prototype.normalize`
-  has no standard ABAP backing. *Mitigate:* small special-casing patch table validated
-  against test262; ship `normalize` deferred (stub) until data/class is added; regex
-  `\p{…}` is covered by PCRE2. Depends on the kernel/open-abap case-mapping behavior
-  matching between runtimes — validate on both.
-- **Native-recursion limits** — deep JS call chains. *Mitigate:* stack-depth guard →
-  `RangeError`; consider an explicit call-stack structure.
-- **Upstream drift** — QuickJS keeps evolving. *Mitigate:* pin to a QuickJS version,
-  record it, and rebase deliberately.
+  has no standard ABAP backing. *Mitigate:* pin the Unicode version, validate the full
+  supported mapping, generate corrections, declare locale support, and leave normalize
+  explicitly unsupported until it is real.
+- **Native-recursion limits** — deep JS calls and hostile syntax. *Mitigate:* an explicit
+  VM frame table from Phase 2 plus a separate parser-depth limit.
+- **Version-bound bytecode/upstream drift** — QuickJS bytecode and internals change.
+  *Mitigate:* pin release+commit, generate metadata, compare normalized disassembly, and
+  rebase deliberately rather than promising serialized compatibility.
 
 ---
 
 ## 11. Recommended immediate next steps
 
-1. Finalize dialect target + `abaplint.jsonc`; stand up CI with one transpiled test
-   (Phase 0).
-2. Prototype `zif_qjs_value` + the guarded numeric layer + `zcl_qjs_atoms` (Phase 1) —
-   this de-risks the biggest design decisions cheaply.
-3. Vertical slice: lexer → parser → emitter → VM for `1 + 2 * 3` and a `while` loop,
-   proving the whole pipeline end-to-end on the smallest opcode subset (Phases 2–3).
-4. Pin the QuickJS commit being tracked and record it in this repo.
+1. Write the target/profile manifest and pin QuickJS release+commit, test262, Unicode,
+   open-abap, npm dependencies, and the minimum real ABAP target.
+2. Stand up both CI lanes, the host-capability probe, and minimal test262 reporting before
+   relying on Node results for semantic claims.
+3. Prototype and benchmark the flat value/special-Number representation, string backing,
+   completion model, atom lifecycle, and limits on both hosts.
+4. Generate opcodes/atoms/identifier ranges and build the normalized QuickJS disassembly
+   helper.
+5. Implement the `1 + 2 * 3` vertical slice under a step budget, then add control flow,
+   functions/closures, and exceptions as successive end-to-end increments.
 
 ---
 
@@ -434,5 +540,11 @@ Estimates assume the C source is used as spec throughout. **M2 is the pragmatic
   <https://bellard.org/quickjs/quickjs.html>
 - "QuickJS: An Overview and Guide to Adding a New Feature", Igalia —
   <https://blogs.igalia.com/compilers/2023/06/12/quickjs-an-overview-and-guide-to-adding-a-new-feature/>
-- QuickJS internals (DeepWiki) — <https://deepwiki.com/bellard/quickjs>
+- QuickJS internals (supplementary, non-authoritative) — <https://deepwiki.com/bellard/quickjs>
 - abaplint / open-abap toolchain — <https://abaplint.org> · <https://github.com/open-abap>
+- SAP ABAP numeric types —
+  <https://help.sap.com/doc/abapdocu_740_index_htm/7.40/en-US/abenbuiltin_types_numeric.htm>
+- SAP ABAP weak references —
+  <https://help.sap.com/docs/SAP_NETWEAVER_AS_ABAP_752/7bfe8cdcfbb040dcb6702dada8c3e2f0/a221990a8f754fc083b3728cdec81dcc.html>
+- SAP ABAP POSIX/PCRE selection —
+  <https://help.sap.com/docs/ABAP_PLATFORM_NEW/b5670aaaa2364a29935f40b16499972d/ae4f0ab4f11f4c6fa8ecf59fb8823d74.html>
