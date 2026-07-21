@@ -57,6 +57,16 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RAISING
         zcx_qjs_error.
 
+    CLASS-METHODS parse_int
+      IMPORTING text TYPE string radix TYPE i DEFAULT 0
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+
+    CLASS-METHODS parse_float
+      IMPORTING text TYPE string
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+
     CLASS-METHODS format_finite
       IMPORTING value TYPE f
       RETURNING VALUE(result) TYPE string
@@ -156,6 +166,9 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
         character     TYPE c
       RETURNING
         VALUE(result) TYPE i.
+    CLASS-METHODS trim_leading_whitespace
+      IMPORTING text TYPE string
+      RETURNING VALUE(result) TYPE string.
 ENDCLASS.
 
 CLASS zcl_qjs_number IMPLEMENTATION.
@@ -401,7 +414,164 @@ CLASS zcl_qjs_number IMPLEMENTATION.
       WHEN 'd' OR 'D'. result = 13.
       WHEN 'e' OR 'E'. result = 14.
       WHEN 'f' OR 'F'. result = 15.
+      WHEN 'g' OR 'G'. result = 16.
+      WHEN 'h' OR 'H'. result = 17.
+      WHEN 'i' OR 'I'. result = 18.
+      WHEN 'j' OR 'J'. result = 19.
+      WHEN 'k' OR 'K'. result = 20.
+      WHEN 'l' OR 'L'. result = 21.
+      WHEN 'm' OR 'M'. result = 22.
+      WHEN 'n' OR 'N'. result = 23.
+      WHEN 'o' OR 'O'. result = 24.
+      WHEN 'p' OR 'P'. result = 25.
+      WHEN 'q' OR 'Q'. result = 26.
+      WHEN 'r' OR 'R'. result = 27.
+      WHEN 's' OR 'S'. result = 28.
+      WHEN 't' OR 'T'. result = 29.
+      WHEN 'u' OR 'U'. result = 30.
+      WHEN 'v' OR 'V'. result = 31.
+      WHEN 'w' OR 'W'. result = 32.
+      WHEN 'x' OR 'X'. result = 33.
+      WHEN 'y' OR 'Y'. result = 34.
+      WHEN 'z' OR 'Z'. result = 35.
     ENDCASE.
+  ENDMETHOD.
+
+  METHOD trim_leading_whitespace.
+    DATA lv_first TYPE c LENGTH 1.
+    result = text.
+    WHILE result IS NOT INITIAL.
+      lv_first = result+0(1).
+      IF lv_first = space
+          OR lv_first = cl_abap_char_utilities=>horizontal_tab
+          OR lv_first = cl_abap_char_utilities=>vertical_tab
+          OR lv_first = cl_abap_char_utilities=>newline
+          OR lv_first = cl_abap_char_utilities=>form_feed
+          OR lv_first = cl_abap_char_utilities=>cr_lf+0(1).
+        result = result+1.
+      ELSE.
+        RETURN.
+      ENDIF.
+    ENDWHILE.
+  ENDMETHOD.
+
+  METHOD parse_int.
+    DATA lv_text TYPE string.
+    DATA lv_sign TYPE i VALUE 1.
+    DATA lv_radix TYPE i.
+    DATA lv_index TYPE i.
+    DATA lv_digit TYPE i.
+    DATA lv_char TYPE c LENGTH 1.
+    DATA lv_value TYPE f.
+    DATA lv_has_digit TYPE abap_bool VALUE abap_false.
+    lv_text = trim_leading_whitespace( text ).
+    IF lv_text IS NOT INITIAL AND lv_text+0(1) = '+'.
+      lv_text = lv_text+1.
+    ELSEIF lv_text IS NOT INITIAL AND lv_text+0(1) = '-'.
+      lv_sign = -1.
+      lv_text = lv_text+1.
+    ENDIF.
+    lv_radix = radix.
+    IF lv_radix <> 0 AND ( lv_radix < 2 OR lv_radix > 36 ).
+      result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+      RETURN.
+    ENDIF.
+    IF lv_radix = 0.
+      lv_radix = 10.
+      IF strlen( lv_text ) >= 2 AND lv_text+0(1) = '0'
+          AND ( lv_text+1(1) = 'x' OR lv_text+1(1) = 'X' ).
+        lv_radix = 16.
+        lv_text = lv_text+2.
+      ENDIF.
+    ELSEIF lv_radix = 16 AND strlen( lv_text ) >= 2
+        AND lv_text+0(1) = '0'
+        AND ( lv_text+1(1) = 'x' OR lv_text+1(1) = 'X' ).
+      lv_text = lv_text+2.
+    ENDIF.
+    WHILE lv_index < strlen( lv_text ).
+      lv_char = lv_text+lv_index(1).
+      lv_digit = digit_value( lv_char ).
+      IF lv_digit < 0 OR lv_digit >= lv_radix.
+        EXIT.
+      ENDIF.
+      lv_has_digit = abap_true.
+      TRY.
+          lv_value = lv_value * lv_radix + lv_digit.
+        CATCH cx_sy_arithmetic_error.
+          result = infinity_with_sign( lv_sign ).
+          RETURN.
+      ENDTRY.
+      lv_index = lv_index + 1.
+    ENDWHILE.
+    IF lv_has_digit = abap_false.
+      result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+    ELSEIF lv_value = 0 AND lv_sign < 0.
+      result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_neg_zero ).
+    ELSEIF lv_sign < 0.
+      result = zcl_qjs_value=>new_finite( 0 - lv_value ).
+    ELSE.
+      result = zcl_qjs_value=>new_finite( lv_value ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD parse_float.
+    DATA lv_text TYPE string.
+    DATA lv_sign TYPE i VALUE 1.
+    DATA lv_index TYPE i.
+    DATA lv_end TYPE i.
+    DATA lv_exp_start TYPE i.
+    DATA lv_has_digit TYPE abap_bool VALUE abap_false.
+    DATA lv_exp_digit TYPE abap_bool.
+    lv_text = trim_leading_whitespace( text ).
+    IF lv_text IS NOT INITIAL AND lv_text+0(1) = '+'.
+      lv_text = lv_text+1.
+    ELSEIF lv_text IS NOT INITIAL AND lv_text+0(1) = '-'.
+      lv_sign = -1.
+      lv_text = lv_text+1.
+    ENDIF.
+    IF strlen( lv_text ) >= 8 AND lv_text+0(8) = 'Infinity'.
+      result = infinity_with_sign( lv_sign ).
+      RETURN.
+    ENDIF.
+    WHILE lv_index < strlen( lv_text ) AND lv_text+lv_index(1) CO '0123456789'.
+      lv_has_digit = abap_true.
+      lv_index = lv_index + 1.
+    ENDWHILE.
+    IF lv_index < strlen( lv_text ) AND lv_text+lv_index(1) = '.'.
+      lv_index = lv_index + 1.
+      WHILE lv_index < strlen( lv_text ) AND lv_text+lv_index(1) CO '0123456789'.
+        lv_has_digit = abap_true.
+        lv_index = lv_index + 1.
+      ENDWHILE.
+    ENDIF.
+    IF lv_has_digit = abap_false.
+      result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+      RETURN.
+    ENDIF.
+    lv_end = lv_index.
+    IF lv_index < strlen( lv_text )
+        AND ( lv_text+lv_index(1) = 'e' OR lv_text+lv_index(1) = 'E' ).
+      lv_exp_start = lv_index.
+      lv_index = lv_index + 1.
+      IF lv_index < strlen( lv_text )
+          AND ( lv_text+lv_index(1) = '+' OR lv_text+lv_index(1) = '-' ).
+        lv_index = lv_index + 1.
+      ENDIF.
+      WHILE lv_index < strlen( lv_text ) AND lv_text+lv_index(1) CO '0123456789'.
+        lv_exp_digit = abap_true.
+        lv_index = lv_index + 1.
+      ENDWHILE.
+      IF lv_exp_digit = abap_true.
+        lv_end = lv_index.
+      ELSE.
+        lv_end = lv_exp_start.
+      ENDIF.
+    ENDIF.
+    DATA(lv_literal) = lv_text+0(lv_end).
+    result = parse_literal( lv_literal ).
+    IF lv_sign < 0.
+      result = negate( result ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD bitwise.

@@ -156,6 +156,25 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
     METHODS json_intrinsic FOR TESTING RAISING cx_root.
     METHODS number_formatting FOR TESTING RAISING cx_root.
     METHODS error_intrinsics FOR TESTING RAISING cx_root.
+    METHODS symbol_intrinsic FOR TESTING RAISING cx_root.
+    METHODS symbol_keyed_properties FOR TESTING RAISING cx_root.
+    METHODS global_numeric_functions FOR TESTING RAISING cx_root.
+    METHODS number_static_methods FOR TESTING RAISING cx_root.
+    METHODS math_unary_methods FOR TESTING RAISING cx_root.
+    METHODS math_constants FOR TESTING RAISING cx_root.
+    METHODS math_log_methods FOR TESTING RAISING cx_root.
+    METHODS math_trig_methods FOR TESTING RAISING cx_root.
+    METHODS math_pow_method FOR TESTING RAISING cx_root.
+    METHODS math_precise_methods FOR TESTING RAISING cx_root.
+    METHODS math_inverse_trig FOR TESTING RAISING cx_root.
+    METHODS math_hyperbolic FOR TESTING RAISING cx_root.
+    METHODS math_integer_utilities FOR TESTING RAISING cx_root.
+    METHODS math_width_and_hypot FOR TESTING RAISING cx_root.
+    METHODS math_random FOR TESTING RAISING cx_root.
+    METHODS uri_globals FOR TESTING RAISING cx_root.
+    METHODS function_intrinsics FOR TESTING RAISING cx_root.
+    METHODS object_collection_methods FOR TESTING RAISING cx_root.
+    METHODS array_prototype_methods FOR TESTING RAISING cx_root.
 ENDCLASS.
 
 CLASS ltcl_qjs IMPLEMENTATION.
@@ -613,6 +632,34 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' inspect(4, 5);' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 11 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'var add = function(a, b) { return a + b; }; add(19, 23);' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 42 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      '(function(value) { return value + 1; })(41);' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 42 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'var factorial = function recur(n) {'
+      && ' if (n <= 1) return 1; return n * recur(n - 1); };'
+      && ' factorial(6);' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 720 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'function make(value) { return function(delta) { return value + delta; }; }'
+      && ' var add = make(40); add(2);' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 42 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'var named = function inner() {}; named.name === "inner"'
+      && ' && named.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD ordinary_objects.
@@ -670,6 +717,27 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var o = { child: { value: 4 } }; o.child.value = 9; o.child.value;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 9 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'var o = { 0: 2, 1e2: 3, null: 4 }; o[0] + o[100] + o.null;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 9 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'Object.getPrototypeOf({}) === Object.prototype'
+      && ' && Object.getPrototypeOf(Array.prototype) === Object.prototype'
+      && ' && Object.prototype.toString.call([]) === "[object Array]"'
+      && ' && Object.prototype.toString.call({}) === "[object Object]"'
+      && ' && Object.prototype.toString.call(null) === "[object Null]"'
+      && ' && Object.prototype.toString.call(1) === "[object Number]";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var tagged = {}; tagged[Symbol.toStringTag] = "Tagged";'
+      && ' Object.prototype.toString.call(tagged) === "[object Tagged]"'
+      && ' && Object.prototype.toString.length === 0'
+      && ' && Object.prototype.toString.name === "toString";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
     ls_result = zcl_qjs=>eval( 'var o = {}; o === o;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
@@ -933,6 +1001,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval( 'var values = [9]; values[4];' ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-tag exp = zcl_qjs_value=>tag_undefined ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [, 1, ,]; values.length === 3'
+      && ' && !Object.hasOwn(values, "0") && values[1] === 1'
+      && ' && !Object.hasOwn(values, "2");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD comments_and_asi.
@@ -1566,6 +1640,802 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (error.name === "TypeError") caught = caught + 1; }'
       && ' try { 1 instanceof 2; } catch (error) {'
       && ' if (error.name === "TypeError") caught = caught + 1; } caught === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD symbol_intrinsic.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var first = Symbol("item"); var second = Symbol("item");'
+      && ' typeof Symbol === "function" && typeof first === "symbol"'
+      && ' && first !== second;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var shared = Symbol.for("shared");'
+      && ' shared === Symbol.for("shared")'
+      && ' && Symbol.keyFor(shared) === "shared"'
+      && ' && Symbol.keyFor(Symbol("local")) === undefined'
+      && ' && Symbol.keyFor(Symbol.for("")) === "";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = 0; try { Symbol.keyFor("not a symbol"); }'
+      && ' catch (error) { if (error.name === "TypeError") caught = caught + 1; }'
+      && ' try { new Symbol("item"); }'
+      && ' catch (error) { if (error.name === "TypeError") caught = caught + 1; }'
+      && ' caught === 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'typeof Symbol.iterator === "symbol"'
+      && ' && Symbol.iterator === Symbol.iterator'
+      && ' && Symbol.iterator !== Symbol.asyncIterator'
+      && ' && Symbol.dispose !== Symbol.asyncDispose'
+      && ' && Symbol.keyFor(Symbol.toPrimitive) === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD symbol_keyed_properties.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'var key = Symbol("key"); var object = {};'
+      && ' object[key] = 7; object["Symbol(key)"] = 8;'
+      && ' object[key] === 7 && object["Symbol(key)"] === 8'
+      && ' && Object.keys(object).length === 1'
+      && ' && Object.getOwnPropertyNames(object).length === 1'
+      && ' && Object.getOwnPropertySymbols(object).length === 1'
+      && ' && Object.getOwnPropertySymbols(object)[0] === key'
+      && ' && Object.hasOwn(object, key);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var key = Symbol("descriptor"); var object = {};'
+      && ' Object.defineProperty(object, key,'
+      && '   { value: 4, writable: true, enumerable: false, configurable: true });'
+      && ' object[key] = 5; var descriptor = Object.getOwnPropertyDescriptor(object, key);'
+      && ' descriptor.value === 5 && descriptor.writable'
+      && ' && !descriptor.enumerable && descriptor.configurable'
+      && ' && delete object[key] && object[key] === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var key = Symbol("copy"); var source = {}; source[key] = 9;'
+      && ' var copy = Object.assign({}, source);'
+      && ' var prototype = {}; prototype[key] = 3;'
+      && ' var child = Object.create(prototype); child[key] = 4;'
+      && ' copy[key] === 9 && child[key] === 4 && prototype[key] === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var key = Symbol("create"); var descriptors = {};'
+      && ' descriptors[key] = { value: 12, enumerable: true };'
+      && ' var object = Object.create(null, descriptors);'
+      && ' object[key] === 12 && Object.hasOwn(object, key);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD global_numeric_functions.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'parseInt("  -0xFtail") === -15 && parseInt("11", 2) === 3'
+      && ' && parseInt("z", 36) === 35 && isNaN(parseInt("10", 1))'
+      && ' && 1 / parseInt("-0") === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'parseFloat("  -1.25e2tail") === -125'
+      && ' && parseFloat(".5") === 0.5 && parseFloat("1e") === 1'
+      && ' && parseFloat("Infinity-and-beyond") === Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'isFinite("42") && isFinite(null) && !isFinite("not numeric")'
+      && ' && !isFinite(Infinity) && !isFinite(NaN);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD number_static_methods.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'Number.isNaN(NaN) && !Number.isNaN("NaN")'
+      && ' && Number.isFinite(1) && Number.isFinite(-0)'
+      && ' && !Number.isFinite("1") && !Number.isFinite(Infinity);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'Number.isInteger(1) && Number.isInteger(-0) && Number.isInteger(1e21)'
+      && ' && !Number.isInteger(1.5) && !Number.isInteger("1")'
+      && ' && Number.isSafeInteger(Number.MAX_SAFE_INTEGER)'
+      && ' && Number.isSafeInteger(Number.MIN_SAFE_INTEGER)'
+      && ' && !Number.isSafeInteger(Number.MAX_SAFE_INTEGER + 1);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'Number.parseInt === parseInt && Number.parseFloat === parseFloat'
+      && ' && Number.NaN !== Number.NaN'
+      && ' && Number.POSITIVE_INFINITY === Infinity'
+      && ' && Number.NEGATIVE_INFINITY === -Infinity && Number.EPSILON > 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_unary_methods.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'Math.trunc(3.9) === 3 && Math.trunc(-3.9) === -3'
+      && ' && 1 / Math.trunc(-0.1) === -Infinity'
+      && ' && Math.trunc(Infinity) === Infinity && isNaN(Math.trunc(NaN));' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'Math.round(1.49) === 1 && Math.round(1.5) === 2'
+      && ' && Math.round(-1.5) === -1 && 1 / Math.round(-0.5) === -Infinity'
+      && ' && 1 / Math.ceil(-0.1) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'Math.sign(-8) === -1 && Math.sign(8) === 1 && Math.sign(0) === 0'
+      && ' && 1 / Math.sign(-0) === -Infinity && isNaN(Math.sign(NaN))'
+      && ' && Math.sqrt(9) === 3 && Math.sqrt(Infinity) === Infinity'
+      && ' && isNaN(Math.sqrt(-1)) && 1 / Math.sqrt(-0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '+Infinity === Infinity && +"42" === 42 && 1 / +(-0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_constants.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.E === 2.718281828459045 && Math.LN10 === 2.302585092994046'
+      && ' && Math.LN2 === 0.6931471805599453'
+      && ' && Math.LOG10E === 0.4342944819032518'
+      && ' && Math.LOG2E === 1.4426950408889634'
+      && ' && Math.PI === 3.141592653589793'
+      && ' && Math.SQRT1_2 === 0.7071067811865476'
+      && ' && Math.SQRT2 === 1.4142135623730951;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'var d = Object.getOwnPropertyDescriptor(Math, "PI");'
+      && ' d.value === Math.PI && !d.writable && !d.enumerable && !d.configurable;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_log_methods.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.exp(0) === 1 && Math.exp(-0) === 1'
+      && ' && Math.exp(Infinity) === Infinity && Math.exp(-Infinity) === 0'
+      && ' && isNaN(Math.exp(NaN));' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.abs(Math.exp(1) - Math.E) < 1e-15'
+      && ' && Math.abs(Math.log(Math.E) - 1) < 1e-15'
+      && ' && Math.exp(710) === Infinity && Math.exp(-746) === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.log(1) === 0 && Math.log(Infinity) === Infinity'
+      && ' && Math.log(0) === -Infinity && Math.log(-0) === -Infinity'
+      && ' && isNaN(Math.log(-1)) && isNaN(Math.log(NaN));' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.abs(Math.log10(1000) - 3) < 1e-14 && Math.log10(1) === 0'
+      && ' && Math.abs(Math.log2(8) - 3) < 1e-14 && Math.log2(1) === 0'
+      && ' && Math.log10(0) === -Infinity && Math.log2(0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_trig_methods.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.sin(0) === 0 && 1 / Math.sin(-0) === -Infinity'
+      && ' && Math.cos(0) === 1 && Math.cos(-0) === 1'
+      && ' && Math.tan(0) === 0 && 1 / Math.tan(-0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'isNaN(Math.sin(Infinity)) && isNaN(Math.cos(-Infinity))'
+      && ' && isNaN(Math.tan(NaN));' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.abs(Math.sin(Math.PI / 2) - 1) < 1e-14'
+      && ' && Math.abs(Math.cos(Math.PI) + 1) < 1e-14'
+      && ' && Math.abs(Math.tan(Math.PI / 4) - 1) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_pow_method.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.pow(2, 10) === 1024 && Math.pow(2, -3) === 0.125'
+      && ' && Math.pow(-2, 3) === -8 && Math.pow(-2, 2) === 4'
+      && ' && Math.abs(Math.pow(9, 0.5) - 3) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.pow(NaN, 0) === 1 && isNaN(Math.pow(NaN, 2))'
+      && ' && isNaN(Math.pow(-2, 0.5)) && isNaN(Math.pow(1, Infinity))'
+      && ' && Math.pow(2, Infinity) === Infinity'
+      && ' && Math.pow(0.5, -Infinity) === Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      '1 / Math.pow(-0, 3) === -Infinity'
+      && ' && 1 / Math.pow(-0, 2) === Infinity'
+      && ' && Math.pow(-0, -3) === -Infinity'
+      && ' && Math.pow(-Infinity, 3) === -Infinity'
+      && ' && 1 / Math.pow(-Infinity, -3) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.pow(2, 1024) === Infinity && Math.pow(2, -1075) === 0'
+      && ' && Math.pow(0.5, -1075) === Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_precise_methods.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.abs(Math.cbrt(27) - 3) < 1e-14'
+      && ' && Math.abs(Math.cbrt(-8) + 2) < 1e-14'
+      && ' && Math.cbrt(Infinity) === Infinity'
+      && ' && 1 / Math.cbrt(-0) === -Infinity && isNaN(Math.cbrt(NaN));' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.abs(Math.expm1(1) - (Math.E - 1)) < 1e-15'
+      && ' && Math.abs(Math.expm1(1e-10) - 1.00000000005e-10) < 1e-24'
+      && ' && Math.expm1(-Infinity) === -1'
+      && ' && Math.expm1(Infinity) === Infinity'
+      && ' && 1 / Math.expm1(-0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.abs(Math.log1p(Math.E - 1) - 1) < 1e-14'
+      && ' && Math.abs(Math.log1p(1e-10) - 9.9999999995e-11) < 1e-24'
+      && ' && Math.log1p(-1) === -Infinity && isNaN(Math.log1p(-2))'
+      && ' && 1 / Math.log1p(-0) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_inverse_trig.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.atan(0) === 0 && 1 / Math.atan(-0) === -Infinity'
+      && ' && Math.abs(Math.atan(1) - Math.PI / 4) < 1e-14'
+      && ' && Math.atan(Infinity) === Math.PI / 2'
+      && ' && Math.atan(-Infinity) === -Math.PI / 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.asin(0) === 0 && 1 / Math.asin(-0) === -Infinity'
+      && ' && Math.asin(1) === Math.PI / 2 && Math.asin(-1) === -Math.PI / 2'
+      && ' && isNaN(Math.asin(2)) && Math.acos(1) === 0'
+      && ' && Math.acos(-1) === Math.PI && Math.acos(0) === Math.PI / 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.atan2(0, 0) === 0 && 1 / Math.atan2(-0, 0) === -Infinity'
+      && ' && Math.atan2(0, -0) === Math.PI'
+      && ' && Math.atan2(-0, -0) === -Math.PI'
+      && ' && Math.atan2(1, 0) === Math.PI / 2'
+      && ' && Math.atan2(-1, 0) === -Math.PI / 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.atan2(Infinity, Infinity) === Math.PI / 4'
+      && ' && Math.atan2(Infinity, -Infinity) === 3 * Math.PI / 4'
+      && ' && Math.atan2(-Infinity, -Infinity) === -3 * Math.PI / 4'
+      && ' && Math.abs(Math.atan2(1, -1) - 3 * Math.PI / 4) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_hyperbolic.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.sinh(0) === 0 && 1 / Math.sinh(-0) === -Infinity'
+      && ' && Math.sinh(Infinity) === Infinity'
+      && ' && Math.sinh(-Infinity) === -Infinity'
+      && ' && Math.abs(Math.sinh(1) - (Math.E - 1 / Math.E) / 2) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.cosh(0) === 1 && Math.cosh(-0) === 1'
+      && ' && Math.cosh(Infinity) === Infinity'
+      && ' && Math.cosh(-Infinity) === Infinity'
+      && ' && Math.abs(Math.cosh(1) - (Math.E + 1 / Math.E) / 2) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.tanh(0) === 0 && 1 / Math.tanh(-0) === -Infinity'
+      && ' && Math.tanh(Infinity) === 1 && Math.tanh(-Infinity) === -1'
+      && ' && Math.abs(Math.tanh(1)'
+      && ' - (Math.E * Math.E - 1) / (Math.E * Math.E + 1)) < 1e-14;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.asinh(0) === 0 && 1 / Math.asinh(-0) === -Infinity'
+      && ' && Math.asinh(Infinity) === Infinity'
+      && ' && Math.asinh(-Infinity) === -Infinity'
+      && ' && Math.abs(Math.asinh(Math.sinh(1)) - 1) < 1e-13;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.acosh(1) === 0 && Math.acosh(Infinity) === Infinity'
+      && ' && isNaN(Math.acosh(0.5))'
+      && ' && Math.abs(Math.acosh(Math.cosh(1)) - 1) < 1e-13;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.atanh(0) === 0 && 1 / Math.atanh(-0) === -Infinity'
+      && ' && Math.atanh(1) === Infinity && Math.atanh(-1) === -Infinity'
+      && ' && isNaN(Math.atanh(2))'
+      && ' && Math.abs(Math.atanh(Math.tanh(0.5)) - 0.5) < 1e-13;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_integer_utilities.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.clz32(0) === 32 && Math.clz32(1) === 31'
+      && ' && Math.clz32(0x100) === 23 && Math.clz32(-1) === 0'
+      && ' && Math.clz32(3.9) === 30 && Math.clz32(NaN) === 32'
+      && ' && Math.clz32(Infinity) === 32;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.imul(2, 4) === 8 && Math.imul(-1, 8) === -8'
+      && ' && Math.imul(0xffffffff, 5) === -5'
+      && ' && Math.imul(0xfffffffe, 5) === -10'
+      && ' && Math.imul(0x7fffffff, 2) === -2'
+      && ' && Math.imul(0x80000000, 2) === 0'
+      && ' && Math.imul(0x12345678, 0x9abcdef0) === 606937216;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_width_and_hypot.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'Math.hypot() === 0 && Math.hypot(3, 4) === 5'
+      && ' && Math.hypot(0, -0, 0) === 0'
+      && ' && Math.hypot(NaN, Infinity) === Infinity'
+      && ' && isNaN(Math.hypot(NaN, 3))'
+      && ' && Math.abs(Math.hypot(3e200, 4e200) / 5e200 - 1) < 1e-15'
+      && ' && Math.hypot("3", "4") === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.fround(Infinity) === Infinity && isNaN(Math.fround(NaN))'
+      && ' && 1 / Math.fround(-0) === -Infinity'
+      && ' && Math.fround(0.1) === 0.10000000149011612'
+      && ' && Math.fround(4294967295) === 4294967296'
+      && ' && Math.fround(1.0000000596046448) === 1'
+      && ' && Math.fround(1.0000001788139343) === 1.000000238418579;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'Math.f16round(0.1) === 0.0999755859375'
+      && ' && Math.f16round(1.00048828125) === 1'
+      && ' && Math.f16round(1.00146484375) === 1.001953125'
+      && ' && Math.f16round(65504) === 65504'
+      && ' && Math.f16round(65520) === Infinity'
+      && ' && 1 / Math.f16round(-2.9802322387695312e-8) === -Infinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD math_random.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'var valid = true; var changed = false; var first = Math.random();'
+      && ' if (first < 0 || first >= 1) valid = false;'
+      && ' for (var i = 0; i < 32; i++) {'
+      && '   var value = Math.random();'
+      && '   if (value < 0 || value >= 1) valid = false;'
+      && '   if (value !== first) changed = true;'
+      && ' } valid && changed;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD uri_globals.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'encodeURI("https://example.com/a b?x=1&y=#")'
+      && ' === "https://example.com/a%20b?x=1&y=#"'
+      && ' && encodeURIComponent(";/?:@&=+$,#")'
+      && ' === "%3B%2F%3F%3A%40%26%3D%2B%24%2C%23"'
+      && ' && encodeURI() === "undefined" && encodeURIComponent(123) === "123";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'decodeURI("%3B%2f%3F%3a%40%26%3D%2b%24%2C%23")'
+      && ' === "%3B%2f%3F%3a%40%26%3D%2b%24%2C%23"'
+      && ' && decodeURIComponent("%3B%2F%3F%3A%40%26%3D%2B%24%2C%23")'
+      && ' === ";/?:@&=+$,#"'
+      && ' && encodeURIComponent(decodeURIComponent("%E2%82%AC")) === "%E2%82%AC"'
+      && ' && encodeURIComponent(decodeURIComponent("%F0%9F%98%80"))'
+      && ' === "%F0%9F%98%80";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'var malformed = ["%", "%C0%AF", "%ED%A0%80", "%F4%90%80%80", "%E2%82"];'
+      && ' var valid = true; for (var i = 0; i < malformed.length; i++) {'
+      && '   try { decodeURIComponent(malformed[i]); valid = false; }'
+      && '   catch (error) { if (error.name !== "URIError") valid = false; }'
+      && ' } var constructed = new URIError("bad");'
+      && ' valid && constructed.name === "URIError" && constructed.message === "bad";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD function_intrinsics.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'function add(a, b) { return this.base + a + b; }'
+      && ' add.call({ base: 1 }, 2, 3) === 6'
+      && ' && add.apply({ base: 2 }, [3, 4]) === 9'
+      && ' && add.apply({ base: 3 }, { "0": 4, "1": 5, length: 2 }) === 12'
+      && ' && Function.prototype.call.call(add, { base: 4 }, 5, 6) === 15;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function add(a, b) { return this.base + a + b; }'
+      && ' var bound = add.bind({ base: 10 }, 20);'
+      && ' bound(30) === 60 && bound.call({ base: 99 }, 30) === 60'
+      && ' && Function.prototype.constructor === Function;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sum = Function("a", "b", "return a + b;");'
+      && ' var empty = Function();'
+      && ' sum(7, 8) === 15 && empty() === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var globalValue = 7;'
+      && ' function make() { var globalValue = 99;'
+      && '   return Function("return globalValue;"); }'
+      && ' make()() === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Point(x, y) { this.x = x; this.y = y; }'
+      && ' var BoundPoint = Point.bind({ x: 99 }, 4);'
+      && ' var point = new BoundPoint(5);'
+      && ' point.x === 4 && point.y === 5 && point instanceof Point;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var valid = false; try { Function.prototype.call.call({}, null); }'
+      && ' catch (error) { valid = error.name === "TypeError"; } valid;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD object_collection_methods.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var target = { a: 1 }; var source = { b: 2, a: 3 };'
+      && ' Object.defineProperty(source, "hidden", { value: 9 });'
+      && ' var returned = Object.assign(target, source, null, undefined);'
+      && ' returned === target && target.a === 3 && target.b === 2'
+      && ' && !Object.hasOwn(target, "hidden");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
+      && ' object[2] = "two"; object.first = 3; object.second = 4;'
+      && ' Object.defineProperty(object, "hidden", { value: 5 });'
+      && ' var values = Object.values(object); var entries = Object.entries(object);'
+      && ' values.length === 3 && values[0] === "two" && values[2] === 4'
+      && ' && entries[1][0] === "first" && entries[1][1] === 3'
+      && ' && Object.hasOwn(object, "first")'
+      && ' && !Object.hasOwn(object, "inherited");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = {}; Object.is(NaN, NaN) && !Object.is(0, -0)'
+      && ' && Object.is(-0, -0) && Object.is(object, object)'
+      && ' && !Object.is({}, {}) && Object.is() && !Object.is(1, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD array_prototype_methods.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2]; var length = values.push(3, 4);'
+      && ' length === 4 && values.length === 4 && values[2] === 3'
+      && ' && values[3] === 4;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [7, 8]; var last = values.pop();'
+      && ' last === 8 && values.length === 1'
+      && ' && !Object.hasOwn(values, "1") && values.pop() === 7'
+      && ' && values.pop() === undefined && values.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = { length: 1 }; object[0] = "first";'
+      && ' var length = Array.prototype.push.call(object, "second");'
+      && ' var value = Array.prototype.pop.call(object);'
+      && ' length === 2 && value === "second" && object.length === 1'
+      && ' && !Object.hasOwn(object, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'Array.isArray(Array.prototype)'
+      && ' && Array.prototype.constructor === Array'
+      && ' && Array.prototype.push.length === 1'
+      && ' && Array.prototype.push.name === "push"'
+      && ' && Array.prototype.pop.length === 0'
+      && ' && Array.prototype.pop.name === "pop";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3]; values.length = 1;'
+      && ' var rangeError = false;'
+      && ' try { values.length = -1; }'
+      && ' catch (error) { rangeError = error.name === "RangeError"; }'
+      && ' values.length === 1 && !Object.hasOwn(values, "1")'
+      && ' && !Object.hasOwn(values, "2") && rangeError;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function joinObject() { var object = { length: 2 };'
+      && ' object[0] = "a"; object[1] = "b";'
+      && ' return Array.prototype.join.call(object, "|"); }'
+      && ' [1, null, undefined, 4].join("-") === "1---4"'
+      && ' && Array(3).join() === ",," && joinObject() === "a|b";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 1, NaN];'
+      && ' values.indexOf(1) === 0 && values.indexOf(1, 1) === 2'
+      && ' && values.indexOf(1, -1) === -1 && values.indexOf(NaN) === -1'
+      && ' && Array(1).indexOf(undefined) === -1'
+      && ' && values.includes(NaN) && Array(1).includes(undefined)'
+      && ' && values.includes(2, -3) && !values.includes(2, 2);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { first: 0 }; prototype[0] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = 1;'
+      && ' Array.prototype.indexOf.call(object, "inherited") === 0'
+      && ' && Array.prototype.includes.call(object, "inherited")'
+      && ' && Array.prototype.join.call(object) === "inherited"'
+      && ' && Array.prototype.join.length === 1'
+      && ' && Array.prototype.indexOf.length === 1'
+      && ' && Array.prototype.includes.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3]; var first = values.shift();'
+      && ' var length = values.unshift(-1, 0);'
+      && ' first === 1 && length === 4 && values.length === 4'
+      && ' && values[0] === -1 && values[1] === 0'
+      && ' && values[2] === 2 && values[3] === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = Array(3); sparse[2] = "last";'
+      && ' sparse.shift() === undefined && sparse.length === 2'
+      && ' && !Object.hasOwn(sparse, "0") && sparse[1] === "last"'
+      && ' && [].shift() === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "inherited";'
+      && ' var object = Object.create(prototype); object[0] = "first";'
+      && ' object.length = 2; var first = Array.prototype.shift.call(object);'
+      && ' var length = Array.prototype.unshift.call(object, "new");'
+      && ' first === "first" && length === 2 && object.length === 2'
+      && ' && object[0] === "new" && object[1] === "inherited"'
+      && ' && Array.prototype.shift.length === 0'
+      && ' && Array.prototype.unshift.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = []; values.length = 4294967295; var rangeError = false;'
+      && ' try { values.push("edge"); }'
+      && ' catch (error) { rangeError = error.name === "RangeError"; }'
+      && ' rangeError && values.length === 4294967295'
+      && ' && values[4294967295] === "edge";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3, 4]; var returned = values.reverse();'
+      && ' returned === values && values[0] === 4 && values[1] === 3'
+      && ' && values[2] === 2 && values[3] === 1'
+      && ' && Array.prototype.reverse.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = Array(3); sparse[0] = "first"; sparse.reverse();'
+      && ' !Object.hasOwn(sparse, "0") && !Object.hasOwn(sparse, "1")'
+      && ' && sparse[2] === "first" && sparse.length === 3; ' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = "inherited";'
+      && ' var object = Object.create(prototype); object[1] = "own"; object.length = 2;'
+      && ' Array.prototype.reverse.call(object) === object'
+      && ' && object[0] === "own" && object[1] === "inherited";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 1, NaN];'
+      && ' values.lastIndexOf(1) === 2 && values.lastIndexOf(1, 1) === 0'
+      && ' && values.lastIndexOf(2, -2) === 1'
+      && ' && values.lastIndexOf(2, -3) === 1'
+      && ' && values.lastIndexOf(2, -4) === -1'
+      && ' && values.lastIndexOf(NaN) === -1'
+      && ' && Array(2).lastIndexOf(undefined) === -1'
+      && ' && Array.prototype.lastIndexOf.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = 3;'
+      && ' Array.prototype.lastIndexOf.call(object, "inherited") === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = ["first", "middle", "last"];'
+      && ' values.at(0) === "first" && values.at(-1) === "last"'
+      && ' && values.at(-2) === "middle" && values.at(3) === undefined'
+      && ' && values.at(-4) === undefined && values.at(NaN) === "first"'
+      && ' && values.at(Infinity) === undefined'
+      && ' && Array.prototype.at.length === 1'
+      && ' && Array.prototype.at.name === "at";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = "3";'
+      && ' Array.prototype.at.call(object, -2) === "inherited"'
+      && ' && Array.prototype.at.call(object, 0) === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [0, 1, 2, 3]; var copy = values.slice(1, -1);'
+      && ' copy !== values && copy.length === 2 && copy[0] === 1'
+      && ' && copy[1] === 2 && values.length === 4'
+      && ' && values.slice(-2)[0] === 2'
+      && ' && values.slice(Infinity).length === 0'
+      && ' && Array.prototype.slice.length === 2'
+      && ' && Array.prototype.slice.name === "slice";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = [, "own", ,]; var copy = sparse.slice();'
+      && ' copy.length === 3 && !Object.hasOwn(copy, "0")'
+      && ' && copy[1] === "own" && !Object.hasOwn(copy, "2");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = "3";'
+      && ' var copy = Array.prototype.slice.call(object, 0, 2);'
+      && ' copy.length === 2 && !Object.hasOwn(copy, "0")'
+      && ' && Object.hasOwn(copy, "1") && copy[1] === "inherited";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var total = 0; var indexes = ""; var values = [2, 3, 4];'
+      && ' function visit(value, index, array) {'
+      && ' total = total + value; indexes = indexes + index;'
+      && ' if (array !== values) { total = -100; } }'
+      && ' var returned = values.forEach(visit);'
+      && ' returned === undefined && total === 9 && indexes === "012"'
+      && ' && Array.prototype.forEach.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var receiver = { factor: 3 }; function multiply(value) {'
+      && ' return value * this.factor; }'
+      && ' var mapped = [1, 2].map(multiply, receiver);'
+      && ' mapped.length === 2 && mapped[0] === 3 && mapped[1] === 6'
+      && ' && mapped !== receiver && Array.prototype.map.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function double(value) { return value * 2; }'
+      && ' function keep(value) { return value > 2; }'
+      && ' var sparse = [, 2, , 4]; var mapped = sparse.map(double);'
+      && ' var filtered = sparse.filter(keep);'
+      && ' mapped.length === 4 && !Object.hasOwn(mapped, "0")'
+      && ' && mapped[1] === 4 && !Object.hasOwn(mapped, "2")'
+      && ' && mapped[3] === 8 && filtered.length === 1'
+      && ' && filtered[0] === 4 && Array.prototype.filter.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = 5;'
+      && ' var object = Object.create(prototype); object.length = 3; var total = 0;'
+      && ' function add(value) { total = total + value; }'
+      && ' Array.prototype.forEach.call(object, add); total === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var someCalls = 0; var everyCalls = 0; var receiver = { limit: 2 };'
+      && ' function above(value) { someCalls++; return value > this.limit; }'
+      && ' function below(value) { everyCalls++; return value < this.limit; }'
+      && ' [1, 3, 5].some(above, receiver) && ![1, 3, 0].every(below, receiver)'
+      && ' && someCalls === 2 && everyCalls === 2'
+      && ' && Array.prototype.some.length === 1'
+      && ' && Array.prototype.every.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; function missing(value) {'
+      && ' calls++; return value === undefined; }'
+      && ' var sparse = Array(2); var someResult = sparse.some(missing);'
+      && ' var someCalls = calls; calls = 0; var found = sparse.find(missing);'
+      && ' var findCalls = calls; calls = 0; var index = sparse.findIndex(missing);'
+      && ' !someResult && someCalls === 0 && found === undefined'
+      && ' && findCalls === 1 && index === 0 && calls === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function isThree(value) { return value === 3; }'
+      && ' var values = [1, 3, 3]; values.find(isThree) === 3'
+      && ' && values.findIndex(isThree) === 1'
+      && ' && Array.prototype.find.length === 1'
+      && ' && Array.prototype.findIndex.length === 1'
+      && ' && Array.prototype.find.name === "find"'
+      && ' && Array.prototype.findIndex.name === "findIndex";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = 3;'
+      && ' var object = Object.create(prototype); object.length = 2;'
+      && ' function isThree(value) { return value === 3; }'
+      && ' Array.prototype.some.call(object, isThree)'
+      && ' && Array.prototype.findIndex.call(object, isThree) === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function add(accumulator, value) { return accumulator + value; }'
+      && ' [1, 2, 3].reduce(add) === 6'
+      && ' && [1, 2, 3].reduce(add, 10) === 16'
+      && ' && [].reduce(add, 7) === 7'
+      && ' && Array.prototype.reduce.length === 1'
+      && ' && Array.prototype.reduce.name === "reduce";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function append(accumulator, value, index, array) {'
+      && ' if (array.length !== 3) return "bad";'
+      && ' return accumulator + value + index; }'
+      && ' ["a", "b", "c"].reduce(append, "") === "a0b1c2"'
+      && ' && ["a", "b", "c"].reduceRight(append, "") === "c2b1a0"'
+      && ' && Array.prototype.reduceRight.length === 1'
+      && ' && Array.prototype.reduceRight.name === "reduceRight";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; function add(accumulator, value) {'
+      && ' calls++; return accumulator + value; }'
+      && ' var sparse = [, , 3, , 5]; var value = sparse.reduce(add);'
+      && ' value === 8 && calls === 1; ' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = 4;'
+      && ' var object = Object.create(prototype); object[2] = 6; object.length = 3;'
+      && ' function add(accumulator, value) { return accumulator + value; }'
+      && ' Array.prototype.reduce.call(object, add, 1) === 11'
+      && ' && Array.prototype.reduceRight.call(object, add) === 10;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; function add(a, b) { return a + b; }'
+      && ' try { Array(3).reduce(add); }'
+      && ' catch (error) { caught = error.name === "TypeError"; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3, 4]; var returned = values.fill(9, 1, -1);'
+      && ' returned === values && values[0] === 1 && values[1] === 9'
+      && ' && values[2] === 9 && values[3] === 4'
+      && ' && Array.prototype.fill.length === 1'
+      && ' && Array.prototype.fill.name === "fill";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = Array(3); sparse.fill("x", 1, undefined);'
+      && ' var object = { length: "3" };'
+      && ' var returned = Array.prototype.fill.call(object, 7, 1);'
+      && ' sparse.length === 3 && !Object.hasOwn(sparse, "0")'
+      && ' && Object.hasOwn(sparse, "1") && Object.hasOwn(sparse, "2")'
+      && ' && sparse[1] === "x" && sparse[2] === "x"'
+      && ' && returned === object && object[1] === 7 && object[2] === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3, 4, 5]; var returned = values.copyWithin(1, 3);'
+      && ' var overlap = [1, 2, 3, 4, 5]; overlap.copyWithin(1, 0, 4);'
+      && ' returned === values && values.join(",") === "1,4,5,4,5"'
+      && ' && overlap.join(",") === "1,1,2,3,4"'
+      && ' && Array.prototype.copyWithin.length === 2'
+      && ' && Array.prototype.copyWithin.name === "copyWithin";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = [1, , 3, 4]; sparse.copyWithin(2, 0, 2);'
+      && ' var prototype = {}; prototype[0] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = 2;'
+      && ' var returned = Array.prototype.copyWithin.call(object, 1, 0, 1);'
+      && ' sparse[2] === 1 && !Object.hasOwn(sparse, "3")'
+      && ' && returned === object && Object.hasOwn(object, "1")'
+      && ' && object[1] === "inherited";' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 ENDCLASS.

@@ -23,7 +23,23 @@ function __zqjsSameValue(actual, expected, message) {
   if (actual !== actual && expected !== expected) return;
   throw new Test262Error(message);
 }
-var assert = { sameValue: __zqjsSameValue };
+function __zqjsNotSameValue(actual, unexpected, message) {
+  if (actual === unexpected
+      && !(actual === 0 && 1 / actual !== 1 / unexpected)) {
+    throw new Test262Error(message);
+  }
+}
+function assert(mustBeTrue, message) {
+  if (!mustBeTrue) throw new Test262Error(message);
+}
+assert.sameValue = __zqjsSameValue;
+assert.notSameValue = __zqjsNotSameValue;
+assert.compareArray = function (actual, expected, message) {
+  if (actual.length !== expected.length) throw new Test262Error(message);
+  for (var index = 0; index < actual.length; index++) {
+    __zqjsSameValue(actual[index], expected[index], message);
+  }
+};
 `;
 
 function git(args) {

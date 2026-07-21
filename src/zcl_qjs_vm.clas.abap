@@ -378,14 +378,24 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'property read from a non-object value' ).
           ENDIF.
-          IF ls_right-tag = zcl_qjs_value=>tag_int.
+          IF ls_right-tag = zcl_qjs_value=>tag_symbol.
+            CLEAR lv_property_name.
+          ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
             lv_element_index = ls_right-int_value.
             lv_property_name = lv_element_index.
             CONDENSE lv_property_name NO-GAPS.
           ELSE.
             lv_property_name = zcl_qjs_value=>to_string( ls_right ).
           ENDIF.
-          IF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_int.
+          IF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            ls_value = lo_object->get_symbol( ls_right-symbol_id ).
+          ELSEIF lo_closure IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            ls_value = lo_closure->get_symbol_property( ls_right-symbol_id ).
+          ELSEIF lo_property_container IS BOUND
+              AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            ls_value = lo_property_container->get_symbol_property(
+              ls_right-symbol_id ).
+          ELSEIF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_int.
             ls_value = lo_object->get_element( lv_element_index ).
           ELSEIF lo_object IS BOUND.
             ls_value = lo_object->get( lv_property_name ).
@@ -426,14 +436,26 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'property write to a non-object value' ).
           ENDIF.
-          IF ls_right-tag = zcl_qjs_value=>tag_int.
+          IF ls_right-tag = zcl_qjs_value=>tag_symbol.
+            CLEAR lv_property_name.
+          ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
             lv_element_index = ls_right-int_value.
             lv_property_name = lv_element_index.
             CONDENSE lv_property_name NO-GAPS.
           ELSE.
             lv_property_name = zcl_qjs_value=>to_string( ls_right ).
           ENDIF.
-          IF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_int.
+          IF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            lo_object->set_symbol(
+              identity = ls_right-symbol_id value = ls_value ).
+          ELSEIF lo_closure IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            lo_closure->set_symbol_property(
+              identity = ls_right-symbol_id value = ls_value ).
+          ELSEIF lo_property_container IS BOUND
+              AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            lo_property_container->set_symbol_property(
+              identity = ls_right-symbol_id value = ls_value ).
+          ELSEIF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_int.
             lo_object->set_element( index = lv_element_index value = ls_value ).
           ELSEIF lo_object IS BOUND.
             lo_object->set( name = lv_property_name value = ls_value ).
@@ -446,7 +468,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>delete_property.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
-          IF ls_right-tag = zcl_qjs_value=>tag_int.
+          IF ls_right-tag = zcl_qjs_value=>tag_symbol.
+            CLEAR lv_property_name.
+          ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
             lv_property_name = ls_right-int_value.
             CONDENSE lv_property_name NO-GAPS.
           ELSE.
@@ -475,8 +499,16 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'property delete from a non-object value' ).
           ENDIF.
-          IF lo_object IS BOUND.
-            DATA(lv_deleted) = lo_object->delete( lv_property_name ).
+          IF lo_object IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            DATA(lv_deleted) = lo_object->delete_symbol( ls_right-symbol_id ).
+          ELSEIF lo_closure IS BOUND AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            lv_deleted = lo_closure->delete_symbol_property( ls_right-symbol_id ).
+          ELSEIF lo_property_container IS BOUND
+              AND ls_right-tag = zcl_qjs_value=>tag_symbol.
+            lv_deleted = lo_property_container->delete_symbol_property(
+              ls_right-symbol_id ).
+          ELSEIF lo_object IS BOUND.
+            lv_deleted = lo_object->delete( lv_property_name ).
           ELSEIF lo_closure IS BOUND.
             lv_deleted = lo_closure->delete_property( lv_property_name ).
           ELSE.
@@ -582,7 +614,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             APPEND lo_cell TO lt_capture_cells.
           ENDLOOP.
-          lo_properties = mo_runtime->create_object( ).
+          lo_properties = mo_runtime->create_function_properties( ).
           lo_prototype = mo_runtime->create_object( ).
           CREATE OBJECT lo_closure
             EXPORTING function = lo_called captures = lt_capture_cells
@@ -705,6 +737,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = zcl_qjs_number=>negate( ls_value ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>unary_plus.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_value = zcl_qjs_number=>to_number( ls_value ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>increment OR zif_qjs_opcodes=>decrement.
           ls_value = pop( CHANGING stack = lt_stack ).
           ls_value = zcl_qjs_number=>to_number( ls_value ).
@@ -760,6 +797,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
           CLEAR lo_closure.
+          CLEAR lo_prototype.
           IF ls_right-tag <> zcl_qjs_value=>tag_object.
             throw_error(
               name    = 'TypeError'
@@ -768,16 +806,34 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           TRY.
               lo_closure ?= ls_right-object_ref.
             CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_closure IS BOUND.
+            lo_prototype = lo_closure->get_prototype_object( ).
+          ELSE.
+            CLEAR lo_property_container.
+            lo_property_container = ls_right-property_ref.
+            IF lo_property_container IS NOT BOUND.
+              TRY.
+                  lo_property_container ?= ls_right-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+            ENDIF.
+            IF lo_property_container IS BOUND.
+              DATA(ls_constructor_prototype) =
+                lo_property_container->get_property( 'prototype' ).
+              IF ls_constructor_prototype-tag = zcl_qjs_value=>tag_object.
+                TRY.
+                    lo_prototype ?= ls_constructor_prototype-object_ref.
+                  CATCH cx_sy_move_cast_error.
+                ENDTRY.
+              ENDIF.
+            ENDIF.
+            IF lo_prototype IS NOT BOUND.
               throw_error(
                 name    = 'TypeError'
                 message = 'right-hand side of instanceof is not constructable' ).
-          ENDTRY.
-          IF lo_closure IS NOT BOUND.
-            throw_error(
-              name    = 'TypeError'
-              message = 'right-hand side of instanceof is not constructable' ).
+            ENDIF.
           ENDIF.
-          lo_prototype = lo_closure->get_prototype_object( ).
           DATA(lv_instance) = abap_false.
           CLEAR lo_object.
           TRY.
@@ -793,6 +849,20 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               ENDIF.
               lo_current_prototype = lo_current_prototype->get_prototype( ).
             ENDWHILE.
+          ELSEIF lo_prototype = mo_runtime->get_function_prototype( ).
+            CLEAR lo_host_callable.
+            CLEAR lo_closure.
+            TRY.
+                lo_closure ?= ls_left-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            TRY.
+                lo_host_callable ?= ls_left-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_closure IS BOUND OR lo_host_callable IS BOUND.
+              lv_instance = abap_true.
+            ENDIF.
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_instance ).
           APPEND ls_value TO lt_stack.

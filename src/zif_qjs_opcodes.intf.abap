@@ -47,6 +47,7 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS set_lexical TYPE i VALUE 97.
   CONSTANTS initialize_lexical TYPE i VALUE 98.
   CONSTANTS negate   TYPE i VALUE 138.
+  CONSTANTS unary_plus TYPE i VALUE 139.
   CONSTANTS decrement TYPE i VALUE 140.
   CONSTANTS increment TYPE i VALUE 141.
   CONSTANTS bitwise_not TYPE i VALUE 147.

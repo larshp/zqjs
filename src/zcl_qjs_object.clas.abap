@@ -14,11 +14,19 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       enumerable TYPE abap_bool,
       configurable TYPE abap_bool,
     END OF ty_own_property.
+    TYPES ty_symbol_ids TYPE STANDARD TABLE OF int8 WITH DEFAULT KEY.
     METHODS get
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS set IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS get_symbol
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS set_symbol
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS define_property
       IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
@@ -32,14 +40,35 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
         enumerable TYPE abap_bool DEFAULT abap_false
         configurable TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
+    METHODS define_symbol_property
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+        writable TYPE abap_bool DEFAULT abap_true
+        enumerable TYPE abap_bool DEFAULT abap_true
+        configurable TYPE abap_bool DEFAULT abap_true
+      RAISING zcx_qjs_error.
+    METHODS define_symbol_accessor
+      IMPORTING identity TYPE int8 getter TYPE zcl_qjs_value=>ty_value
+        setter TYPE zcl_qjs_value=>ty_value
+        enumerable TYPE abap_bool DEFAULT abap_false
+        configurable TYPE abap_bool DEFAULT abap_false
+      RAISING zcx_qjs_error.
     METHODS delete
       IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS delete_symbol
+      IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_own
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_property
       IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_own_symbol
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_symbol_property
+      IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS own_property_count RETURNING VALUE(result) TYPE i.
     METHODS get_prototype RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
@@ -48,6 +77,9 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_shape=>ty_descriptor.
     METHODS get_own_property
       IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE ty_own_property.
+    METHODS get_own_symbol_property
+      IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE ty_own_property.
     METHODS set_element IMPORTING index TYPE int8 value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
@@ -59,6 +91,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set_array_length IMPORTING length TYPE int8 RAISING zcx_qjs_error.
     METHODS own_keys RETURNING VALUE(result) TYPE zcl_qjs_shape=>ty_names.
     METHODS own_property_names RETURNING VALUE(result) TYPE zcl_qjs_shape=>ty_names.
+    METHODS own_property_symbols RETURNING VALUE(result) TYPE ty_symbol_ids.
     METHODS set_prototype IMPORTING prototype TYPE REF TO zcl_qjs_object OPTIONAL
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
@@ -69,7 +102,22 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       setter TYPE zcl_qjs_value=>ty_value,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
+    TYPES: BEGIN OF ty_symbol_property,
+      identity TYPE int8,
+      value TYPE zcl_qjs_value=>ty_value,
+      getter TYPE zcl_qjs_value=>ty_value,
+      setter TYPE zcl_qjs_value=>ty_value,
+      accessor TYPE abap_bool,
+      writable TYPE abap_bool,
+      enumerable TYPE abap_bool,
+      configurable TYPE abap_bool,
+      insertion_order TYPE i,
+    END OF ty_symbol_property.
+    TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
+      WITH UNIQUE KEY identity.
     DATA mt_properties TYPE ty_properties.
+    DATA mt_symbol_properties TYPE ty_symbol_properties.
+    DATA mv_next_symbol_order TYPE i.
     DATA mo_prototype TYPE REF TO zcl_qjs_object.
     DATA mv_is_array TYPE abap_bool.
     DATA mv_length TYPE int8.
@@ -81,6 +129,14 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS set_with_receiver
       IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+        receiver TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS get_symbol_with_receiver
+      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS set_symbol_with_receiver
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
         receiver TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS invoke_callable
@@ -159,7 +215,105 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       name = name value = value receiver = zcl_qjs_value=>new_object( me ) ).
   ENDMETHOD.
 
+  METHOD get_symbol.
+    result = get_symbol_with_receiver(
+      identity = identity receiver = zcl_qjs_value=>new_object( me ) ).
+  ENDMETHOD.
+
+  METHOD get_symbol_with_receiver.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc = 0.
+      IF ls_property-accessor = abap_true.
+        IF ls_property-getter-tag = zcl_qjs_value=>tag_undefined.
+          result = zcl_qjs_value=>new_undefined( ).
+        ELSE.
+          result = invoke_callable(
+            callable = ls_property-getter this_value = receiver ).
+        ENDIF.
+      ELSE.
+        result = ls_property-value.
+      ENDIF.
+    ELSEIF mo_prototype IS BOUND.
+      result = mo_prototype->get_symbol_with_receiver(
+        identity = identity receiver = receiver ).
+    ELSE.
+      result = zcl_qjs_value=>new_undefined( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD set_symbol.
+    set_symbol_with_receiver(
+      identity = identity value = value
+      receiver = zcl_qjs_value=>new_object( me ) ).
+  ENDMETHOD.
+
+  METHOD set_symbol_with_receiver.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_existing).
+    IF sy-subrc = 0.
+      IF ls_existing-accessor = abap_true.
+        IF ls_existing-setter-tag = zcl_qjs_value=>tag_undefined.
+          raise_error( name = 'TypeError' message = 'property has no setter' ).
+        ENDIF.
+        DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND value TO lt_setter_arguments.
+        DATA(ls_ignored) = invoke_callable(
+          callable = ls_existing-setter this_value = receiver
+          arguments = lt_setter_arguments ).
+        RETURN.
+      ELSEIF ls_existing-writable = abap_false.
+        raise_error( name = 'TypeError' message = 'property is not writable' ).
+      ELSEIF receiver-object_ref = me.
+        ls_existing-value = value.
+        DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+        INSERT ls_existing INTO TABLE mt_symbol_properties.
+        RETURN.
+      ENDIF.
+    ELSEIF mo_prototype IS BOUND.
+      mo_prototype->set_symbol_with_receiver(
+        identity = identity value = value receiver = receiver ).
+      RETURN.
+    ENDIF.
+    DATA lo_receiver TYPE REF TO zcl_qjs_object.
+    TRY.
+        lo_receiver ?= receiver-object_ref.
+      CATCH cx_sy_move_cast_error.
+        raise_error(
+          name = 'TypeError' message = 'property receiver is not an ordinary object' ).
+    ENDTRY.
+    lo_receiver->define_symbol_property( identity = identity value = value ).
+  ENDMETHOD.
+
   METHOD set_with_receiver.
+    IF mv_is_array = abap_true AND name = 'length' AND receiver-object_ref = me.
+      DATA(ls_length_value) = zcl_qjs_number=>to_number( value ).
+      DATA(lv_new_length) = CONV int8( 0 ).
+      DATA lv_max_array_length TYPE int8.
+      DATA lv_max_array_length_f TYPE f.
+      lv_max_array_length = '4294967295'.
+      lv_max_array_length_f = '4294967295'.
+      IF ls_length_value-tag = zcl_qjs_value=>tag_int
+          AND ls_length_value-int_value >= 0.
+        lv_new_length = ls_length_value-int_value.
+      ELSEIF ls_length_value-tag = zcl_qjs_value=>tag_number
+          AND ls_length_value-number_kind = zcl_qjs_value=>number_neg_zero.
+        lv_new_length = 0.
+      ELSEIF ls_length_value-tag = zcl_qjs_value=>tag_number
+          AND ls_length_value-number_kind = zcl_qjs_value=>number_finite
+          AND ls_length_value-float_value >= 0
+          AND ls_length_value-float_value <= lv_max_array_length_f
+          AND trunc( ls_length_value-float_value ) = ls_length_value-float_value.
+        lv_new_length = trunc( ls_length_value-float_value ).
+      ELSE.
+        raise_error( name = 'RangeError' message = 'invalid array length' ).
+      ENDIF.
+      IF lv_new_length > lv_max_array_length.
+        raise_error( name = 'RangeError' message = 'invalid array length' ).
+      ENDIF.
+      set_array_length( lv_new_length ).
+      RETURN.
+    ENDIF.
     DATA ls_descriptor TYPE zcl_qjs_shape=>ty_descriptor.
     ls_descriptor = mo_shape->lookup( name ).
     IF ls_descriptor-found = abap_true.
@@ -245,6 +399,65 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     INSERT ls_property INTO TABLE mt_properties.
   ENDMETHOD.
 
+  METHOD define_symbol_property.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_old_property).
+    IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
+      IF ls_old_property-accessor = abap_true OR configurable = abap_true
+          OR ls_old_property-enumerable <> enumerable
+          OR ( ls_old_property-writable = abap_false AND writable = abap_true )
+          OR ( ls_old_property-writable = abap_false
+            AND zcl_qjs_value=>strict_equal(
+              left = ls_old_property-value right = value ) = abap_false ).
+        raise_error( name = 'TypeError' message = 'property is not configurable' ).
+      ENDIF.
+    ENDIF.
+    DATA ls_property TYPE ty_symbol_property.
+    IF sy-subrc = 0.
+      ls_property-insertion_order = ls_old_property-insertion_order.
+    ELSE.
+      ls_property-insertion_order = mv_next_symbol_order.
+      mv_next_symbol_order = mv_next_symbol_order + 1.
+    ENDIF.
+    ls_property-identity = identity.
+    ls_property-value = value.
+    ls_property-writable = writable.
+    ls_property-enumerable = enumerable.
+    ls_property-configurable = configurable.
+    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+    INSERT ls_property INTO TABLE mt_symbol_properties.
+  ENDMETHOD.
+
+  METHOD define_symbol_accessor.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_old_property).
+    IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
+      IF ls_old_property-accessor = abap_false OR configurable = abap_true
+          OR ls_old_property-enumerable <> enumerable
+          OR zcl_qjs_value=>strict_equal(
+            left = ls_old_property-getter right = getter ) = abap_false
+          OR zcl_qjs_value=>strict_equal(
+            left = ls_old_property-setter right = setter ) = abap_false.
+        raise_error( name = 'TypeError' message = 'property is not configurable' ).
+      ENDIF.
+    ENDIF.
+    DATA ls_property TYPE ty_symbol_property.
+    IF sy-subrc = 0.
+      ls_property-insertion_order = ls_old_property-insertion_order.
+    ELSE.
+      ls_property-insertion_order = mv_next_symbol_order.
+      mv_next_symbol_order = mv_next_symbol_order + 1.
+    ENDIF.
+    ls_property-identity = identity.
+    ls_property-getter = getter.
+    ls_property-setter = setter.
+    ls_property-accessor = abap_true.
+    ls_property-enumerable = enumerable.
+    ls_property-configurable = configurable.
+    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+    INSERT ls_property INTO TABLE mt_symbol_properties.
+  ENDMETHOD.
+
   METHOD invoke_callable.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lo_callable TYPE REF TO zif_qjs_callable.
@@ -285,6 +498,17 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     result = abap_true.
   ENDMETHOD.
 
+  METHOD delete_symbol.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc = 0 AND ls_property-configurable = abap_false.
+      result = abap_false.
+      RETURN.
+    ENDIF.
+    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+    result = abap_true.
+  ENDMETHOD.
+
   METHOD has_own.
     result = mo_shape->lookup( name )-found.
   ENDMETHOD.
@@ -296,8 +520,21 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD has_own_symbol.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      TRANSPORTING NO FIELDS.
+    result = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD has_symbol_property.
+    result = has_own_symbol( identity ).
+    IF result = abap_false AND mo_prototype IS BOUND.
+      result = mo_prototype->has_symbol_property( identity ).
+    ENDIF.
+  ENDMETHOD.
+
   METHOD own_property_count.
-    result = mo_shape->property_count( ).
+    result = mo_shape->property_count( ) + lines( mt_symbol_properties ).
   ENDMETHOD.
 
   METHOD get_prototype.
@@ -327,12 +564,30 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     result-configurable = ls_descriptor-configurable.
   ENDMETHOD.
 
+  METHOD get_own_symbol_property.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    result-found = abap_true.
+    result-accessor = ls_property-accessor.
+    result-value = ls_property-value.
+    result-getter = ls_property-getter.
+    result-setter = ls_property-setter.
+    result-writable = ls_property-writable.
+    result-enumerable = ls_property-enumerable.
+    result-configurable = ls_property-configurable.
+  ENDMETHOD.
+
   METHOD set_element.
     DATA lv_name TYPE string.
+    DATA lv_max_array_length TYPE int8.
+    lv_max_array_length = '4294967295'.
     lv_name = index.
     CONDENSE lv_name NO-GAPS.
     set( name = lv_name value = value ).
-    IF index >= mv_length.
+    IF index >= mv_length AND index >= 0 AND index < lv_max_array_length.
       mv_length = index + 1.
     ENDIF.
   ENDMETHOD.
@@ -349,8 +604,34 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD set_array_length.
-    IF mv_is_array = abap_false OR length < 0.
+    DATA lv_max_array_length TYPE int8.
+    lv_max_array_length = '4294967295'.
+    IF mv_is_array = abap_false OR length < 0 OR length > lv_max_array_length.
       raise_error( name = 'RangeError' message = 'invalid array length' ).
+    ENDIF.
+    IF length < mv_length.
+      DATA lt_delete_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+      LOOP AT mt_properties INTO DATA(ls_property).
+        DATA(lv_index) = CONV int8( 0 ).
+        DATA(lv_canonical_name) = ``.
+        TRY.
+            lv_index = ls_property-name.
+            lv_canonical_name = lv_index.
+            CONDENSE lv_canonical_name NO-GAPS.
+            IF lv_index >= length AND lv_index >= 0
+                AND lv_index < lv_max_array_length
+                AND lv_canonical_name = ls_property-name.
+              APPEND ls_property-name TO lt_delete_names.
+            ENDIF.
+          CATCH cx_sy_conversion_no_number cx_sy_conversion_overflow.
+        ENDTRY.
+      ENDLOOP.
+      LOOP AT lt_delete_names INTO DATA(lv_delete_name).
+        IF delete( lv_delete_name ) = abap_false.
+          raise_error(
+            name = 'TypeError' message = 'array element is not configurable' ).
+        ENDIF.
+      ENDLOOP.
     ENDIF.
     mv_length = length.
   ENDMETHOD.
@@ -361,6 +642,17 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD own_property_names.
     result = mo_shape->names( ).
+  ENDMETHOD.
+
+  METHOD own_property_symbols.
+    DATA lt_properties TYPE STANDARD TABLE OF ty_symbol_property WITH DEFAULT KEY.
+    LOOP AT mt_symbol_properties INTO DATA(ls_property).
+      APPEND ls_property TO lt_properties.
+    ENDLOOP.
+    SORT lt_properties BY insertion_order ASCENDING.
+    LOOP AT lt_properties INTO ls_property.
+      APPEND ls_property-identity TO result.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD set_prototype.

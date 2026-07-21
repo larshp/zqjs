@@ -283,8 +283,8 @@ carry a **Partial** note. Verification on a representative real ABAP stack is st
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 73 opcodes; abaplint covers 59 files with no findings; all
-current ABAP Unit suites pass; and the pinned test262 slice reports 12 pass, 1
+QuickJS table contains 74 opcodes; abaplint covers 60 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 282 pass, 2
 reasoned unsupported, and 0 fail.
 
 ### Phase 0 — Scope, reproducibility & host proof
@@ -389,8 +389,10 @@ reasoned unsupported, and 0 fail.
       `arguments`; object/array literals.
 - [ ] Functions become ordinary callable objects; implement `this`, `new`, constructors,
       `instanceof`, and callable/constructable distinction.
-      **Partial:** closures are property-bearing callable objects and `this`, `new`,
-      constructors, and callable/constructable checks exist; full ordinary-object
+      **Partial:** declarations plus anonymous/named function expressions, captures,
+      self-recursion, and IIFEs are implemented; closures are property-bearing callable
+      objects and `this`, `new`, constructors, and callable/constructable checks exist;
+      full ordinary-object
       unification and `instanceof` coverage remain.
 - [x] Host-function registration through `zif_qjs_callable`, ABAP↔JS marshalling,
       explicit host-resource disposal, error translation, and cancellation.
@@ -411,15 +413,34 @@ reasoned unsupported, and 0 fail.
       exact `toFixed`/`toPrecision` and arbitrary-radix divergence coverage remains.
 - [ ] Priority built-ins: global functions, `Object`, `Function`, `Array`, `String`,
       `Number`, `Boolean`, `Math`, `JSON`, `Symbol`, and the `Error` hierarchy.
-      **Partial:** Object, Array, String, Number, Boolean, Math, bounded JSON, and the
-      Error hierarchy are present; Function, Symbol, global, and broader prototype
-      coverage remain incomplete.
+      **Partial:** Object, Array, String, Number, Boolean, Math, bounded JSON, the
+      Error hierarchy, Symbol creation/global-registry operations, numeric globals,
+      Number static predicates/constants, Math's eight standard numeric constants plus
+      `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cbrt`,
+      `ceil`, `clz32`, `cos`, `cosh`, `exp`, `expm1`, `f16round`, `floor`, `fround`,
+      `hypot`, `imul`, `log`, `log1p`, `log10`, `log2`, `max`, `min`, `pow`, `round`,
+      `random`, `sign`, `sin`, `sinh`, `sqrt`, `tan`, `tanh`, and `trunc`, and
+      Object `assign`, `values`, `entries`, `hasOwn`, and `is`, a real
+      `Object.prototype` with `toString`, the four URI transform
+      globals, `URIError`, dynamic `Function` construction, and
+      `Function.prototype.call`/`apply`/`bind`, runtime-stable well-known Symbols,
+      separate symbol-keyed property storage, and Symbol-aware Object reflection are
+      present; arrays inherit a real `Array.prototype` with generic `push`, `pop`,
+      `shift`, `unshift`, `reverse`, `slice`, `forEach`, `map`, `filter`, `join`,
+      `some`, `every`, `find`, `findIndex`, `reduce`, `reduceRight`, `fill`,
+      `copyWithin`, `indexOf`,
+      `lastIndexOf`, `includes`, and `at`,
+      shared `ToLength` handling, uint32 index boundaries, and truncating `length`
+      assignment. The
+      broader Function/Array/String prototypes, well-known Symbol property attributes,
+      other prototypes, and built-in function metadata remain incomplete.
 - [ ] Then `Map`, `Set`, and `Reflect`. Keep `Date`, weak collections, Proxy, and binary
       data in explicit later/deferred feature groups rather than silently omitting them.
 - **Exit:** JSON and the declared core built-in profile pass published test262 subsets;
       Number formatting passes a named corpus with every remaining divergence listed.
-      **Status:** the selected JSON slice passes five pinned test262 cases; the broader
-      built-in profile, named formatting corpus, and divergence catalog remain.
+      **Status:** selected JSON, Symbol, Function, Array, numeric-global, URI-global, Number, Math, and Object slices
+      pass pinned test262 cases; the broader built-in profile, named formatting corpus,
+      and divergence catalog remain.
 
 ### Phase 6 — Advanced language features
 - [ ] Destructuring, spread/rest, default parameters, template literals, computed keys.
@@ -431,6 +452,9 @@ reasoned unsupported, and 0 fail.
       `import()`. Add module test262 harness support here.
 - [ ] Direct `eval` and `Function` construction only if the Phase 0 profile includes
       them; verify their scope-resolution effects explicitly.
+      **Partial:** `Function` construction uses global context bindings and is covered
+      for parameter/body compilation and non-capture of caller locals; direct `eval`
+      remains unimplemented.
 - **Exit:** each enabled feature group has a named test262 denominator, pass rate, limits,
       and host-integration tests.
 

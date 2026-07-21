@@ -46,6 +46,7 @@
   { "upstreamName": "set_loc_check", "abapName": "set_lexical", "opcode": 97, "size": 3, "pops": 1, "pushes": 1, "format": "loc" },
   { "upstreamName": "put_loc_check_init", "abapName": "initialize_lexical", "opcode": 98, "size": 3, "pops": 1, "pushes": 0, "format": "loc" },
   { "upstreamName": "neg", "abapName": "negate", "opcode": 138, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
+  { "upstreamName": "plus", "abapName": "unary_plus", "opcode": 139, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
   { "upstreamName": "dec", "abapName": "decrement", "opcode": 140, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
   { "upstreamName": "inc", "abapName": "increment", "opcode": 141, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
   { "upstreamName": "not", "abapName": "bitwise_not", "opcode": 147, "size": 1, "pops": 1, "pushes": 1, "format": "none" },

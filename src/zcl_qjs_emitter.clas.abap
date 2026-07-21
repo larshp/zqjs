@@ -1,7 +1,8 @@
 CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor
-      IMPORTING limits TYPE REF TO zcl_qjs_limits OPTIONAL.
+      IMPORTING limits TYPE REF TO zcl_qjs_limits OPTIONAL
+      RAISING zcx_qjs_error.
 
     METHODS emit
       IMPORTING
@@ -36,7 +37,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE i.
     METHODS set_signature
       IMPORTING parameter_count TYPE i has_self TYPE abap_bool DEFAULT abap_false
-        has_this TYPE abap_bool DEFAULT abap_false
+        has_this TYPE abap_bool DEFAULT abap_false name TYPE string OPTIONAL
         has_arguments TYPE abap_bool DEFAULT abap_false.
     METHODS intern_atom
       IMPORTING name TYPE string
@@ -51,6 +52,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mt_constants TYPE zcl_qjs_function=>ty_constants.
     DATA mv_local_count TYPE i.
     DATA mv_parameter_count TYPE i.
+    DATA mv_name TYPE string.
     DATA mv_has_self TYPE abap_bool.
     DATA mv_has_this TYPE abap_bool.
     DATA mv_has_arguments TYPE abap_bool.
@@ -82,7 +84,7 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
         code            = mt_code
         constants       = mt_constants
         local_count     = mv_local_count
-        parameter_count = mv_parameter_count
+        parameter_count = mv_parameter_count name = mv_name
         has_self        = mv_has_self
         has_this        = mv_has_this
         has_arguments   = mv_has_arguments
@@ -142,6 +144,7 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
 
   METHOD set_signature.
     mv_parameter_count = parameter_count.
+    mv_name = name.
     mv_has_self = has_self.
     mv_has_this = has_this.
     mv_has_arguments = has_arguments.
