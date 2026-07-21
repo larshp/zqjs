@@ -74,7 +74,7 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS token_bit_xor_assign TYPE i VALUE 71.
     CONSTANTS token_shift_left_assign TYPE i VALUE 72.
     CONSTANTS token_shift_right_assign TYPE i VALUE 73.
-    CONSTANTS token_shift_right_unsigned_assign TYPE i VALUE 74.
+    CONSTANTS token_ushift_right_assign TYPE i VALUE 74.
 
     TYPES:
       BEGIN OF ty_token,
@@ -270,7 +270,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
       WHEN '>'.
         result-kind = token_gt.
         IF mv_offset + 3 < strlen( mv_source ) AND mv_source+mv_offset(4) = '>>>='.
-          result-kind = token_shift_right_unsigned_assign.
+          result-kind = token_ushift_right_assign.
           mv_offset = mv_offset + 3.
         ELSEIF mv_offset + 2 < strlen( mv_source ) AND mv_source+mv_offset(3) = '>>='.
           result-kind = token_shift_right_assign.

@@ -15,21 +15,20 @@
   ],
   "syntax": {
     "version": "open-abap",
-    "errorNamespace": "^Z"
+    "errorNamespace": "."
   },
   "rules": {
     "parser_error": true,
     "unknown_types": true,
     "check_syntax": true,
     "global_class": true,
+    "align_parameters": true,
     "implement_methods": true,
     "local_testclass_consistency": true,
     "main_file_contents": true,
     "xml_consistency": true,
     "whitespace_end": true,
     "contains_tab": true,
-    "keyword_case": {
-      "style": "upper"
-    }
+    "keyword_case": true
   }
 }

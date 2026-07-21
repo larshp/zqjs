@@ -62,39 +62,39 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     ENDIF.
     mo_runtime = runtime.
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_number
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
     set_global( name = 'Number' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_string
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
     set_global( name = 'String' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_boolean
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
     set_global( name = 'Boolean' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_object
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_object_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
     set_global( name = 'Object' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_array
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_array_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
     set_global( name = 'Array' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_is_nan
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
     ls_native_value-property_ref = lo_native.
@@ -111,16 +111,16 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'keys' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_define_property
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
       name = 'defineProperty' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_get_own_descriptor
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
-      name = 'getOwnPropertyDescriptor'
+      name  = 'getOwnPropertyDescriptor'
       value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_create runtime = mo_runtime.
@@ -129,86 +129,86 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'create' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_get_prototype
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
       name = 'getPrototypeOf' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_set_prototype
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
       name = 'setPrototypeOf' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_define_properties
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
       name = 'defineProperties' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_object_get_own_names
-        runtime = mo_runtime.
+        runtime    = mo_runtime.
     lo_reference = lo_native.
     lo_object_intrinsic->set_property(
       name = 'getOwnPropertyNames' value = zcl_qjs_value=>new_object( lo_reference ) ).
     set_global(
-      name = 'NaN'
+      name  = 'NaN'
       value = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ) ).
     set_global(
-      name = 'Infinity'
+      name  = 'Infinity'
       value = zcl_qjs_value=>new_special( zcl_qjs_value=>number_pos_inf ) ).
     lo_math = mo_runtime->create_object( ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_math_abs
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_math->set( name = 'abs' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_math_floor
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_math->set( name = 'floor' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_math_ceil
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_math->set( name = 'ceil' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_math_max
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_math->set( name = 'max' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_math_min
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_math->set( name = 'min' value = zcl_qjs_value=>new_object( lo_reference ) ).
     set_global( name = 'Math' value = zcl_qjs_value=>new_object( lo_math ) ).
     lo_json = mo_runtime->create_object( ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_json_parse
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_json->set(
       name = 'parse' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_json_stringify
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     lo_json->set(
       name = 'stringify' value = zcl_qjs_value=>new_object( lo_reference ) ).
     set_global( name = 'JSON' value = zcl_qjs_value=>new_object( lo_json ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_error
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     set_global( name = 'Error' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_type_error
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     set_global( name = 'TypeError' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_range_error
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     set_global( name = 'RangeError' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_syntax_error
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     set_global( name = 'SyntaxError' value = zcl_qjs_value=>new_object( lo_reference ) ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_reference_error
-      runtime = mo_runtime.
+      runtime                            = mo_runtime.
     lo_reference = lo_native.
     set_global( name = 'ReferenceError' value = zcl_qjs_value=>new_object( lo_reference ) ).
   ENDMETHOD.

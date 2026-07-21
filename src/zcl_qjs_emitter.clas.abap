@@ -79,16 +79,16 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
   METHOD to_function.
     CREATE OBJECT result
       EXPORTING
-        code = mt_code
-        constants = mt_constants
-        local_count = mv_local_count
+        code            = mt_code
+        constants       = mt_constants
+        local_count     = mv_local_count
         parameter_count = mv_parameter_count
-        has_self = mv_has_self
-        has_this = mv_has_this
-        has_arguments = mv_has_arguments
-        atoms = mt_atoms
-        captures = mt_captures
-        local_specs = mt_local_specs.
+        has_self        = mv_has_self
+        has_this        = mv_has_this
+        has_arguments   = mv_has_arguments
+        atoms           = mt_atoms
+        captures        = mt_captures
+        local_specs     = mt_local_specs.
   ENDMETHOD.
 
   METHOD emit_constant.

@@ -464,7 +464,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             APPEND lo_create_properties->get( lv_create_name ) TO lt_define_arguments.
             DATA(ls_create_ignored) = lo_define_helper->zif_qjs_callable~call(
               this_value = zcl_qjs_value=>new_undefined( )
-              arguments = lt_define_arguments ).
+              arguments  = lt_define_arguments ).
           ENDLOOP.
         ENDIF.
       WHEN id_object_get_prototype.
@@ -541,7 +541,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             TO lt_define_many_arguments.
           DATA(ls_define_many_ignored) = lo_define_many_helper->zif_qjs_callable~call(
             this_value = zcl_qjs_value=>new_undefined( )
-            arguments = lt_define_many_arguments ).
+            arguments  = lt_define_many_arguments ).
         ENDLOOP.
         result = ls_define_many_target.
       WHEN id_object_get_own_names.

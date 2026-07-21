@@ -708,11 +708,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ls_local-name = ls_parent_binding-name.
         IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
           ls_local-index = mo_emitter->allocate_capture(
-            source_kind = zcl_qjs_function=>capture_parent
+            source_kind  = zcl_qjs_function=>capture_parent
             source_index = ls_parent_binding-index ).
         ELSE.
           ls_local-index = mo_emitter->allocate_capture(
-            source_kind = zcl_qjs_function=>capture_local
+            source_kind  = zcl_qjs_function=>capture_local
             source_index = ls_parent_binding-index ).
         ENDIF.
         ls_local-kind = zcl_qjs_function=>capture_parent.
@@ -749,12 +749,12 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       lv_constant_index = mo_emitter->add_constant( ls_function_value ).
       mo_emitter->replace(
         instruction = ls_hoist-make_instruction
-        opcode = zif_qjs_opcodes=>make_closure
-        operand = lv_constant_index ).
+        opcode      = zif_qjs_opcodes=>make_closure
+        operand     = lv_constant_index ).
       mo_emitter->replace(
         instruction = ls_hoist-put_instruction
-        opcode = zif_qjs_opcodes=>put_local
-        operand = ls_outer_local-index ).
+        opcode      = zif_qjs_opcodes=>put_local
+        operand     = ls_outer_local-index ).
     ELSE.
       mo_emitter->emit_closure( ls_function_value ).
       mo_emitter->emit(
@@ -787,11 +787,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       result-name = name.
       IF ls_local-kind = zcl_qjs_function=>capture_parent.
         result-index = mo_emitter->allocate_capture(
-          source_kind = zcl_qjs_function=>capture_parent
+          source_kind  = zcl_qjs_function=>capture_parent
           source_index = ls_local-index ).
       ELSE.
         result-index = mo_emitter->allocate_capture(
-          source_kind = zcl_qjs_function=>capture_local
+          source_kind  = zcl_qjs_function=>capture_local
           source_index = ls_local-index ).
       ENDIF.
       result-kind = zcl_qjs_function=>capture_parent.
@@ -1053,7 +1053,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD is_compound_assignment.
     result = xsdbool( kind >= zcl_qjs_lexer=>token_add_assign
-      AND kind <= zcl_qjs_lexer=>token_shift_right_unsigned_assign ).
+      AND kind <= zcl_qjs_lexer=>token_ushift_right_assign ).
   ENDMETHOD.
 
   METHOD emit_compound_operator.
@@ -1078,7 +1078,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         mo_emitter->emit( zif_qjs_opcodes=>shift_left ).
       WHEN zcl_qjs_lexer=>token_shift_right_assign.
         mo_emitter->emit( zif_qjs_opcodes=>shift_right ).
-      WHEN zcl_qjs_lexer=>token_shift_right_unsigned_assign.
+      WHEN zcl_qjs_lexer=>token_ushift_right_assign.
         mo_emitter->emit( zif_qjs_opcodes=>shift_right_unsigned ).
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1685,15 +1685,15 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           lv_constructor_binding = find_binding( lv_constructor_name ).
           IF lv_constructor_binding-kind = zcl_qjs_function=>capture_parent.
             mo_emitter->emit(
-              opcode = zif_qjs_opcodes=>get_capture
+              opcode  = zif_qjs_opcodes=>get_capture
               operand = lv_constructor_binding-index ).
           ELSEIF lv_constructor_binding-lexical = abap_true.
             mo_emitter->emit(
-              opcode = zif_qjs_opcodes=>get_lexical
+              opcode  = zif_qjs_opcodes=>get_lexical
               operand = lv_constructor_binding-index ).
           ELSE.
             mo_emitter->emit(
-              opcode = zif_qjs_opcodes=>get_local
+              opcode  = zif_qjs_opcodes=>get_local
               operand = lv_constructor_binding-index ).
           ENDIF.
         ENDIF.
@@ -1734,7 +1734,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           mo_emitter->emit( zif_qjs_opcodes=>new_object ).
         ELSE.
           mo_emitter->emit(
-            opcode = zif_qjs_opcodes=>call_constructor
+            opcode  = zif_qjs_opcodes=>call_constructor
             operand = lv_constructor_arguments ).
         ENDIF.
       WHEN OTHERS.

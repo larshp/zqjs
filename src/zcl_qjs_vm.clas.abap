@@ -762,19 +762,19 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           CLEAR lo_closure.
           IF ls_right-tag <> zcl_qjs_value=>tag_object.
             throw_error(
-              name = 'TypeError'
+              name    = 'TypeError'
               message = 'right-hand side of instanceof is not constructable' ).
           ENDIF.
           TRY.
               lo_closure ?= ls_right-object_ref.
             CATCH cx_sy_move_cast_error.
               throw_error(
-                name = 'TypeError'
+                name    = 'TypeError'
                 message = 'right-hand side of instanceof is not constructable' ).
           ENDTRY.
           IF lo_closure IS NOT BOUND.
             throw_error(
-              name = 'TypeError'
+              name    = 'TypeError'
               message = 'right-hand side of instanceof is not constructable' ).
           ENDIF.
           lo_prototype = lo_closure->get_prototype_object( ).
