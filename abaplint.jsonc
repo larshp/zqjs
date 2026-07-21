@@ -1,0 +1,35 @@
+{
+  "global": {
+    "files": "/src/**/*.*",
+    "skipGeneratedGatewayClasses": true,
+    "skipGeneratedPersistentClasses": true,
+    "skipGeneratedFunctionGroups": true,
+    "errorOnDuplicateFilenames": true
+  },
+  "dependencies": [
+    {
+      "url": "https://github.com/open-abap/open-abap-core",
+      "folder": "/.cache/open-abap-core",
+      "files": "/src/**/*.*"
+    }
+  ],
+  "syntax": {
+    "version": "open-abap",
+    "errorNamespace": "^Z"
+  },
+  "rules": {
+    "parser_error": true,
+    "unknown_types": true,
+    "check_syntax": true,
+    "global_class": true,
+    "implement_methods": true,
+    "local_testclass_consistency": true,
+    "main_file_contents": true,
+    "xml_consistency": true,
+    "whitespace_end": true,
+    "contains_tab": true,
+    "keyword_case": {
+      "style": "upper"
+    }
+  }
+}

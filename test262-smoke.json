@@ -1,0 +1,21 @@
+{
+  "tests": [
+    "test/built-ins/JSON/parse/15.12.1.1-0-9.js",
+    "test/built-ins/JSON/parse/text-negative-zero.js",
+    "test/built-ins/JSON/stringify/value-number-negative-zero.js",
+    "test/built-ins/JSON/stringify/value-number-non-finite.js",
+    "test/built-ins/JSON/stringify/value-primitive-top-level.js",
+    "test/language/expressions/addition/S11.6.1_A2.1_T1.js",
+    "test/language/expressions/bitwise-and/S11.10.1_A2.1_T1.js",
+    "test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js",
+    {
+      "path": "test/language/expressions/compound-assignment/11.13.2-6-1gs.js",
+      "expectedOutcome": "unsupported"
+    },
+    "test/language/expressions/left-shift/S11.7.1_A2.1_T1.js",
+    "test/language/expressions/logical-and/S11.11.1_A2.1_T1.js",
+    "test/language/expressions/postfix-increment/S11.3.1_A3_T4.js",
+    "test/language/expressions/postfix-increment/line-terminator-line-feed.js"
+  ],
+  "expectedOutcome": "pass"
+}
