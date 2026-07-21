@@ -277,24 +277,43 @@ changing the representation after the VM exists would be expensive, so measure e
 Each phase is independently testable and delivers standalone value. Check items off as
 completed.
 
+**Implementation status (2026-07-21):** `[x]` means the item is implemented and
+verified in the current transpiled-Node lane. Incomplete items remain `[ ]` and may
+carry a **Partial** note. Verification on a representative real ABAP stack is still
+outstanding, so no dual-host exit criterion is considered complete yet.
+
+Current verified baseline: the full `npm test` pipeline is green; the generated
+QuickJS table contains 73 opcodes; abaplint covers 59 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 12 pass, 1
+reasoned unsupported, and 0 fail.
+
 ### Phase 0 — Scope, reproducibility & host proof
-- [ ] Fix the supported language profile: strict/sloppy mode, direct `eval`, `Function`,
+- [x] Fix the supported language profile: strict/sloppy mode, direct `eval`, `Function`,
       `with`, Annex B, modules, and the explicitly excluded/deferred features. BigInt,
       `Intl`, SharedArrayBuffer/Atomics, and tail calls start outside the core profile;
       record `Proxy`, TypedArray/ArrayBuffer/DataView, and async-generator status too.
 - [ ] Pin the QuickJS release **and commit**, test262 commit, Unicode version, npm
       dependencies, open-abap version, minimum SAP_BASIS/kernel, and PCRE baseline.
       Preserve upstream MIT notices for derived/generated material.
+      **Partial:** QuickJS, test262, npm/open-abap, and minimum SAP versions are
+      recorded; Unicode/PCRE baselines and the complete derived-material notice audit
+      remain.
 - [ ] Repo layout, lockfile, `abaplint.jsonc`, transpiler/open-abap runner, and CI.
+      **Partial:** the repository, lockfile, lint/transpile/test runners, and the
+      transpiled lane exist; a real-ABAP CI lane remains.
 - [ ] Run the host-capability probe from §3 on Node and a representative real ABAP
       stack; publish its result as a target matrix.
-- [ ] Minimal test262 ingestion: front matter, harness includes, positive/negative parse
+- [x] Minimal test262 ingestion: front matter, harness includes, positive/negative parse
       and runtime tests, feature filtering, and reasoned unsupported/skip reporting.
       Async and module harness support grows when those features arrive.
 - [ ] Build/pin a small QuickJS reference utility that emits normalized JSON
       disassembly. Generate `zif_qjs_opcodes`, operand metadata, predefined atoms, and
       `ID_Start`/`ID_Continue` ranges from pinned upstream inputs.
+      **Partial:** the normalized oracle and opcode/operand generation are in place;
+      predefined-atom and Unicode identifier-range generation remain.
 - [ ] Skeleton public facade and one unit test passing in both CI lanes.
+      **Partial:** the facade and transpiled ABAP Unit coverage exist; the real-ABAP
+      lane is not yet available.
 - **Exit:** reproducible green builds, a published capability/profile manifest, a real
       ABAP smoke test, generated inputs, and one test262 test reported correctly.
 
@@ -302,76 +321,105 @@ completed.
 - [ ] `zcl_qjs_value=>ty_value`: flat tagged representation for `INT`, `NUMBER`, `BOOL`,
       `NULL`, `UNDEFINED`, `STRING`, `OBJECT`, `SYMBOL`, and internal sentinels. No
       `BIG_INT`; benchmark it against object wrappers before freezing the VM API.
+      **Partial:** the tagged representation is implemented and in use; the recorded
+      wrapper comparison/benchmark remains.
 - [ ] `zcl_qjs_number`: explicit finite/NaN/+Infinity/-Infinity/-0 kinds; guarded JS
       arithmetic, comparison, `ToNumber`/`ToInt32`/`ToUint32`, and an **interim parser**
       for decimal and `0x`/`0o`/`0b` literals. Validate it against a named boundary
       corpus and tag every exact-rounding divergence pending Phase 9. No ABAP arithmetic
       exception may leak.
+      **Partial:** number kinds, coercions, parsing, arithmetic, and shortest finite
+      formatting are covered; the named boundary corpus and exact divergence catalog
+      are not complete.
 - [ ] `zcl_qjs_string`: choose its backing from the Phase 0 probe; implement exact
       UTF-16 length/code-unit access, lone-surrogate preservation, concat, and equality.
-- [ ] `zcl_qjs_completion`/`zcx_qjs_throw`: define normal, return, throw, break, and
+      **Partial:** the string abstraction and UTF-16 operations exist; real-host probe
+      evidence, especially for lone surrogates, remains.
+- [x] `zcl_qjs_completion`/`zcx_qjs_throw`: define normal, return, throw, break, and
       continue propagation, keeping host/configuration failures separate.
 - [ ] Runtime/context shell, symbols, atom interning, and explicit retention rules.
       Predefined atoms may be permanent; dynamic atoms and shape caches need lifecycle
       policy and quotas.
+      **Partial:** runtime/context, symbols, and atom interning exist; lifecycle policy
+      and quotas for dynamic atoms and shape caches remain incomplete.
 - [ ] `zcl_qjs_limits` and cancellation checks: instruction, frame/operand stack,
       parser depth, atoms, objects/estimated bytes, source/bytecode size, and job queue.
-- [ ] Minimal callable/object cells needed by the first VM slice.
+      **Partial:** instruction, stack/frame, parser, atom/object, and source/bytecode
+      limits plus cancellation are implemented; estimated-byte and job-queue limits
+      remain.
+- [x] Minimal callable/object cells needed by the first VM slice.
 - **Exit:** every primitive and special Number state round-trips; arithmetic/coercion,
       string/code-unit, completion, atom-lifecycle, and limit tests pass on both hosts.
 
 ### Phase 2 — First end-to-end vertical slice
-- [ ] Minimal lexer for identifiers, numeric/string literals, `+ - * /`, parentheses,
+- [x] Minimal lexer for identifiers, numeric/string literals, `+ - * /`, parentheses,
       and end-of-input. Regex literal scanning is parser-directed when added later.
-- [ ] Direct-emitting expression parser plus `zcl_qjs_emitter`/byte buffer.
-- [ ] `zcl_qjs_function` and `zcl_qjs_disasm`; normalized snapshots compare with the
+- [x] Direct-emitting expression parser plus `zcl_qjs_emitter`/byte buffer.
+- [x] `zcl_qjs_function` and `zcl_qjs_disasm`; normalized snapshots compare with the
       pinned QuickJS reference at the logical-instruction level.
-- [ ] `zcl_qjs_vm`: `CASE` dispatch, operand stack, **explicit frame table**, program
+- [x] `zcl_qjs_vm`: `CASE` dispatch, operand stack, **explicit frame table**, program
       counter, and budget/cancellation checkpoint.
-- [ ] Minimal push, arithmetic, return, and required conversion opcodes.
+- [x] Minimal push, arithmetic, return, and required conversion opcodes.
 - **Exit:** `1 + 2 * 3` runs through source→lexer→parser→bytecode→VM on both hosts, has a
       normalized reference snapshot, and terminates under a deliberately tiny budget.
+      **Status:** complete in the transpiled lane; real-ABAP execution remains.
 
 ### Phase 3 — Core language, one vertical slice at a time
-- [ ] Expand tokens/grammar incrementally: comparisons, assignments, blocks,
+- [x] Expand tokens/grammar incrementally: comparisons, assignments, blocks,
       `if`, loops, `break`/`continue`, ASI, and functions. Add template/regex lexical
       modes only with the parser productions that consume them.
-- [ ] Pass 2: `var`/`let`/`const`, TDZ, args/locals/closure slots, labels, and closure
+- [x] Pass 2: `var`/`let`/`const`, TDZ, args/locals/closure slots, labels, and closure
       capture. Its rules follow the language profile fixed in Phase 0.
-- [ ] Expand the same explicit-frame VM: locals/args, jumps, calls/returns, closures,
+- [x] Expand the same explicit-frame VM: locals/args, jumps, calls/returns, closures,
       lexical environments, and stack metadata verification.
-- [ ] Exceptions end-to-end now: `throw`, `try/catch/finally`, internal TypeError/
+- [x] Exceptions end-to-end now: `throw`, `try/catch/finally`, internal TypeError/
       RangeError/SyntaxError creation, and abrupt-completion unwinding.
-- [ ] Enforce instruction/stack/parser/allocation limits in all new paths.
+- [x] Enforce instruction/stack/parser/allocation limits in all new paths.
 - **Exit:** arithmetic, `if`/`while`/`for`, recursion, closure counters, and caught/finally
       exceptions pass their test262 subsets and host-differential tests.
+      **Status:** covered by ABAP Unit in the transpiled lane; broader named test262
+      subsets and real-host differential tests remain.
 
 ### Phase 4 — Objects, prototypes & the embedding API
 - [ ] `zcl_qjs_shape` + `zcl_qjs_object`: property keys/flags, prototype, class id,
       transition-cache ownership, and exotic hooks.
-- [ ] Property get/set/define/delete; accessors; prototype lookup; ordinary arrays and
+      **Partial:** shapes, ordinary objects, property flags, prototypes, and transition
+      caching exist; class/exotic-hook coverage is not complete.
+- [x] Property get/set/define/delete; accessors; prototype lookup; ordinary arrays and
       `arguments`; object/array literals.
 - [ ] Functions become ordinary callable objects; implement `this`, `new`, constructors,
       `instanceof`, and callable/constructable distinction.
-- [ ] Host-function registration through `zif_qjs_callable`, ABAP↔JS marshalling,
+      **Partial:** closures are property-bearing callable objects and `this`, `new`,
+      constructors, and callable/constructable checks exist; full ordinary-object
+      unification and `instanceof` coverage remain.
+- [x] Host-function registration through `zif_qjs_callable`, ABAP↔JS marshalling,
       explicit host-resource disposal, error translation, and cancellation.
-- [ ] Stabilize the public `eval`/`call` API and define runtime/context disposal.
+- [x] Stabilize the public `eval`/`call` API and define runtime/context disposal.
 - **Exit:** an ABAP caller registers a function, passes structured values, runs object/
       prototype/constructor code, receives results, catches JS errors, and hits budgets.
       This is the first credible embedded-engine milestone.
+      **Status:** achieved and tested in the transpiled lane; representative real-ABAP
+      verification remains.
 
 ### Phase 5 — Core built-ins & number formatting
-- [ ] Interim Number→string implementation: integers exact; finite doubles use a
+- [x] Interim Number→string implementation: integers exact; finite doubles use a
       locale-independent shortest-round-trip search over verified ABAP conversion, then
       ECMAScript exponent/shape rules. Keep special Number kinds explicit.
 - [ ] Document and tag known interim divergences (`toFixed`/`toPrecision` extremes,
       arbitrary-radix fractions); they are unsupported/expected failures, not passes.
+      **Partial:** shortest-round-trip finite formatting is implemented and tested;
+      exact `toFixed`/`toPrecision` and arbitrary-radix divergence coverage remains.
 - [ ] Priority built-ins: global functions, `Object`, `Function`, `Array`, `String`,
       `Number`, `Boolean`, `Math`, `JSON`, `Symbol`, and the `Error` hierarchy.
+      **Partial:** Object, Array, String, Number, Boolean, Math, bounded JSON, and the
+      Error hierarchy are present; Function, Symbol, global, and broader prototype
+      coverage remain incomplete.
 - [ ] Then `Map`, `Set`, and `Reflect`. Keep `Date`, weak collections, Proxy, and binary
       data in explicit later/deferred feature groups rather than silently omitting them.
 - **Exit:** JSON and the declared core built-in profile pass published test262 subsets;
       Number formatting passes a named corpus with every remaining divergence listed.
+      **Status:** the selected JSON slice passes five pinned test262 cases; the broader
+      built-in profile, named formatting corpus, and divergence catalog remain.
 
 ### Phase 6 — Advanced language features
 - [ ] Destructuring, spread/rest, default parameters, template literals, computed keys.
