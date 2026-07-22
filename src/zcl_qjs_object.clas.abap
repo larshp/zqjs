@@ -1,5 +1,11 @@
 CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
+    CONSTANTS collection_none TYPE i VALUE 0.
+    CONSTANTS collection_map TYPE i VALUE 1.
+    CONSTANTS collection_set TYPE i VALUE 2.
+    CONSTANTS iterator_keys TYPE i VALUE 1.
+    CONSTANTS iterator_values TYPE i VALUE 2.
+    CONSTANTS iterator_entries TYPE i VALUE 3.
     METHODS constructor IMPORTING prototype TYPE REF TO zcl_qjs_object OPTIONAL
       is_array TYPE abap_bool DEFAULT abap_false
       shape TYPE REF TO zcl_qjs_shape OPTIONAL
@@ -15,6 +21,12 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       configurable TYPE abap_bool,
     END OF ty_own_property.
     TYPES ty_symbol_ids TYPE STANDARD TABLE OF int8 WITH DEFAULT KEY.
+    TYPES: BEGIN OF ty_collection_entry,
+      found TYPE abap_bool,
+      deleted TYPE abap_bool,
+      key TYPE zcl_qjs_value=>ty_value,
+      value TYPE zcl_qjs_value=>ty_value,
+    END OF ty_collection_entry.
     METHODS get
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -24,6 +36,24 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS get_symbol
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS reflect_get
+      IMPORTING name TYPE string receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS reflect_get_symbol
+      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS reflect_set
+      IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+        receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS reflect_set_symbol
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+        receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS set_symbol
       IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
@@ -89,11 +119,44 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS is_array RETURNING VALUE(result) TYPE abap_bool.
     METHODS set_array_length IMPORTING length TYPE int8 RAISING zcx_qjs_error.
+    METHODS lock_array_length.
     METHODS own_keys RETURNING VALUE(result) TYPE zcl_qjs_shape=>ty_names.
     METHODS own_property_names RETURNING VALUE(result) TYPE zcl_qjs_shape=>ty_names.
     METHODS own_property_symbols RETURNING VALUE(result) TYPE ty_symbol_ids.
     METHODS set_prototype IMPORTING prototype TYPE REF TO zcl_qjs_object OPTIONAL
       RAISING zcx_qjs_error.
+    METHODS is_extensible RETURNING VALUE(result) TYPE abap_bool.
+    METHODS prevent_extensions.
+    METHODS initialize_collection IMPORTING kind TYPE i.
+    METHODS collection_kind RETURNING VALUE(result) TYPE i.
+    METHODS collection_size RETURNING VALUE(result) TYPE i.
+    METHODS collection_slots RETURNING VALUE(result) TYPE i.
+    METHODS collection_get
+      IMPORTING key TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE ty_collection_entry
+      RAISING zcx_qjs_error.
+    METHODS collection_set_entry
+      IMPORTING key TYPE zcl_qjs_value=>ty_value
+        value TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS collection_delete
+      IMPORTING key TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS collection_clear.
+    METHODS collection_entry_at
+      IMPORTING index TYPE i
+      RETURNING VALUE(result) TYPE ty_collection_entry.
+    METHODS initialize_iterator
+      IMPORTING collection TYPE REF TO zcl_qjs_object kind TYPE i.
+    METHODS initialize_array_iterator
+      IMPORTING array TYPE REF TO zcl_qjs_object kind TYPE i.
+    METHODS initialize_string_iterator
+      IMPORTING value TYPE zcl_qjs_value=>ty_value.
+    METHODS iterator_next
+      RETURNING VALUE(result) TYPE ty_collection_entry
+      RAISING zcx_qjs_error.
+    METHODS iterator_kind RETURNING VALUE(result) TYPE i.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_property,
       name TYPE string,
@@ -120,7 +183,18 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_next_symbol_order TYPE i.
     DATA mo_prototype TYPE REF TO zcl_qjs_object.
     DATA mv_is_array TYPE abap_bool.
+    DATA mv_extensible TYPE abap_bool VALUE abap_true.
+    TYPES ty_collection_entries TYPE STANDARD TABLE OF ty_collection_entry
+      WITH DEFAULT KEY.
+    DATA mv_collection_kind TYPE i.
+    DATA mt_collection_entries TYPE ty_collection_entries.
+    DATA mo_iterator_collection TYPE REF TO zcl_qjs_object.
+    DATA mv_iterator_kind TYPE i.
+    DATA mv_iterator_index TYPE i.
+    DATA mv_iterator_source_kind TYPE i.
+    DATA ms_iterator_string TYPE zcl_qjs_value=>ty_value.
     DATA mv_length TYPE int8.
+    DATA mv_length_writable TYPE abap_bool VALUE abap_true.
     DATA mo_shape TYPE REF TO zcl_qjs_shape.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     METHODS get_with_receiver
@@ -146,6 +220,11 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS raise_error IMPORTING name TYPE string message TYPE string.
+    METHODS collection_key_equal
+      IMPORTING left TYPE zcl_qjs_value=>ty_value
+        right TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
 ENDCLASS.
 
 CLASS zcl_qjs_object IMPLEMENTATION.
@@ -178,6 +257,15 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD get.
     result = get_with_receiver(
       name = name receiver = zcl_qjs_value=>new_object( me ) ).
+  ENDMETHOD.
+
+  METHOD reflect_get.
+    result = get_with_receiver( name = name receiver = receiver ).
+  ENDMETHOD.
+
+  METHOD reflect_get_symbol.
+    result = get_symbol_with_receiver(
+      identity = identity receiver = receiver ).
   ENDMETHOD.
 
   METHOD get_with_receiver.
@@ -285,8 +373,66 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     lo_receiver->define_symbol_property( identity = identity value = value ).
   ENDMETHOD.
 
+  METHOD reflect_set_symbol.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_existing).
+    IF sy-subrc = 0.
+      IF ls_existing-accessor = abap_true.
+        IF ls_existing-setter-tag = zcl_qjs_value=>tag_undefined.
+          RETURN.
+        ENDIF.
+        DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND value TO lt_setter_arguments.
+        DATA(ls_ignored) = invoke_callable(
+          callable = ls_existing-setter this_value = receiver
+          arguments = lt_setter_arguments ).
+        result = abap_true.
+        RETURN.
+      ELSEIF ls_existing-writable = abap_false.
+        RETURN.
+      ELSEIF receiver-object_ref = me.
+        ls_existing-value = value.
+        DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+        INSERT ls_existing INTO TABLE mt_symbol_properties.
+        result = abap_true.
+        RETURN.
+      ENDIF.
+    ELSEIF mo_prototype IS BOUND.
+      result = mo_prototype->reflect_set_symbol(
+        identity = identity value = value receiver = receiver ).
+      RETURN.
+    ENDIF.
+    DATA lo_receiver TYPE REF TO zcl_qjs_object.
+    TRY.
+        lo_receiver ?= receiver-object_ref.
+      CATCH cx_sy_move_cast_error.
+        RETURN.
+    ENDTRY.
+    DATA(ls_receiver_property) = lo_receiver->get_own_symbol_property( identity ).
+    IF ls_receiver_property-found = abap_true.
+      IF ls_receiver_property-accessor = abap_true
+          OR ls_receiver_property-writable = abap_false.
+        RETURN.
+      ENDIF.
+      lo_receiver->define_symbol_property(
+        identity = identity value = value
+        writable = ls_receiver_property-writable
+        enumerable = ls_receiver_property-enumerable
+        configurable = ls_receiver_property-configurable ).
+    ELSE.
+      IF lo_receiver->is_extensible( ) = abap_false.
+        RETURN.
+      ENDIF.
+      lo_receiver->define_symbol_property( identity = identity value = value ).
+    ENDIF.
+    result = abap_true.
+  ENDMETHOD.
+
   METHOD set_with_receiver.
     IF mv_is_array = abap_true AND name = 'length' AND receiver-object_ref = me.
+      IF mv_length_writable = abap_false.
+        raise_error( name = 'TypeError' message = 'property is not writable' ).
+      ENDIF.
       DATA(ls_length_value) = zcl_qjs_number=>to_number( value ).
       DATA(lv_new_length) = CONV int8( 0 ).
       DATA lv_max_array_length TYPE int8.
@@ -351,9 +497,74 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     lo_receiver->define_property( name = name value = value ).
   ENDMETHOD.
 
+  METHOD reflect_set.
+    IF mv_is_array = abap_true AND name = 'length' AND receiver-object_ref = me.
+      IF mv_length_writable = abap_false.
+        RETURN.
+      ENDIF.
+      set_with_receiver( name = name value = value receiver = receiver ).
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    DATA(ls_descriptor) = mo_shape->lookup( name ).
+    IF ls_descriptor-found = abap_true.
+      READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_existing).
+      IF ls_descriptor-accessor = abap_true.
+        IF ls_existing-setter-tag = zcl_qjs_value=>tag_undefined.
+          RETURN.
+        ENDIF.
+        DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND value TO lt_setter_arguments.
+        DATA(ls_ignored) = invoke_callable(
+          callable = ls_existing-setter this_value = receiver
+          arguments = lt_setter_arguments ).
+        result = abap_true.
+        RETURN.
+      ELSEIF ls_descriptor-writable = abap_false.
+        RETURN.
+      ELSEIF receiver-object_ref = me.
+        ls_existing-value = value.
+        DELETE TABLE mt_properties WITH TABLE KEY name = name.
+        INSERT ls_existing INTO TABLE mt_properties.
+        result = abap_true.
+        RETURN.
+      ENDIF.
+    ELSEIF mo_prototype IS BOUND.
+      result = mo_prototype->reflect_set(
+        name = name value = value receiver = receiver ).
+      RETURN.
+    ENDIF.
+    DATA lo_receiver TYPE REF TO zcl_qjs_object.
+    TRY.
+        lo_receiver ?= receiver-object_ref.
+      CATCH cx_sy_move_cast_error.
+        RETURN.
+    ENDTRY.
+    DATA(ls_receiver_property) = lo_receiver->get_own_property( name ).
+    IF ls_receiver_property-found = abap_true.
+      IF ls_receiver_property-accessor = abap_true
+          OR ls_receiver_property-writable = abap_false.
+        RETURN.
+      ENDIF.
+      lo_receiver->define_property(
+        name = name value = value writable = ls_receiver_property-writable
+        enumerable = ls_receiver_property-enumerable
+        configurable = ls_receiver_property-configurable ).
+    ELSE.
+      IF lo_receiver->is_extensible( ) = abap_false.
+        RETURN.
+      ENDIF.
+      lo_receiver->define_property( name = name value = value ).
+    ENDIF.
+    result = abap_true.
+  ENDMETHOD.
+
   METHOD define_property.
     DATA ls_descriptor TYPE zcl_qjs_shape=>ty_descriptor.
     ls_descriptor = mo_shape->lookup( name ).
+    IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
     IF ls_descriptor-found = abap_true AND ls_descriptor-configurable = abap_false.
       READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_old_property).
       IF ls_descriptor-accessor = abap_true OR configurable = abap_true
@@ -377,6 +588,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD define_accessor.
     DATA(ls_descriptor) = mo_shape->lookup( name ).
+    IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
     IF ls_descriptor-found = abap_true AND ls_descriptor-configurable = abap_false.
       READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_old_accessor).
       IF ls_descriptor-accessor = abap_false OR configurable = abap_true
@@ -402,6 +616,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD define_symbol_property.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
       INTO DATA(ls_old_property).
+    IF sy-subrc <> 0 AND mv_extensible = abap_false.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
     IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
       IF ls_old_property-accessor = abap_true OR configurable = abap_true
           OR ls_old_property-enumerable <> enumerable
@@ -431,6 +648,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD define_symbol_accessor.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
       INTO DATA(ls_old_property).
+    IF sy-subrc <> 0 AND mv_extensible = abap_false.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
     IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
       IF ls_old_property-accessor = abap_false OR configurable = abap_true
           OR ls_old_property-enumerable <> enumerable
@@ -488,6 +708,10 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD delete.
+    IF mv_is_array = abap_true AND name = 'length'.
+      result = abap_false.
+      RETURN.
+    ENDIF.
     DATA(ls_descriptor) = mo_shape->lookup( name ).
     IF ls_descriptor-found = abap_true AND ls_descriptor-configurable = abap_false.
       result = abap_false.
@@ -510,6 +734,10 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD has_own.
+    IF mv_is_array = abap_true AND name = 'length'.
+      result = abap_true.
+      RETURN.
+    ENDIF.
     result = mo_shape->lookup( name )-found.
   ENDMETHOD.
 
@@ -535,6 +763,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD own_property_count.
     result = mo_shape->property_count( ) + lines( mt_symbol_properties ).
+    IF mv_is_array = abap_true.
+      result = result + 1.
+    ENDIF.
   ENDMETHOD.
 
   METHOD get_prototype.
@@ -546,6 +777,18 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_own_property.
+    IF mv_is_array = abap_true AND name = 'length'.
+      result-found = abap_true.
+      IF mv_length <= 2147483647.
+        result-value = zcl_qjs_value=>new_int( CONV i( mv_length ) ).
+      ELSE.
+        result-value = zcl_qjs_value=>new_finite( CONV f( mv_length ) ).
+      ENDIF.
+      result-writable = mv_length_writable.
+      result-enumerable = abap_false.
+      result-configurable = abap_false.
+      RETURN.
+    ENDIF.
     DATA(ls_descriptor) = mo_shape->lookup( name ).
     IF ls_descriptor-found = abap_false.
       RETURN.
@@ -636,12 +879,19 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     mv_length = length.
   ENDMETHOD.
 
+  METHOD lock_array_length.
+    mv_length_writable = abap_false.
+  ENDMETHOD.
+
   METHOD own_keys.
     result = mo_shape->names( enumerable_only = abap_true ).
   ENDMETHOD.
 
   METHOD own_property_names.
     result = mo_shape->names( ).
+    IF mv_is_array = abap_true.
+      APPEND 'length' TO result.
+    ENDIF.
   ENDMETHOD.
 
   METHOD own_property_symbols.
@@ -656,6 +906,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD set_prototype.
+    IF mv_extensible = abap_false AND prototype <> mo_prototype.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
     DATA lo_current TYPE REF TO zcl_qjs_object.
     lo_current = prototype.
     WHILE lo_current IS BOUND.
@@ -665,5 +918,178 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       lo_current = lo_current->get_prototype( ).
     ENDWHILE.
     mo_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD is_extensible.
+    result = mv_extensible.
+  ENDMETHOD.
+
+  METHOD prevent_extensions.
+    mv_extensible = abap_false.
+  ENDMETHOD.
+
+  METHOD initialize_collection.
+    mv_collection_kind = kind.
+    CLEAR mt_collection_entries.
+  ENDMETHOD.
+
+  METHOD collection_kind.
+    result = mv_collection_kind.
+  ENDMETHOD.
+
+  METHOD collection_key_equal.
+    result = zcl_qjs_value=>strict_equal( left = left right = right ).
+    IF result = abap_false
+        AND left-tag = zcl_qjs_value=>tag_number
+        AND right-tag = zcl_qjs_value=>tag_number
+        AND left-number_kind = zcl_qjs_value=>number_nan
+        AND right-number_kind = zcl_qjs_value=>number_nan.
+      result = abap_true.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD collection_size.
+    LOOP AT mt_collection_entries INTO DATA(ls_entry).
+      IF ls_entry-deleted = abap_false.
+        result = result + 1.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD collection_slots.
+    result = lines( mt_collection_entries ).
+  ENDMETHOD.
+
+  METHOD collection_get.
+    LOOP AT mt_collection_entries INTO DATA(ls_entry).
+      IF ls_entry-deleted = abap_false AND collection_key_equal(
+          left = ls_entry-key right = key ) = abap_true.
+        result = ls_entry.
+        result-found = abap_true.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD collection_set_entry.
+    LOOP AT mt_collection_entries ASSIGNING FIELD-SYMBOL(<ls_entry>).
+      IF <ls_entry>-deleted = abap_false AND collection_key_equal(
+          left = <ls_entry>-key right = key ) = abap_true.
+        <ls_entry>-value = value.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+    DATA ls_entry TYPE ty_collection_entry.
+    ls_entry-key = key.
+    ls_entry-value = value.
+    APPEND ls_entry TO mt_collection_entries.
+  ENDMETHOD.
+
+  METHOD collection_delete.
+    LOOP AT mt_collection_entries ASSIGNING FIELD-SYMBOL(<ls_entry>).
+      IF <ls_entry>-deleted = abap_false AND collection_key_equal(
+          left = <ls_entry>-key right = key ) = abap_true.
+        <ls_entry>-deleted = abap_true.
+        result = abap_true.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD collection_clear.
+    LOOP AT mt_collection_entries ASSIGNING FIELD-SYMBOL(<ls_entry>).
+      <ls_entry>-deleted = abap_true.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD collection_entry_at.
+    READ TABLE mt_collection_entries INDEX index INTO result.
+    IF sy-subrc = 0.
+      result-found = abap_true.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD initialize_iterator.
+    mo_iterator_collection = collection.
+    mv_iterator_kind = kind.
+    mv_iterator_index = 1.
+    mv_iterator_source_kind = 1.
+  ENDMETHOD.
+
+  METHOD initialize_array_iterator.
+    mo_iterator_collection = array.
+    mv_iterator_kind = kind.
+    mv_iterator_index = 0.
+    mv_iterator_source_kind = 2.
+  ENDMETHOD.
+
+  METHOD initialize_string_iterator.
+    ms_iterator_string = value.
+    mv_iterator_kind = iterator_values.
+    mv_iterator_index = 0.
+    mv_iterator_source_kind = 3.
+  ENDMETHOD.
+
+  METHOD iterator_next.
+    IF mv_iterator_source_kind = 2 AND mo_iterator_collection IS BOUND.
+      DATA(ls_length_value) = mo_iterator_collection->get( 'length' ).
+      DATA(lv_length) = CONV int8( 0 ).
+      IF ls_length_value-tag = zcl_qjs_value=>tag_int.
+        lv_length = ls_length_value-int_value.
+      ENDIF.
+      IF mv_iterator_index < lv_length.
+        result-found = abap_true.
+        result-key = zcl_qjs_value=>new_int( mv_iterator_index ).
+        result-value = mo_iterator_collection->get_element(
+          CONV int8( mv_iterator_index ) ).
+        mv_iterator_index = mv_iterator_index + 1.
+        RETURN.
+      ENDIF.
+      CLEAR mo_iterator_collection.
+      CLEAR mv_iterator_source_kind.
+      RETURN.
+    ELSEIF mv_iterator_source_kind = 3
+        AND ms_iterator_string-tag = zcl_qjs_value=>tag_string.
+      IF mv_iterator_index < ms_iterator_string-string_ref->length( ).
+        result-found = abap_true.
+        result-key = zcl_qjs_value=>new_int( mv_iterator_index ).
+        DATA(lv_first_code) = ms_iterator_string-string_ref->code_unit_value_at(
+          mv_iterator_index ).
+        DATA(lv_width) = 1.
+        IF lv_first_code >= 55296 AND lv_first_code <= 56319
+            AND mv_iterator_index + 1 < ms_iterator_string-string_ref->length( ).
+          DATA(lv_second_index) = mv_iterator_index + 1.
+          DATA(lv_second_code) =
+            ms_iterator_string-string_ref->code_unit_value_at( lv_second_index ).
+          IF lv_second_code >= 56320 AND lv_second_code <= 57343.
+            lv_width = 2.
+          ENDIF.
+        ENDIF.
+        DATA(lv_string_source) = ms_iterator_string-string_ref->as_string( ).
+        DATA lv_iterator_value TYPE string.
+        lv_iterator_value = lv_string_source+mv_iterator_index(lv_width).
+        result-value = zcl_qjs_value=>new_string( lv_iterator_value ).
+        mv_iterator_index = mv_iterator_index + lv_width.
+        RETURN.
+      ENDIF.
+      CLEAR ms_iterator_string.
+      CLEAR mv_iterator_source_kind.
+      RETURN.
+    ENDIF.
+    WHILE mv_iterator_source_kind = 1 AND mo_iterator_collection IS BOUND
+        AND mv_iterator_index <= mo_iterator_collection->collection_slots( ).
+      result = mo_iterator_collection->collection_entry_at( mv_iterator_index ).
+      mv_iterator_index = mv_iterator_index + 1.
+      IF result-found = abap_true AND result-deleted = abap_false.
+        RETURN.
+      ENDIF.
+    ENDWHILE.
+    CLEAR result.
+    CLEAR mo_iterator_collection.
+    CLEAR mv_iterator_source_kind.
+  ENDMETHOD.
+
+  METHOD iterator_kind.
+    result = mv_iterator_kind.
   ENDMETHOD.
 ENDCLASS.

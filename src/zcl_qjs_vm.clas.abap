@@ -33,6 +33,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
         pc       TYPE i,
         locals   TYPE ty_cells,
         captures TYPE zcl_qjs_closure=>ty_cells,
+        arguments TYPE zif_qjs_callable=>ty_arguments,
         handlers TYPE ty_handlers,
         stack_base TYPE i,
         subroutine_returns TYPE STANDARD TABLE OF i WITH DEFAULT KEY,
@@ -131,6 +132,18 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     DATA lo_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_current_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_property_container TYPE REF TO zif_qjs_property_container.
+    DATA lo_for_in_iterator TYPE REF TO zcl_qjs_for_in_iterator.
+    DATA ls_for_in_next TYPE zcl_qjs_for_in_iterator=>ty_next.
+    DATA ls_for_of_next TYPE zcl_qjs_runtime=>ty_iterator_result.
+    DATA lo_native_function TYPE REF TO zcl_qjs_native_function.
+    DATA lt_copy_names TYPE zcl_qjs_shape=>ty_names.
+    DATA lt_copy_symbols TYPE zcl_qjs_object=>ty_symbol_ids.
+    DATA lv_copy_name TYPE string.
+    DATA lv_copy_symbol TYPE int8.
+    DATA lo_copy_source TYPE REF TO zcl_qjs_object.
+    DATA lo_copy_target TYPE REF TO zcl_qjs_object.
+    DATA lo_copy_exclude TYPE REF TO zcl_qjs_object.
+    DATA ls_copy_property TYPE zcl_qjs_object=>ty_own_property.
 
     IF function IS NOT BOUND.
       RAISE EXCEPTION TYPE zcx_qjs_error
@@ -138,6 +151,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           reason = 'Cannot execute an initial bytecode function'.
     ENDIF.
     ls_frame-function = function.
+    ls_frame-arguments = initial_arguments.
     ls_frame-pc = 1.
     ls_frame-stack_base = 0.
     DO function->get_local_count( ) TIMES.
@@ -225,6 +239,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           APPEND ls_left TO lt_stack.
           APPEND ls_right TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>swap.
+          ls_right = pop( CHANGING stack = lt_stack ).
+          ls_left = pop( CHANGING stack = lt_stack ).
+          APPEND ls_right TO lt_stack.
+          APPEND ls_left TO lt_stack.
         WHEN zif_qjs_opcodes=>insert_two.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
@@ -277,8 +296,190 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = zcl_qjs_value=>new_object( lo_object ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>rest.
+          lo_object = mo_runtime->create_array( ).
+          lv_element_index = 0.
+          lv_argument_index = ls_instruction-operand + 1.
+          WHILE lv_argument_index <= lines( ls_frame-arguments ).
+            READ TABLE ls_frame-arguments INDEX lv_argument_index INTO ls_value.
+            lo_object->set_element( index = lv_element_index value = ls_value ).
+            lv_argument_index = lv_argument_index + 1.
+            lv_element_index = lv_element_index + 1.
+          ENDWHILE.
+          APPEND zcl_qjs_value=>new_object( lo_object ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>append.
+          DATA(ls_append_source) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_append_position) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_append_target) = pop( CHANGING stack = lt_stack ).
+          CLEAR lo_object.
+          TRY.
+              lo_object ?= ls_append_target-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_object IS NOT BOUND OR lo_object->is_array( ) = abap_false.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Spread append target is not an array'.
+          ENDIF.
+          lv_element_index = ls_append_position-int_value.
+          DATA(ls_append_iterator) = mo_runtime->get_iterator( ls_append_source ).
+          WHILE abap_true = abap_true.
+            ls_for_of_next = mo_runtime->iterator_next( ls_append_iterator ).
+            IF ls_for_of_next-done = abap_true.
+              EXIT.
+            ENDIF.
+            lo_object->set_element(
+              index = lv_element_index value = ls_for_of_next-value ).
+            lv_element_index = lv_element_index + 1.
+          ENDWHILE.
+          APPEND ls_append_target TO lt_stack.
+          APPEND zcl_qjs_value=>new_int( CONV i( lv_element_index ) ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>copy_data_properties.
+          DATA(ls_copy_exclude_value) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_copy_source_value) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_copy_target_value) = pop( CHANGING stack = lt_stack ).
+          CLEAR: lo_copy_source, lo_copy_target, lo_copy_exclude, lo_closure.
+          TRY.
+              lo_copy_target ?= ls_copy_target_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_copy_target IS NOT BOUND.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Object spread target is not an object'.
+          ENDIF.
+          IF ls_copy_exclude_value-tag = zcl_qjs_value=>tag_object.
+            TRY.
+                lo_copy_exclude ?= ls_copy_exclude_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+          ENDIF.
+          IF ls_copy_source_value-tag = zcl_qjs_value=>tag_object.
+            TRY.
+                lo_copy_source ?= ls_copy_source_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_copy_source IS NOT BOUND.
+              TRY.
+                  lo_closure ?= ls_copy_source_value-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+              IF lo_closure IS BOUND.
+                lo_copy_source = lo_closure->get_property_storage( ).
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          IF lo_copy_source IS BOUND.
+            lt_copy_names = lo_copy_source->own_keys( ).
+            LOOP AT lt_copy_names INTO lv_copy_name.
+              IF lo_copy_exclude IS BOUND
+                  AND lo_copy_exclude->has_own( lv_copy_name ) = abap_true.
+                CONTINUE.
+              ENDIF.
+              lo_copy_target->define_property(
+                name = lv_copy_name value = lo_copy_source->get( lv_copy_name ) ).
+            ENDLOOP.
+            lt_copy_symbols = lo_copy_source->own_property_symbols( ).
+            LOOP AT lt_copy_symbols INTO lv_copy_symbol.
+              ls_copy_property = lo_copy_source->get_own_symbol_property(
+                lv_copy_symbol ).
+              IF ls_copy_property-enumerable = abap_false
+                  OR ( lo_copy_exclude IS BOUND
+                    AND lo_copy_exclude->has_own_symbol(
+                      lv_copy_symbol ) = abap_true ).
+                CONTINUE.
+              ENDIF.
+              lo_copy_target->define_symbol_property(
+                identity = lv_copy_symbol
+                value    = lo_copy_source->get_symbol( lv_copy_symbol ) ).
+            ENDLOOP.
+          ELSEIF ls_copy_source_value-tag = zcl_qjs_value=>tag_string.
+            lv_element_index = 0.
+            WHILE lv_element_index < ls_copy_source_value-string_ref->length( ).
+              lv_copy_name = lv_element_index.
+              CONDENSE lv_copy_name NO-GAPS.
+              IF lo_copy_exclude IS NOT BOUND
+                  OR lo_copy_exclude->has_own( lv_copy_name ) = abap_false.
+                lo_copy_target->define_property(
+                  name  = lv_copy_name
+                  value = zcl_qjs_value=>new_string(
+                    ls_copy_source_value-string_ref->code_unit_at(
+                      CONV i( lv_element_index ) ) ) ).
+              ENDIF.
+              lv_element_index = lv_element_index + 1.
+            ENDWHILE.
+          ENDIF.
+          APPEND ls_copy_target_value TO lt_stack.
+          APPEND ls_copy_source_value TO lt_stack.
+          APPEND ls_copy_exclude_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_in_start.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          CREATE OBJECT lo_for_in_iterator EXPORTING source = ls_value.
+          ls_value = zcl_qjs_value=>new_object( lo_for_in_iterator ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_in_next.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          CLEAR lo_for_in_iterator.
+          TRY.
+              lo_for_in_iterator ?= ls_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_for_in_iterator IS BOUND.
+            ls_for_in_next = lo_for_in_iterator->next( ).
+          ELSE.
+            ls_for_in_next-done = abap_true.
+            ls_for_in_next-value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          APPEND ls_value TO lt_stack.
+          APPEND ls_for_in_next-value TO lt_stack.
+          APPEND zcl_qjs_value=>new_boolean( ls_for_in_next-done ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_of_start.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_value = mo_runtime->get_iterator( ls_value ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_of_next.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_for_of_next = mo_runtime->iterator_next( ls_value ).
+          APPEND ls_value TO lt_stack.
+          APPEND ls_for_of_next-value TO lt_stack.
+          APPEND zcl_qjs_value=>new_boolean( ls_for_of_next-done ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>iterator_close.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          mo_runtime->iterator_close( ls_value ).
+        WHEN zif_qjs_opcodes=>to_object.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          IF ls_value-tag = zcl_qjs_value=>tag_null
+              OR ls_value-tag = zcl_qjs_value=>tag_undefined.
+            throw_error(
+              name = 'TypeError' message = 'cannot destructure null or undefined' ).
+          ENDIF.
+          APPEND ls_value TO lt_stack.
         WHEN zif_qjs_opcodes=>get_field OR zif_qjs_opcodes=>get_field_for_call.
           ls_value = pop( CHANGING stack = lt_stack ).
+          lv_atom = ls_frame-function->get_atom( ls_instruction-operand ).
+          IF ls_value-tag = zcl_qjs_value=>tag_string.
+            IF ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call.
+              APPEND ls_value TO lt_stack.
+            ENDIF.
+            IF lv_atom = 'length'.
+              ls_value = zcl_qjs_value=>new_int( ls_value-string_ref->length( ) ).
+            ELSE.
+              lo_prototype = mo_runtime->get_string_prototype( ).
+              IF lo_prototype IS BOUND.
+                ls_value = lo_prototype->get( lv_atom ).
+              ELSE.
+                ls_value = zcl_qjs_value=>new_undefined( ).
+              ENDIF.
+            ENDIF.
+            APPEND ls_value TO lt_stack.
+            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            CONTINUE.
+          ENDIF.
           CLEAR lo_object.
           CLEAR lo_closure.
           CLEAR lo_property_container.
@@ -355,6 +556,55 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>get_element OR zif_qjs_opcodes=>get_element_for_call.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
+          IF ls_left-tag = zcl_qjs_value=>tag_string.
+            IF ls_instruction-opcode = zif_qjs_opcodes=>get_element_for_call.
+              APPEND ls_left TO lt_stack.
+            ENDIF.
+            IF ls_right-tag = zcl_qjs_value=>tag_symbol.
+              lo_prototype = mo_runtime->get_string_prototype( ).
+              IF lo_prototype IS BOUND.
+                ls_value = lo_prototype->get_symbol( ls_right-symbol_id ).
+              ELSE.
+                ls_value = zcl_qjs_value=>new_undefined( ).
+              ENDIF.
+            ELSE.
+              IF ls_right-tag = zcl_qjs_value=>tag_int.
+                lv_element_index = ls_right-int_value.
+                lv_property_name = lv_element_index.
+                CONDENSE lv_property_name NO-GAPS.
+              ELSE.
+                lv_property_name = zcl_qjs_value=>to_string( ls_right ).
+                lv_element_index = -1.
+                IF lv_property_name IS NOT INITIAL
+                    AND lv_property_name CO '0123456789'
+                    AND ( strlen( lv_property_name ) = 1
+                      OR lv_property_name+0(1) <> '0' ).
+                  TRY.
+                      lv_element_index = lv_property_name.
+                    CATCH cx_sy_conversion_error cx_sy_arithmetic_error.
+                      lv_element_index = -1.
+                  ENDTRY.
+                ENDIF.
+              ENDIF.
+              IF lv_property_name = 'length'.
+                ls_value = zcl_qjs_value=>new_int( ls_left-string_ref->length( ) ).
+              ELSEIF lv_element_index >= 0
+                  AND lv_element_index < ls_left-string_ref->length( ).
+                ls_value = zcl_qjs_value=>new_string(
+                  ls_left-string_ref->code_unit_at( CONV i( lv_element_index ) ) ).
+              ELSE.
+                lo_prototype = mo_runtime->get_string_prototype( ).
+                IF lo_prototype IS BOUND.
+                  ls_value = lo_prototype->get( lv_property_name ).
+                ELSE.
+                  ls_value = zcl_qjs_value=>new_undefined( ).
+                ENDIF.
+              ENDIF.
+            ENDIF.
+            APPEND ls_value TO lt_stack.
+            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            CONTINUE.
+          ENDIF.
           CLEAR lo_object.
           CLEAR lo_closure.
           CLEAR lo_property_container.
@@ -527,6 +777,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = lo_cell->get( ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>get_arg.
+          READ TABLE ls_frame-arguments INDEX ls_instruction-operand + 1
+            INTO ls_value.
+          IF sy-subrc <> 0.
+            ls_value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>get_capture.
           lv_local_index = ls_instruction-operand + 1.
           READ TABLE ls_frame-captures INDEX lv_local_index INTO lo_cell.
@@ -577,18 +835,34 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           lo_cell->initialize( ls_value ).
         WHEN zif_qjs_opcodes=>reset_lexical.
           lv_local_index = ls_instruction-operand + 1.
-          READ TABLE ls_frame-locals INDEX lv_local_index INTO lo_cell.
-          IF sy-subrc <> 0.
+          IF lv_local_index < 1 OR lv_local_index > lines( ls_frame-locals ).
             RAISE EXCEPTION TYPE zcx_qjs_error
               EXPORTING reason = 'Bytecode lexical index out of bounds'.
           ENDIF.
-          lo_cell->reset_uninitialized( ).
+          ls_local_spec = ls_frame-function->get_local_spec(
+            ls_instruction-operand ).
+          ls_value = zcl_qjs_value=>new_undefined( ).
+          CREATE OBJECT lo_cell
+            EXPORTING value = ls_value initialized = abap_false
+              mutable = ls_local_spec-mutable runtime = mo_runtime.
+          MODIFY ls_frame-locals FROM lo_cell INDEX lv_local_index.
+          MODIFY lt_frames FROM ls_frame INDEX lv_frame_index.
         WHEN zif_qjs_opcodes=>push_i32.
           ls_value = zcl_qjs_value=>new_int( ls_instruction-operand ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>push_const.
           ls_value = ls_frame-function->get_constant( ls_instruction-operand ).
+          IF ls_value-tag = zcl_qjs_value=>tag_object.
+            DATA lo_template_site TYPE REF TO zcl_qjs_template_site.
+            TRY.
+                lo_template_site ?= ls_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_template_site IS BOUND.
+              ls_value = lo_template_site->materialize( mo_runtime ).
+            ENDIF.
+          ENDIF.
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>make_closure.
@@ -705,6 +979,18 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>add.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
+          TRY.
+              IF ls_left-tag = zcl_qjs_value=>tag_object.
+                ls_left = mo_runtime->to_primitive( ls_left ).
+              ENDIF.
+              IF ls_right-tag = zcl_qjs_value=>tag_object.
+                ls_right = mo_runtime->to_primitive( ls_right ).
+              ENDIF.
+            CATCH zcx_qjs_error INTO lo_host_error.
+              RAISE EXCEPTION TYPE zcx_qjs_throw
+                EXPORTING value = mo_runtime->create_error_from_reason(
+                  lo_host_error->reason ).
+          ENDTRY.
           ls_value = zcl_qjs_number=>add( left = ls_left right = ls_right ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
@@ -867,9 +1153,64 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = zcl_qjs_value=>new_boolean( lv_instance ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>in_operator.
+          ls_right = pop( CHANGING stack = lt_stack ).
+          ls_left = pop( CHANGING stack = lt_stack ).
+          CLEAR lo_object.
+          CLEAR lo_closure.
+          CLEAR lo_native_function.
+          IF ls_right-tag = zcl_qjs_value=>tag_object.
+            TRY.
+                lo_object ?= ls_right-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            TRY.
+                lo_closure ?= ls_right-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            TRY.
+                lo_native_function ?= ls_right-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+          ENDIF.
+          IF lo_object IS NOT BOUND AND lo_closure IS NOT BOUND
+              AND lo_native_function IS NOT BOUND.
+            throw_error(
+              name = 'TypeError' message = 'right-hand side of in is not an object' ).
+          ENDIF.
+          DATA(lv_has_property) = abap_false.
+          IF ls_left-tag = zcl_qjs_value=>tag_symbol.
+            IF lo_object IS BOUND.
+              lv_has_property = lo_object->has_symbol_property( ls_left-symbol_id ).
+            ELSEIF lo_closure IS BOUND.
+              lv_has_property = lo_closure->has_symbol_property( ls_left-symbol_id ).
+            ELSE.
+              lv_has_property = lo_native_function->has_symbol_property(
+                ls_left-symbol_id ).
+            ENDIF.
+          ELSE.
+            lv_property_name = zcl_qjs_value=>to_string( ls_left ).
+            IF lo_object IS BOUND.
+              lv_has_property = lo_object->has_property( lv_property_name ).
+            ELSEIF lo_closure IS BOUND.
+              lv_has_property = lo_closure->has_property( lv_property_name ).
+            ELSE.
+              lv_has_property = lo_native_function->has_property( lv_property_name ).
+            ENDIF.
+          ENDIF.
+          ls_value = zcl_qjs_value=>new_boolean( lv_has_property ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>equal OR zif_qjs_opcodes=>not_equal.
           ls_right = pop( CHANGING stack = lt_stack ).
           ls_left = pop( CHANGING stack = lt_stack ).
+          IF ls_left-tag = zcl_qjs_value=>tag_object
+              AND ls_right-tag <> zcl_qjs_value=>tag_object.
+            ls_left = mo_runtime->to_primitive( ls_left ).
+          ELSEIF ls_right-tag = zcl_qjs_value=>tag_object
+              AND ls_left-tag <> zcl_qjs_value=>tag_object.
+            ls_right = mo_runtime->to_primitive( ls_right ).
+          ENDIF.
           lv_equal = zcl_qjs_value=>abstract_equal( left = ls_left right = ls_right ).
           IF ls_instruction-opcode = zif_qjs_opcodes=>not_equal.
             lv_equal = xsdbool( lv_equal = abap_false ).
@@ -923,6 +1264,42 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           DELETE ls_frame-handlers INDEX lv_handler_index.
           MODIFY lt_frames FROM ls_frame INDEX lv_frame_index.
           APPEND ls_value TO lt_stack.
+        WHEN zif_qjs_opcodes=>apply.
+          DATA(ls_apply_arguments) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_apply_callable) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_apply_this) = pop( CHANGING stack = lt_stack ).
+          CLEAR lo_object.
+          TRY.
+              lo_object ?= ls_apply_arguments-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_object IS NOT BOUND OR lo_object->is_array( ) = abap_false.
+            throw_error( name = 'TypeError' message = 'spread arguments are not an array' ).
+          ENDIF.
+          CLEAR lt_arguments.
+          DATA(ls_apply_length) = lo_object->get( 'length' ).
+          lv_argument_index = 0.
+          WHILE lv_argument_index < ls_apply_length-int_value.
+            APPEND lo_object->get_element( CONV int8( lv_argument_index ) )
+              TO lt_arguments.
+            lv_argument_index = lv_argument_index + 1.
+          ENDWHILE.
+          TRY.
+              IF ls_instruction-operand = 1.
+                ls_value = mo_runtime->construct_value(
+                  constructor = ls_apply_callable arguments = lt_arguments ).
+              ELSE.
+                ls_value = mo_runtime->invoke_callable(
+                  callable = ls_apply_callable this_value = ls_apply_this
+                  arguments = lt_arguments ).
+              ENDIF.
+            CATCH zcx_qjs_error INTO lo_host_error.
+              RAISE EXCEPTION TYPE zcx_qjs_throw
+                EXPORTING value = mo_runtime->create_error_from_reason(
+                  lo_host_error->reason ).
+          ENDTRY.
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>call OR zif_qjs_opcodes=>call_method
             OR zif_qjs_opcodes=>call_constructor.
           CLEAR lt_arguments.
@@ -1008,6 +1385,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           CLEAR ls_called_frame.
           ls_called_frame-function = lo_called.
+          ls_called_frame-arguments = lt_arguments.
           ls_called_frame-pc = 1.
           ls_called_frame-stack_base = lines( lt_stack ).
           IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.

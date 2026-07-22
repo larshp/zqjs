@@ -111,6 +111,83 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_array_reduce_right TYPE i VALUE 116.
     CONSTANTS id_array_fill TYPE i VALUE 117.
     CONSTANTS id_array_copy_within TYPE i VALUE 118.
+    CONSTANTS id_array_concat TYPE i VALUE 119.
+    CONSTANTS id_array_splice TYPE i VALUE 120.
+    CONSTANTS id_array_sort TYPE i VALUE 121.
+    CONSTANTS id_array_find_last TYPE i VALUE 122.
+    CONSTANTS id_array_find_last_index TYPE i VALUE 123.
+    CONSTANTS id_array_flat TYPE i VALUE 124.
+    CONSTANTS id_array_flat_map TYPE i VALUE 125.
+    CONSTANTS id_array_of TYPE i VALUE 126.
+    CONSTANTS id_array_to_string TYPE i VALUE 127.
+    CONSTANTS id_array_to_reversed TYPE i VALUE 128.
+    CONSTANTS id_array_with TYPE i VALUE 129.
+    CONSTANTS id_array_to_sorted TYPE i VALUE 130.
+    CONSTANTS id_array_to_spliced TYPE i VALUE 131.
+    CONSTANTS id_object_has_own_property TYPE i VALUE 132.
+    CONSTANTS id_object_value_of TYPE i VALUE 133.
+    CONSTANTS id_object_property_is_enum TYPE i VALUE 134.
+    CONSTANTS id_object_is_prototype_of TYPE i VALUE 135.
+    CONSTANTS id_string_to_string TYPE i VALUE 136.
+    CONSTANTS id_string_value_of TYPE i VALUE 137.
+    CONSTANTS id_string_char_at TYPE i VALUE 138.
+    CONSTANTS id_string_char_code_at TYPE i VALUE 139.
+    CONSTANTS id_string_at TYPE i VALUE 140.
+    CONSTANTS id_string_index_of TYPE i VALUE 141.
+    CONSTANTS id_string_last_index_of TYPE i VALUE 142.
+    CONSTANTS id_string_includes TYPE i VALUE 143.
+    CONSTANTS id_string_starts_with TYPE i VALUE 144.
+    CONSTANTS id_string_ends_with TYPE i VALUE 145.
+    CONSTANTS id_string_slice TYPE i VALUE 146.
+    CONSTANTS id_string_substring TYPE i VALUE 147.
+    CONSTANTS id_string_concat TYPE i VALUE 148.
+    CONSTANTS id_string_repeat TYPE i VALUE 149.
+    CONSTANTS id_string_to_lower TYPE i VALUE 150.
+    CONSTANTS id_string_to_upper TYPE i VALUE 151.
+    CONSTANTS id_string_trim TYPE i VALUE 152.
+    CONSTANTS id_string_trim_start TYPE i VALUE 153.
+    CONSTANTS id_string_trim_end TYPE i VALUE 154.
+    CONSTANTS id_reflect_apply TYPE i VALUE 155.
+    CONSTANTS id_reflect_construct TYPE i VALUE 156.
+    CONSTANTS id_reflect_define_property TYPE i VALUE 157.
+    CONSTANTS id_reflect_delete_property TYPE i VALUE 158.
+    CONSTANTS id_reflect_get TYPE i VALUE 159.
+    CONSTANTS id_reflect_get_own_descriptor TYPE i VALUE 160.
+    CONSTANTS id_reflect_get_prototype TYPE i VALUE 161.
+    CONSTANTS id_reflect_has TYPE i VALUE 162.
+    CONSTANTS id_reflect_is_extensible TYPE i VALUE 163.
+    CONSTANTS id_reflect_own_keys TYPE i VALUE 164.
+    CONSTANTS id_reflect_prevent_extensions TYPE i VALUE 165.
+    CONSTANTS id_reflect_set TYPE i VALUE 166.
+    CONSTANTS id_reflect_set_prototype TYPE i VALUE 167.
+    CONSTANTS id_object_is_extensible TYPE i VALUE 168.
+    CONSTANTS id_object_prevent_extensions TYPE i VALUE 169.
+    CONSTANTS id_map TYPE i VALUE 170.
+    CONSTANTS id_set TYPE i VALUE 171.
+    CONSTANTS id_map_get TYPE i VALUE 172.
+    CONSTANTS id_map_set TYPE i VALUE 173.
+    CONSTANTS id_map_has TYPE i VALUE 174.
+    CONSTANTS id_map_delete TYPE i VALUE 175.
+    CONSTANTS id_map_clear TYPE i VALUE 176.
+    CONSTANTS id_map_size TYPE i VALUE 177.
+    CONSTANTS id_map_entries TYPE i VALUE 178.
+    CONSTANTS id_map_keys TYPE i VALUE 179.
+    CONSTANTS id_map_values TYPE i VALUE 180.
+    CONSTANTS id_map_for_each TYPE i VALUE 181.
+    CONSTANTS id_set_add TYPE i VALUE 182.
+    CONSTANTS id_set_has TYPE i VALUE 183.
+    CONSTANTS id_set_delete TYPE i VALUE 184.
+    CONSTANTS id_set_clear TYPE i VALUE 185.
+    CONSTANTS id_set_size TYPE i VALUE 186.
+    CONSTANTS id_set_entries TYPE i VALUE 187.
+    CONSTANTS id_set_values TYPE i VALUE 188.
+    CONSTANTS id_set_for_each TYPE i VALUE 189.
+    CONSTANTS id_collection_next TYPE i VALUE 190.
+    CONSTANTS id_iterator_self TYPE i VALUE 191.
+    CONSTANTS id_array_entries TYPE i VALUE 192.
+    CONSTANTS id_array_keys TYPE i VALUE 193.
+    CONSTANTS id_array_values TYPE i VALUE 194.
+    CONSTANTS id_string_iterator TYPE i VALUE 195.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -120,13 +197,41 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
     METHODS set_property IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value.
+    TYPES: BEGIN OF ty_own_property,
+      found TYPE abap_bool,
+      value TYPE zcl_qjs_value=>ty_value,
+      writable TYPE abap_bool,
+      enumerable TYPE abap_bool,
+      configurable TYPE abap_bool,
+    END OF ty_own_property.
+    METHODS define_property
+      IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+        writable TYPE abap_bool enumerable TYPE abap_bool configurable TYPE abap_bool.
+    METHODS get_own_property
+      IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE ty_own_property.
     METHODS delete_property
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_property
+      IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_symbol_property
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE abap_bool.
   PRIVATE SECTION.
+    TYPES:
+      BEGIN OF ty_integer,
+        value TYPE int8,
+        positive_infinity TYPE abap_bool,
+        negative_infinity TYPE abap_bool,
+      END OF ty_integer.
     TYPES: BEGIN OF ty_property,
       name TYPE string,
       value TYPE zcl_qjs_value=>ty_value,
+      writable TYPE abap_bool,
+      enumerable TYPE abap_bool,
+      configurable TYPE abap_bool,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_symbol_property,
@@ -147,6 +252,9 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS is_callable
       IMPORTING value TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS is_constructable
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_callable_property
       IMPORTING value TYPE zcl_qjs_value=>ty_value name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -164,6 +272,59 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS array_slice_index
       IMPORTING value TYPE zcl_qjs_value=>ty_value length TYPE int8
       RETURNING VALUE(result) TYPE int8
+      RAISING zcx_qjs_error.
+    METHODS array_clamped_count
+      IMPORTING value TYPE zcl_qjs_value=>ty_value maximum TYPE int8
+      RETURNING VALUE(result) TYPE int8
+      RAISING zcx_qjs_error.
+    METHODS string_receiver
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        exact TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_qjs_error.
+    METHODS primitive_value
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        prefer_string TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS string_value
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_qjs_error.
+    METHODS string_integer
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE ty_integer
+      RAISING zcx_qjs_error.
+    METHODS string_trim_value
+      IMPORTING value TYPE string trim_start TYPE abap_bool trim_end TYPE abap_bool
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_qjs_error.
+    METHODS string_is_whitespace
+      IMPORTING character TYPE string
+      RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS initialize_string_wrapper
+      IMPORTING object TYPE REF TO zcl_qjs_object
+        primitive TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS reflect_arguments
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zif_qjs_callable=>ty_arguments
+      RAISING zcx_qjs_error.
+    METHODS array_sort_compare
+      IMPORTING left TYPE zcl_qjs_value=>ty_value
+        right TYPE zcl_qjs_value=>ty_value
+        comparator TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE i
+      RAISING zcx_qjs_error.
+    METHODS array_flatten_into
+      IMPORTING source TYPE REF TO zcl_qjs_object
+        target TYPE REF TO zcl_qjs_object
+        source_length TYPE int8 depth TYPE int8
+        mapper TYPE zcl_qjs_value=>ty_value
+        mapper_this TYPE zcl_qjs_value=>ty_value
+        use_mapper TYPE abap_bool
+      CHANGING target_index TYPE int8
       RAISING zcx_qjs_error.
     METHODS same_value_zero
       IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
@@ -257,6 +418,193 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
 ENDCLASS.
 
 CLASS zcl_qjs_native_function IMPLEMENTATION.
+  METHOD primitive_value.
+    IF value-tag <> zcl_qjs_value=>tag_object.
+      result = value.
+      RETURN.
+    ENDIF.
+    DATA lv_first_name TYPE string.
+    DATA lv_second_name TYPE string.
+    IF prefer_string = abap_true.
+      lv_first_name = `toString`.
+      lv_second_name = `valueOf`.
+    ELSE.
+      lv_first_name = `valueOf`.
+      lv_second_name = `toString`.
+    ENDIF.
+    DATA(ls_method) = get_callable_property(
+      value = value name = lv_first_name ).
+    IF is_callable( ls_method ) = abap_true.
+      result = mo_runtime->invoke_callable(
+        callable = ls_method this_value = value ).
+      IF result-tag <> zcl_qjs_value=>tag_object.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    ls_method = get_callable_property(
+      value = value name = lv_second_name ).
+    IF is_callable( ls_method ) = abap_true.
+      result = mo_runtime->invoke_callable(
+        callable = ls_method this_value = value ).
+      IF result-tag <> zcl_qjs_value=>tag_object.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    RAISE EXCEPTION TYPE zcx_qjs_error
+      EXPORTING reason = 'TypeError: native conversion cannot produce a primitive'.
+  ENDMETHOD.
+
+  METHOD string_value.
+    result = zcl_qjs_value=>to_string(
+      primitive_value( value = value prefer_string = abap_true ) ).
+  ENDMETHOD.
+
+  METHOD string_receiver.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA ls_primitive TYPE zcl_qjs_object=>ty_own_property.
+    IF value-tag = zcl_qjs_value=>tag_string.
+      result = value-string_ref->as_string( ).
+      RETURN.
+    ENDIF.
+    IF value-tag = zcl_qjs_value=>tag_object.
+      TRY.
+          lo_object ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_object IS BOUND.
+        ls_primitive = lo_object->get_own_property( '[[PrimitiveValue]]' ).
+        IF ls_primitive-found = abap_true.
+          IF exact = abap_true
+              AND ls_primitive-value-tag <> zcl_qjs_value=>tag_string.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: String method receiver is not a string'.
+          ENDIF.
+          result = zcl_qjs_value=>to_string( ls_primitive-value ).
+          RETURN.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    IF exact = abap_true.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: String method receiver is not a string'.
+    ENDIF.
+    IF value-tag = zcl_qjs_value=>tag_null
+        OR value-tag = zcl_qjs_value=>tag_undefined.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: String method receiver is null or undefined'.
+    ENDIF.
+    result = string_value( value ).
+  ENDMETHOD.
+
+  METHOD string_integer.
+    DATA(ls_number) = zcl_qjs_number=>to_number(
+      primitive_value( value = value ) ).
+    DATA lv_max_safe_f TYPE f.
+    lv_max_safe_f = '9007199254740991'.
+    IF ls_number-tag = zcl_qjs_value=>tag_int.
+      result-value = ls_number-int_value.
+    ELSEIF ls_number-tag = zcl_qjs_value=>tag_number.
+      IF ls_number-number_kind = zcl_qjs_value=>number_pos_inf.
+        result-positive_infinity = abap_true.
+      ELSEIF ls_number-number_kind = zcl_qjs_value=>number_neg_inf.
+        result-negative_infinity = abap_true.
+      ELSEIF ls_number-number_kind = zcl_qjs_value=>number_finite.
+        IF ls_number-float_value >= lv_max_safe_f.
+          result-positive_infinity = abap_true.
+        ELSEIF ls_number-float_value <= 0 - lv_max_safe_f.
+          result-negative_infinity = abap_true.
+        ELSE.
+          result-value = trunc( ls_number-float_value ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD string_trim_value.
+    DATA lv_start TYPE i.
+    DATA lv_end TYPE i.
+    DATA lv_character TYPE string.
+    lv_end = strlen( value ).
+    IF trim_start = abap_true.
+      WHILE lv_start < lv_end.
+        lv_character = value+lv_start(1).
+        IF string_is_whitespace( lv_character ) = abap_false.
+          EXIT.
+        ENDIF.
+        lv_start = lv_start + 1.
+      ENDWHILE.
+    ENDIF.
+    IF trim_end = abap_true.
+      WHILE lv_end > lv_start.
+        DATA(lv_last) = lv_end - 1.
+        lv_character = value+lv_last(1).
+        IF string_is_whitespace( lv_character ) = abap_false.
+          EXIT.
+        ENDIF.
+        lv_end = lv_end - 1.
+      ENDWHILE.
+    ENDIF.
+    DATA(lv_length) = lv_end - lv_start.
+    result = value+lv_start(lv_length).
+  ENDMETHOD.
+
+  METHOD string_is_whitespace.
+    DATA(lv_code) = uri_code_unit( character ).
+    result = xsdbool(
+      lv_code = 9 OR lv_code = 10 OR lv_code = 11 OR lv_code = 12
+      OR lv_code = 13 OR lv_code = 32 OR lv_code = 160 OR lv_code = 5760
+      OR ( lv_code >= 8192 AND lv_code <= 8202 )
+      OR lv_code = 8232 OR lv_code = 8233 OR lv_code = 8239
+      OR lv_code = 8287 OR lv_code = 12288 OR lv_code = 65279 ).
+  ENDMETHOD.
+
+  METHOD initialize_string_wrapper.
+    DATA lv_text TYPE string.
+    DATA lv_index TYPE i.
+    DATA lv_name TYPE string.
+    IF primitive-tag <> zcl_qjs_value=>tag_string.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'String wrapper requires a string primitive'.
+    ENDIF.
+    lv_text = primitive-string_ref->as_string( ).
+    object->define_property(
+      name = '[[PrimitiveValue]]' value = primitive
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    object->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( strlen( lv_text ) )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    WHILE lv_index < strlen( lv_text ).
+      lv_name = lv_index.
+      CONDENSE lv_name NO-GAPS.
+      DATA(lv_wrapper_character) = lv_text+lv_index(1).
+      object->define_property(
+        name = lv_name value = zcl_qjs_value=>new_string( lv_wrapper_character )
+        writable = abap_false enumerable = abap_true configurable = abap_false ).
+      lv_index = lv_index + 1.
+    ENDWHILE.
+  ENDMETHOD.
+
+  METHOD reflect_arguments.
+    IF value-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Reflect argument list is not an object'.
+    ENDIF.
+    DATA lo_arguments TYPE REF TO zcl_qjs_object.
+    TRY.
+        lo_arguments ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: Reflect argument list must be ordinary'.
+    ENDTRY.
+    DATA(lv_argument_length) = array_to_length(
+      lo_arguments->get( 'length' ) ).
+    DATA lv_argument_index TYPE int8.
+    WHILE lv_argument_index < lv_argument_length.
+      APPEND lo_arguments->get_element( lv_argument_index ) TO result.
+      lv_argument_index = lv_argument_index + 1.
+    ENDWHILE.
+  ENDMETHOD.
+
   METHOD array_to_length.
     DATA(ls_number) = zcl_qjs_number=>to_number( value ).
     DATA lv_max_safe TYPE int8.
@@ -333,6 +681,138 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD array_clamped_count.
+    DATA(ls_number) = zcl_qjs_number=>to_number( value ).
+    DATA(lv_count) = CONV int8( 0 ).
+    IF ls_number-tag = zcl_qjs_value=>tag_int.
+      IF ls_number-int_value > 0.
+        lv_count = ls_number-int_value.
+      ENDIF.
+    ELSEIF ls_number-tag = zcl_qjs_value=>tag_number.
+      IF ls_number-number_kind = zcl_qjs_value=>number_pos_inf.
+        result = maximum.
+        RETURN.
+      ELSEIF ls_number-number_kind = zcl_qjs_value=>number_finite
+          AND ls_number-float_value > 0.
+        IF ls_number-float_value >= CONV f( maximum ).
+          result = maximum.
+          RETURN.
+        ENDIF.
+        lv_count = trunc( ls_number-float_value ).
+      ENDIF.
+    ENDIF.
+    IF lv_count > maximum.
+      result = maximum.
+    ELSE.
+      result = lv_count.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD array_sort_compare.
+    IF left-tag = zcl_qjs_value=>tag_undefined
+        AND right-tag = zcl_qjs_value=>tag_undefined.
+      RETURN.
+    ELSEIF left-tag = zcl_qjs_value=>tag_undefined.
+      result = 1.
+      RETURN.
+    ELSEIF right-tag = zcl_qjs_value=>tag_undefined.
+      result = -1.
+      RETURN.
+    ENDIF.
+    IF comparator-tag <> zcl_qjs_value=>tag_undefined.
+      DATA lt_compare_arguments TYPE zif_qjs_callable=>ty_arguments.
+      APPEND left TO lt_compare_arguments.
+      APPEND right TO lt_compare_arguments.
+      DATA(ls_compare_result) = zcl_qjs_number=>to_number(
+        mo_runtime->invoke_callable(
+          callable   = comparator
+          this_value = zcl_qjs_value=>new_undefined( )
+          arguments  = lt_compare_arguments ) ).
+      IF ls_compare_result-tag = zcl_qjs_value=>tag_int.
+        IF ls_compare_result-int_value < 0.
+          result = -1.
+        ELSEIF ls_compare_result-int_value > 0.
+          result = 1.
+        ENDIF.
+      ELSEIF ls_compare_result-tag = zcl_qjs_value=>tag_number.
+        IF ls_compare_result-number_kind = zcl_qjs_value=>number_neg_inf
+            OR ( ls_compare_result-number_kind = zcl_qjs_value=>number_finite
+              AND ls_compare_result-float_value < 0 ).
+          result = -1.
+        ELSEIF ls_compare_result-number_kind = zcl_qjs_value=>number_pos_inf
+            OR ( ls_compare_result-number_kind = zcl_qjs_value=>number_finite
+              AND ls_compare_result-float_value > 0 ).
+          result = 1.
+        ENDIF.
+      ENDIF.
+      RETURN.
+    ENDIF.
+    DATA(lv_left_string) = zcl_qjs_value=>to_string( left ).
+    DATA(lv_right_string) = zcl_qjs_value=>to_string( right ).
+    IF lv_left_string < lv_right_string.
+      result = -1.
+    ELSEIF lv_left_string > lv_right_string.
+      result = 1.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD array_flatten_into.
+    mo_runtime->get_limits( )->consume( source_length ).
+    DATA(lv_flat_source_index) = CONV int8( 0 ).
+    WHILE lv_flat_source_index < source_length.
+      DATA(lv_flat_source_name) = CONV string( lv_flat_source_index ).
+      CONDENSE lv_flat_source_name NO-GAPS.
+      IF source->has_property( lv_flat_source_name ) = abap_true.
+        DATA(ls_flat_element) = source->get( lv_flat_source_name ).
+        IF use_mapper = abap_true.
+          DATA lt_flat_arguments TYPE zif_qjs_callable=>ty_arguments.
+          APPEND ls_flat_element TO lt_flat_arguments.
+          APPEND array_length_value( lv_flat_source_index ) TO lt_flat_arguments.
+          APPEND zcl_qjs_value=>new_object( source ) TO lt_flat_arguments.
+          ls_flat_element = mo_runtime->invoke_callable(
+            callable   = mapper
+            this_value = mapper_this
+            arguments  = lt_flat_arguments ).
+        ENDIF.
+        DATA lo_flat_nested TYPE REF TO zcl_qjs_object.
+        IF depth > 0 AND ls_flat_element-tag = zcl_qjs_value=>tag_object.
+          TRY.
+              lo_flat_nested ?= ls_flat_element-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF depth > 0 AND lo_flat_nested IS BOUND
+            AND lo_flat_nested->is_array( ) = abap_true.
+          DATA(lv_flat_nested_length) = array_to_length(
+            lo_flat_nested->get( 'length' ) ).
+          mo_runtime->get_limits( )->enter_nested_frame( ).
+          TRY.
+              array_flatten_into(
+                EXPORTING source = lo_flat_nested target = target
+                  source_length = lv_flat_nested_length depth = depth - 1
+                  mapper = zcl_qjs_value=>new_undefined( )
+                  mapper_this = zcl_qjs_value=>new_undefined( )
+                  use_mapper = abap_false
+                CHANGING target_index = target_index ).
+            CLEANUP.
+              mo_runtime->get_limits( )->leave_nested_frame( ).
+          ENDTRY.
+          mo_runtime->get_limits( )->leave_nested_frame( ).
+        ELSE.
+          DATA lv_flat_max_array TYPE int8.
+          lv_flat_max_array = '4294967295'.
+          IF target_index >= lv_flat_max_array.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: flattened array is too large'.
+          ENDIF.
+          target->set_element( index = target_index value = ls_flat_element ).
+          target_index = target_index + 1.
+        ENDIF.
+      ENDIF.
+      lv_flat_source_index = lv_flat_source_index + 1.
+    ENDWHILE.
+  ENDMETHOD.
+
   METHOD same_value_zero.
     result = zcl_qjs_value=>strict_equal( left = left right = right ).
     IF result = abap_false
@@ -367,30 +847,91 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       result = ls_property-value.
     ELSE.
       DATA(lo_function_prototype) = mo_runtime->get_function_prototype( ).
-      IF lo_function_prototype IS BOUND.
+      WHILE lo_function_prototype IS BOUND.
         DATA(ls_prototype_property) = lo_function_prototype->get_own_property( name ).
         IF ls_prototype_property-found = abap_true.
           result = ls_prototype_property-value.
-        ELSE.
-          result = zcl_qjs_value=>new_undefined( ).
+          RETURN.
         ENDIF.
-      ELSE.
-        result = zcl_qjs_value=>new_undefined( ).
-      ENDIF.
+        lo_function_prototype = lo_function_prototype->get_prototype( ).
+      ENDWHILE.
+      result = zcl_qjs_value=>new_undefined( ).
     ENDIF.
   ENDMETHOD.
 
   METHOD set_property.
     DATA ls_property TYPE ty_property.
+    READ TABLE mt_properties WITH TABLE KEY name = name INTO ls_property.
+    IF sy-subrc = 0 AND ls_property-writable = abap_false.
+      RETURN.
+    ENDIF.
     ls_property-name = name.
     ls_property-value = value.
+    ls_property-writable = abap_true.
+    ls_property-enumerable = abap_true.
+    ls_property-configurable = abap_true.
     DELETE TABLE mt_properties WITH TABLE KEY name = name.
     INSERT ls_property INTO TABLE mt_properties.
   ENDMETHOD.
 
+  METHOD define_property.
+    DATA ls_property TYPE ty_property.
+    ls_property-name = name.
+    ls_property-value = value.
+    ls_property-writable = writable.
+    ls_property-enumerable = enumerable.
+    ls_property-configurable = configurable.
+    DELETE TABLE mt_properties WITH TABLE KEY name = name.
+    INSERT ls_property INTO TABLE mt_properties.
+  ENDMETHOD.
+
+  METHOD get_own_property.
+    DATA ls_property TYPE ty_property.
+    READ TABLE mt_properties WITH TABLE KEY name = name INTO ls_property.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    result-found = abap_true.
+    result-value = ls_property-value.
+    result-writable = ls_property-writable.
+    result-enumerable = ls_property-enumerable.
+    result-configurable = ls_property-configurable.
+  ENDMETHOD.
+
   METHOD delete_property.
+    DATA ls_property TYPE ty_property.
+    READ TABLE mt_properties WITH TABLE KEY name = name INTO ls_property.
+    IF sy-subrc = 0 AND ls_property-configurable = abap_false.
+      result = abap_false.
+      RETURN.
+    ENDIF.
     DELETE TABLE mt_properties WITH TABLE KEY name = name.
     result = abap_true.
+  ENDMETHOD.
+
+  METHOD has_property.
+    READ TABLE mt_properties WITH TABLE KEY name = name TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    DATA(lo_function_prototype) = mo_runtime->get_function_prototype( ).
+    IF lo_function_prototype IS BOUND.
+      result = lo_function_prototype->has_property( name ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD has_symbol_property.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    DATA(lo_function_prototype) = mo_runtime->get_function_prototype( ).
+    IF lo_function_prototype IS BOUND.
+      result = lo_function_prototype->has_symbol_property( identity ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD is_callable.
@@ -413,8 +954,49 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD is_constructable.
+    DATA lo_closure TYPE REF TO zcl_qjs_closure.
+    DATA lo_native TYPE REF TO zcl_qjs_native_function.
+    DATA lo_constructor TYPE REF TO zif_qjs_constructable.
+    result = abap_false.
+    IF value-tag <> zcl_qjs_value=>tag_object.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_closure ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_closure IS BOUND.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_native ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_native IS BOUND.
+      CASE lo_native->mv_id.
+        WHEN id_object OR id_array OR id_error OR id_type_error OR id_range_error
+            OR id_syntax_error OR id_reference_error OR id_uri_error OR id_function
+            OR id_number OR id_string OR id_boolean OR id_map OR id_set.
+          result = abap_true.
+        WHEN id_bound_function.
+          result = is_constructable( lo_native->ms_bound_target ).
+      ENDCASE.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_constructor ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_constructor IS BOUND.
+      result = abap_true.
+    ENDIF.
+  ENDMETHOD.
+
   METHOD get_callable_property.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
     DATA lo_properties TYPE REF TO zif_qjs_property_container.
     IF value-tag <> zcl_qjs_value=>tag_object.
       result = zcl_qjs_value=>new_undefined( ).
@@ -426,6 +1008,14 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ENDTRY.
     IF lo_closure IS BOUND.
       result = lo_closure->get_property( name ).
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_object ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_object IS BOUND.
+      result = lo_object->get( name ).
       RETURN.
     ENDIF.
     lo_properties = value-property_ref.
@@ -1430,6 +2020,15 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA lv_apply_index TYPE i.
     DATA lo_bound TYPE REF TO zcl_qjs_native_function.
     DATA lo_reference TYPE REF TO object.
+    DATA lv_text_string TYPE string.
+    DATA lv_needle_string TYPE string.
+    DATA lv_string_result TYPE string.
+    DATA lv_string_length TYPE i.
+    DATA lv_string_start TYPE i.
+    DATA lv_string_end TYPE i.
+    DATA lv_string_offset TYPE i.
+    DATA lv_string_count TYPE i.
+    DATA ls_string_integer TYPE ty_integer.
     READ TABLE arguments INDEX 1 INTO ls_argument.
     CASE mv_id.
       WHEN id_function.
@@ -1567,12 +2166,754 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           result = zcl_qjs_value=>new_int( 0 ).
         ENDIF.
+      WHEN id_map OR id_set.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: collection constructor requires new'.
       WHEN id_string.
-        IF sy-subrc = 0.
-          result = zcl_qjs_value=>new_string( zcl_qjs_value=>to_string( ls_argument ) ).
+        IF sy-subrc = 0 AND ls_argument-tag = zcl_qjs_value=>tag_symbol.
+          result = zcl_qjs_value=>new_string(
+            'Symbol(' && mo_runtime->symbol_description( ls_argument ) && ')' ).
+        ELSEIF sy-subrc = 0.
+          result = zcl_qjs_value=>new_string( string_value( ls_argument ) ).
         ELSE.
           result = zcl_qjs_value=>new_string( '' ).
         ENDIF.
+      WHEN id_string_to_string OR id_string_value_of.
+        lv_text_string = string_receiver( value = this_value exact = abap_true ).
+        result = zcl_qjs_value=>new_string( lv_text_string ).
+      WHEN id_string_char_at OR id_string_char_code_at OR id_string_at.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+        ELSE.
+          CLEAR ls_string_integer.
+        ENDIF.
+        IF ls_string_integer-positive_infinity = abap_true
+            OR ls_string_integer-negative_infinity = abap_true.
+          lv_string_start = -1.
+        ELSE.
+          lv_string_start = ls_string_integer-value.
+          IF mv_id = id_string_at AND lv_string_start < 0.
+            lv_string_start = lv_string_length + lv_string_start.
+          ENDIF.
+        ENDIF.
+        IF lv_string_start < 0 OR lv_string_start >= lv_string_length.
+          IF mv_id = id_string_char_code_at.
+            result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+          ELSEIF mv_id = id_string_at.
+            result = zcl_qjs_value=>new_undefined( ).
+          ELSE.
+            result = zcl_qjs_value=>new_string( '' ).
+          ENDIF.
+        ELSE.
+          DATA(lv_string_character) = lv_text_string+lv_string_start(1).
+          IF mv_id = id_string_char_code_at.
+            result = zcl_qjs_value=>new_int( uri_code_unit( lv_string_character ) ).
+          ELSE.
+            result = zcl_qjs_value=>new_string( lv_string_character ).
+          ENDIF.
+        ENDIF.
+      WHEN id_string_index_of OR id_string_includes
+          OR id_string_starts_with.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          lv_needle_string = string_value( ls_argument ).
+        ELSE.
+          lv_needle_string = 'undefined'.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+          IF ls_string_integer-positive_infinity = abap_true.
+            lv_string_start = lv_string_length.
+          ELSEIF ls_string_integer-negative_infinity = abap_true.
+            lv_string_start = 0.
+          ELSE.
+            lv_string_start = ls_string_integer-value.
+          ENDIF.
+        ELSE.
+          lv_string_start = 0.
+        ENDIF.
+        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
+        IF lv_string_start > lv_string_length.
+          lv_string_start = lv_string_length.
+        ENDIF.
+        lv_string_offset = -1.
+        IF strlen( lv_needle_string ) = 0.
+          lv_string_offset = lv_string_start.
+        ELSEIF lv_string_start < lv_string_length.
+          DATA(lv_string_tail) = lv_text_string+lv_string_start.
+          FIND FIRST OCCURRENCE OF lv_needle_string IN lv_string_tail
+            MATCH OFFSET lv_string_offset.
+          IF sy-subrc = 0.
+            lv_string_offset = lv_string_offset + lv_string_start.
+          ELSE.
+            lv_string_offset = -1.
+          ENDIF.
+        ENDIF.
+        IF mv_id = id_string_index_of.
+          result = zcl_qjs_value=>new_int( lv_string_offset ).
+        ELSEIF mv_id = id_string_includes.
+          result = zcl_qjs_value=>new_boolean(
+            xsdbool( lv_string_offset >= 0 ) ).
+        ELSE.
+          result = zcl_qjs_value=>new_boolean(
+            xsdbool( lv_string_offset = lv_string_start ) ).
+        ENDIF.
+      WHEN id_string_last_index_of.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          lv_needle_string = string_value( ls_argument ).
+        ELSE.
+          lv_needle_string = 'undefined'.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+          IF ls_string_integer-negative_infinity = abap_true.
+            lv_string_start = 0.
+          ELSEIF ls_string_integer-positive_infinity = abap_true.
+            lv_string_start = lv_string_length.
+          ELSE.
+            lv_string_start = ls_string_integer-value.
+          ENDIF.
+        ELSE.
+          lv_string_start = lv_string_length.
+        ENDIF.
+        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
+        IF lv_string_start > lv_string_length.
+          lv_string_start = lv_string_length.
+        ENDIF.
+        lv_string_start = nmin(
+          val1 = lv_string_start
+          val2 = lv_string_length - strlen( lv_needle_string ) ).
+        lv_string_offset = -1.
+        IF strlen( lv_needle_string ) = 0.
+          lv_string_offset = nmax( val1 = 0 val2 = lv_string_start ).
+        ELSEIF lv_string_start >= 0.
+          lv_string_offset = lv_string_start.
+          lv_string_count = strlen( lv_needle_string ).
+          WHILE lv_string_offset >= 0.
+            DATA(lv_string_candidate) =
+              lv_text_string+lv_string_offset(lv_string_count).
+            IF lv_string_candidate = lv_needle_string.
+              EXIT.
+            ENDIF.
+            lv_string_offset = lv_string_offset - 1.
+          ENDWHILE.
+        ENDIF.
+        result = zcl_qjs_value=>new_int( lv_string_offset ).
+      WHEN id_string_ends_with.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          lv_needle_string = string_value( ls_argument ).
+        ELSE.
+          lv_needle_string = 'undefined'.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+          IF ls_string_integer-positive_infinity = abap_true.
+            lv_string_end = lv_string_length.
+          ELSEIF ls_string_integer-negative_infinity = abap_true.
+            lv_string_end = 0.
+          ELSE.
+            lv_string_end = ls_string_integer-value.
+          ENDIF.
+        ELSE.
+          lv_string_end = lv_string_length.
+        ENDIF.
+        IF lv_string_end < 0. lv_string_end = 0. ENDIF.
+        IF lv_string_end > lv_string_length. lv_string_end = lv_string_length. ENDIF.
+        lv_string_start = lv_string_end - strlen( lv_needle_string ).
+        IF lv_string_start < 0.
+          result = zcl_qjs_value=>new_boolean( abap_false ).
+        ELSE.
+          lv_string_count = strlen( lv_needle_string ).
+          result = zcl_qjs_value=>new_boolean(
+            xsdbool( lv_text_string+lv_string_start(lv_string_count)
+              = lv_needle_string ) ).
+        ENDIF.
+      WHEN id_string_slice.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          lv_string_start = array_slice_index(
+            value = ls_argument length = CONV int8( lv_string_length ) ).
+        ELSE.
+          lv_string_start = 0.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
+          lv_string_end = array_slice_index(
+            value = ls_argument length = CONV int8( lv_string_length ) ).
+        ELSE.
+          lv_string_end = lv_string_length.
+        ENDIF.
+        lv_string_count = lv_string_end - lv_string_start.
+        IF lv_string_count < 0. lv_string_count = 0. ENDIF.
+        lv_string_result = lv_text_string+lv_string_start(lv_string_count).
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_substring.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+          IF ls_string_integer-positive_infinity = abap_true.
+            lv_string_start = lv_string_length.
+          ELSEIF ls_string_integer-negative_infinity = abap_true.
+            lv_string_start = 0.
+          ELSE.
+            lv_string_start = ls_string_integer-value.
+          ENDIF.
+        ELSE.
+          lv_string_start = 0.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
+          ls_string_integer = string_integer( ls_argument ).
+          IF ls_string_integer-positive_infinity = abap_true.
+            lv_string_end = lv_string_length.
+          ELSEIF ls_string_integer-negative_infinity = abap_true.
+            lv_string_end = 0.
+          ELSE.
+            lv_string_end = ls_string_integer-value.
+          ENDIF.
+        ELSE.
+          lv_string_end = lv_string_length.
+        ENDIF.
+        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
+        IF lv_string_end < 0. lv_string_end = 0. ENDIF.
+        IF lv_string_start > lv_string_length. lv_string_start = lv_string_length. ENDIF.
+        IF lv_string_end > lv_string_length. lv_string_end = lv_string_length. ENDIF.
+        IF lv_string_start > lv_string_end.
+          lv_string_offset = lv_string_start.
+          lv_string_start = lv_string_end.
+          lv_string_end = lv_string_offset.
+        ENDIF.
+        lv_string_count = lv_string_end - lv_string_start.
+        lv_string_result = lv_text_string+lv_string_start(lv_string_count).
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_concat.
+        lv_string_result = string_receiver( this_value ).
+        LOOP AT arguments INTO ls_argument.
+          lv_string_result = lv_string_result
+            && string_value( ls_argument ).
+        ENDLOOP.
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_repeat.
+        lv_text_string = string_receiver( this_value ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+        ELSE.
+          CLEAR ls_string_integer.
+        ENDIF.
+        IF ls_string_integer-negative_infinity = abap_true
+            OR ls_string_integer-positive_infinity = abap_true
+            OR ls_string_integer-value < 0.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: invalid string repeat count'.
+        ENDIF.
+        IF lv_text_string IS INITIAL.
+          result = zcl_qjs_value=>new_string( '' ).
+          RETURN.
+        ENDIF.
+        IF ls_string_integer-value > 1000000.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: repeated string exceeds implementation limit'.
+        ENDIF.
+        CLEAR lv_string_result.
+        lv_string_count = ls_string_integer-value.
+        DO lv_string_count TIMES.
+          lv_string_result = lv_string_result && lv_text_string.
+        ENDDO.
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_to_lower.
+        lv_text_string = string_receiver( this_value ).
+        result = zcl_qjs_value=>new_string( to_lower( val = lv_text_string ) ).
+      WHEN id_string_to_upper.
+        lv_text_string = string_receiver( this_value ).
+        result = zcl_qjs_value=>new_string( to_upper( val = lv_text_string ) ).
+      WHEN id_string_trim OR id_string_trim_start OR id_string_trim_end.
+        lv_text_string = string_receiver( this_value ).
+        DATA(lv_trim_start) = xsdbool( mv_id <> id_string_trim_end ).
+        DATA(lv_trim_end) = xsdbool( mv_id <> id_string_trim_start ).
+        lv_string_result = string_trim_value(
+          value = lv_text_string trim_start = lv_trim_start trim_end = lv_trim_end ).
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_reflect_apply.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_reflect_target).
+        IF sy-subrc <> 0 OR is_callable( ls_reflect_target ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.apply target is not callable'.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_reflect_this).
+        IF sy-subrc <> 0.
+          ls_reflect_this = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        READ TABLE arguments INDEX 3 INTO DATA(ls_reflect_list).
+        IF sy-subrc <> 0.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.apply requires an argument list'.
+        ENDIF.
+        DATA(lt_reflect_arguments) = reflect_arguments( ls_reflect_list ).
+        result = mo_runtime->invoke_callable(
+          callable = ls_reflect_target this_value = ls_reflect_this
+          arguments = lt_reflect_arguments ).
+      WHEN id_reflect_construct.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR is_constructable( ls_reflect_target ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.construct target is not constructable'.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_reflect_list.
+        IF sy-subrc <> 0.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.construct requires an argument list'.
+        ENDIF.
+        lt_reflect_arguments = reflect_arguments( ls_reflect_list ).
+        READ TABLE arguments INDEX 3 INTO DATA(ls_reflect_new_target).
+        IF sy-subrc <> 0.
+          ls_reflect_new_target = ls_reflect_target.
+        ELSEIF is_constructable( ls_reflect_new_target ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.construct newTarget is not constructable'.
+        ENDIF.
+        result = mo_runtime->construct_value(
+          constructor = ls_reflect_target new_target = ls_reflect_new_target
+          arguments = lt_reflect_arguments ).
+      WHEN id_reflect_define_property.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_reflect_key).
+        READ TABLE arguments INDEX 3 INTO DATA(ls_reflect_descriptor).
+        DATA lo_reflect_define TYPE REF TO zcl_qjs_native_function.
+        DATA lt_reflect_define_args TYPE zif_qjs_callable=>ty_arguments.
+        CREATE OBJECT lo_reflect_define
+          EXPORTING id = id_object_define_property runtime = mo_runtime.
+        APPEND ls_reflect_target TO lt_reflect_define_args.
+        APPEND ls_reflect_key TO lt_reflect_define_args.
+        APPEND ls_reflect_descriptor TO lt_reflect_define_args.
+        TRY.
+            DATA(ls_reflect_ignored) = lo_reflect_define->zif_qjs_callable~call(
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_reflect_define_args ).
+            result = zcl_qjs_value=>new_boolean( abap_true ).
+          CATCH zcx_qjs_throw.
+            result = zcl_qjs_value=>new_boolean( abap_false ).
+        ENDTRY.
+      WHEN id_reflect_delete_property.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR ls_reflect_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.deleteProperty target is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect.deleteProperty target must be ordinary'.
+        ENDTRY.
+        READ TABLE arguments INDEX 2 INTO ls_reflect_key.
+        IF sy-subrc <> 0.
+          ls_reflect_key = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF ls_reflect_key-tag = zcl_qjs_value=>tag_symbol.
+          result = zcl_qjs_value=>new_boolean(
+            lo_object->delete_symbol( ls_reflect_key-symbol_id ) ).
+        ELSE.
+          result = zcl_qjs_value=>new_boolean( lo_object->delete(
+            string_value( ls_reflect_key ) ) ).
+        ENDIF.
+      WHEN id_reflect_get OR id_reflect_set.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR ls_reflect_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect property target is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect property target must be ordinary'.
+        ENDTRY.
+        READ TABLE arguments INDEX 2 INTO ls_reflect_key.
+        IF sy-subrc <> 0.
+          ls_reflect_key = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF mv_id = id_reflect_get.
+          READ TABLE arguments INDEX 3 INTO DATA(ls_reflect_receiver).
+          IF sy-subrc <> 0.
+            ls_reflect_receiver = ls_reflect_target.
+          ENDIF.
+          IF ls_reflect_key-tag = zcl_qjs_value=>tag_symbol.
+            result = lo_object->reflect_get_symbol(
+              identity = ls_reflect_key-symbol_id receiver = ls_reflect_receiver ).
+          ELSE.
+            result = lo_object->reflect_get(
+              name = string_value( ls_reflect_key ) receiver = ls_reflect_receiver ).
+          ENDIF.
+        ELSE.
+          READ TABLE arguments INDEX 3 INTO DATA(ls_reflect_value).
+          IF sy-subrc <> 0.
+            ls_reflect_value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          READ TABLE arguments INDEX 4 INTO ls_reflect_receiver.
+          IF sy-subrc <> 0.
+            ls_reflect_receiver = ls_reflect_target.
+          ENDIF.
+          DATA(lv_reflect_set) = abap_false.
+          IF ls_reflect_key-tag = zcl_qjs_value=>tag_symbol.
+            lv_reflect_set = lo_object->reflect_set_symbol(
+              identity = ls_reflect_key-symbol_id value = ls_reflect_value
+              receiver = ls_reflect_receiver ).
+          ELSE.
+            lv_reflect_set = lo_object->reflect_set(
+              name = string_value( ls_reflect_key ) value = ls_reflect_value
+              receiver = ls_reflect_receiver ).
+          ENDIF.
+          result = zcl_qjs_value=>new_boolean( lv_reflect_set ).
+        ENDIF.
+      WHEN id_reflect_get_own_descriptor.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        READ TABLE arguments INDEX 2 INTO ls_reflect_key.
+        DATA lo_reflect_descriptor TYPE REF TO zcl_qjs_native_function.
+        DATA lt_reflect_descriptor_args TYPE zif_qjs_callable=>ty_arguments.
+        CREATE OBJECT lo_reflect_descriptor
+          EXPORTING id = id_object_get_own_descriptor runtime = mo_runtime.
+        APPEND ls_reflect_target TO lt_reflect_descriptor_args.
+        APPEND ls_reflect_key TO lt_reflect_descriptor_args.
+        result = lo_reflect_descriptor->zif_qjs_callable~call(
+          this_value = zcl_qjs_value=>new_undefined( )
+          arguments  = lt_reflect_descriptor_args ).
+      WHEN id_reflect_get_prototype.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        DATA lo_reflect_proto TYPE REF TO zcl_qjs_native_function.
+        DATA lt_reflect_proto_args TYPE zif_qjs_callable=>ty_arguments.
+        CREATE OBJECT lo_reflect_proto
+          EXPORTING id = id_object_get_prototype runtime = mo_runtime.
+        APPEND ls_reflect_target TO lt_reflect_proto_args.
+        result = lo_reflect_proto->zif_qjs_callable~call(
+          this_value = zcl_qjs_value=>new_undefined( )
+          arguments  = lt_reflect_proto_args ).
+      WHEN id_reflect_has.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR ls_reflect_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.has target is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect.has target must be ordinary'.
+        ENDTRY.
+        READ TABLE arguments INDEX 2 INTO ls_reflect_key.
+        IF sy-subrc <> 0.
+          ls_reflect_key = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF ls_reflect_key-tag = zcl_qjs_value=>tag_symbol.
+          result = zcl_qjs_value=>new_boolean(
+            lo_object->has_symbol_property( ls_reflect_key-symbol_id ) ).
+        ELSE.
+          result = zcl_qjs_value=>new_boolean( lo_object->has_property(
+            string_value( ls_reflect_key ) ) ).
+        ENDIF.
+      WHEN id_reflect_is_extensible OR id_reflect_prevent_extensions.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR ls_reflect_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect extensibility target is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect extensibility target must be ordinary'.
+        ENDTRY.
+        IF mv_id = id_reflect_is_extensible.
+          result = zcl_qjs_value=>new_boolean( lo_object->is_extensible( ) ).
+        ELSE.
+          lo_object->prevent_extensions( ).
+          result = zcl_qjs_value=>new_boolean( abap_true ).
+        ENDIF.
+      WHEN id_reflect_own_keys.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        IF sy-subrc <> 0 OR ls_reflect_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.ownKeys target is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect.ownKeys target must be ordinary'.
+        ENDTRY.
+        DATA(lo_reflect_keys) = mo_runtime->create_array( ).
+        DATA(lv_reflect_index) = CONV int8( 0 ).
+        DATA(lt_reflect_names) = lo_object->own_property_names( ).
+        LOOP AT lt_reflect_names INTO DATA(lv_reflect_name).
+          lo_reflect_keys->set_element(
+            index = lv_reflect_index
+            value = zcl_qjs_value=>new_string( lv_reflect_name ) ).
+          lv_reflect_index = lv_reflect_index + 1.
+        ENDLOOP.
+        DATA(lt_reflect_symbols) = lo_object->own_property_symbols( ).
+        LOOP AT lt_reflect_symbols INTO DATA(lv_reflect_symbol).
+          lo_reflect_keys->set_element(
+            index = lv_reflect_index
+            value = zcl_qjs_value=>new_symbol( lv_reflect_symbol ) ).
+          lv_reflect_index = lv_reflect_index + 1.
+        ENDLOOP.
+        result = zcl_qjs_value=>new_object( lo_reflect_keys ).
+      WHEN id_reflect_set_prototype.
+        READ TABLE arguments INDEX 1 INTO ls_reflect_target.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_reflect_proto_value).
+        IF ls_reflect_target-tag <> zcl_qjs_value=>tag_object
+            OR ( ls_reflect_proto_value-tag <> zcl_qjs_value=>tag_object
+              AND ls_reflect_proto_value-tag <> zcl_qjs_value=>tag_null ).
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Reflect.setPrototypeOf arguments are invalid'.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_reflect_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Reflect.setPrototypeOf target must be ordinary'.
+        ENDTRY.
+        DATA lo_reflect_new_proto TYPE REF TO zcl_qjs_object.
+        IF ls_reflect_proto_value-tag = zcl_qjs_value=>tag_object.
+          TRY.
+              lo_reflect_new_proto ?= ls_reflect_proto_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: Reflect.setPrototypeOf prototype must be ordinary'.
+          ENDTRY.
+        ENDIF.
+        TRY.
+            lo_object->set_prototype( lo_reflect_new_proto ).
+            result = zcl_qjs_value=>new_boolean( abap_true ).
+          CATCH zcx_qjs_throw.
+            result = zcl_qjs_value=>new_boolean( abap_false ).
+        ENDTRY.
+      WHEN id_object_is_extensible OR id_object_prevent_extensions.
+        IF sy-subrc <> 0 OR ls_argument-tag <> zcl_qjs_value=>tag_object.
+          IF mv_id = id_object_is_extensible.
+            result = zcl_qjs_value=>new_boolean( abap_false ).
+          ELSEIF sy-subrc = 0.
+            result = ls_argument.
+          ELSE.
+            result = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          RETURN.
+        ENDIF.
+        TRY.
+            lo_object ?= ls_argument-object_ref.
+          CATCH cx_sy_move_cast_error.
+            IF mv_id = id_object_is_extensible.
+              result = zcl_qjs_value=>new_boolean( abap_true ).
+            ELSE.
+              result = ls_argument.
+            ENDIF.
+            RETURN.
+        ENDTRY.
+        IF mv_id = id_object_is_extensible.
+          result = zcl_qjs_value=>new_boolean( lo_object->is_extensible( ) ).
+        ELSE.
+          lo_object->prevent_extensions( ).
+          result = ls_argument.
+        ENDIF.
+      WHEN id_map_get OR id_map_set OR id_map_has OR id_map_delete
+          OR id_map_clear OR id_map_size OR id_map_entries OR id_map_keys
+          OR id_map_values OR id_map_for_each OR id_set_add OR id_set_has
+          OR id_set_delete OR id_set_clear OR id_set_size OR id_set_entries
+          OR id_set_values OR id_set_for_each.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: collection method receiver is incompatible'.
+        ENDIF.
+        DATA lo_collection TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_collection ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: collection method receiver is incompatible'.
+        ENDTRY.
+        DATA(lv_collection_kind) = zcl_qjs_object=>collection_map.
+        IF mv_id = id_set_add OR mv_id = id_set_has OR mv_id = id_set_delete
+            OR mv_id = id_set_clear OR mv_id = id_set_size
+            OR mv_id = id_set_entries OR mv_id = id_set_values
+            OR mv_id = id_set_for_each.
+          lv_collection_kind = zcl_qjs_object=>collection_set.
+        ENDIF.
+        IF lo_collection->collection_kind( ) <> lv_collection_kind.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: collection method receiver is incompatible'.
+        ENDIF.
+        IF mv_id = id_map_get.
+          DATA(ls_map_entry) = lo_collection->collection_get( ls_argument ).
+          IF ls_map_entry-found = abap_true.
+            result = ls_map_entry-value.
+          ELSE.
+            result = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+        ELSEIF mv_id = id_map_set.
+          READ TABLE arguments INDEX 2 INTO DATA(ls_map_value).
+          IF sy-subrc <> 0.
+            ls_map_value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          lo_collection->collection_set_entry(
+            key = ls_argument value = ls_map_value ).
+          result = this_value.
+        ELSEIF mv_id = id_set_add.
+          lo_collection->collection_set_entry(
+            key = ls_argument value = ls_argument ).
+          result = this_value.
+        ELSEIF mv_id = id_map_has OR mv_id = id_set_has.
+          DATA(ls_has_entry) = lo_collection->collection_get( ls_argument ).
+          result = zcl_qjs_value=>new_boolean( ls_has_entry-found ).
+        ELSEIF mv_id = id_map_delete OR mv_id = id_set_delete.
+          result = zcl_qjs_value=>new_boolean(
+            lo_collection->collection_delete( ls_argument ) ).
+        ELSEIF mv_id = id_map_clear OR mv_id = id_set_clear.
+          lo_collection->collection_clear( ).
+          result = zcl_qjs_value=>new_undefined( ).
+        ELSEIF mv_id = id_map_size OR mv_id = id_set_size.
+          result = zcl_qjs_value=>new_int( lo_collection->collection_size( ) ).
+        ELSEIF mv_id = id_map_for_each OR mv_id = id_set_for_each.
+          IF is_callable( ls_argument ) = abap_false.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: collection callback is not callable'.
+          ENDIF.
+          READ TABLE arguments INDEX 2 INTO DATA(ls_collection_this).
+          IF sy-subrc <> 0.
+            ls_collection_this = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          DATA(lv_collection_index) = 1.
+          WHILE lv_collection_index <= lo_collection->collection_slots( ).
+            DATA(ls_each_entry) = lo_collection->collection_entry_at(
+              lv_collection_index ).
+            lv_collection_index = lv_collection_index + 1.
+            IF ls_each_entry-deleted = abap_true.
+              CONTINUE.
+            ENDIF.
+            DATA lt_each_arguments TYPE zif_qjs_callable=>ty_arguments.
+            IF lv_collection_kind = zcl_qjs_object=>collection_map.
+              APPEND ls_each_entry-value TO lt_each_arguments.
+              APPEND ls_each_entry-key TO lt_each_arguments.
+            ELSE.
+              APPEND ls_each_entry-key TO lt_each_arguments.
+              APPEND ls_each_entry-key TO lt_each_arguments.
+            ENDIF.
+            APPEND this_value TO lt_each_arguments.
+            DATA(ls_each_ignored) = mo_runtime->invoke_callable(
+              callable = ls_argument this_value = ls_collection_this
+              arguments = lt_each_arguments ).
+          ENDWHILE.
+          result = zcl_qjs_value=>new_undefined( ).
+        ELSE.
+          DATA(lv_iterator_kind) = zcl_qjs_object=>iterator_values.
+          IF mv_id = id_map_entries OR mv_id = id_set_entries.
+            lv_iterator_kind = zcl_qjs_object=>iterator_entries.
+          ELSEIF mv_id = id_map_keys.
+            lv_iterator_kind = zcl_qjs_object=>iterator_keys.
+          ENDIF.
+          DATA lo_collection_iterator TYPE REF TO zcl_qjs_object.
+          IF lv_collection_kind = zcl_qjs_object=>collection_map.
+            lo_collection_iterator = mo_runtime->create_object(
+              mo_runtime->get_map_iterator_proto( ) ).
+          ELSE.
+            lo_collection_iterator = mo_runtime->create_object(
+              mo_runtime->get_set_iterator_proto( ) ).
+          ENDIF.
+          lo_collection_iterator->initialize_iterator(
+            collection = lo_collection kind = lv_iterator_kind ).
+          result = zcl_qjs_value=>new_object( lo_collection_iterator ).
+        ENDIF.
+      WHEN id_array_entries OR id_array_keys OR id_array_values.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: array iterator receiver is not an object'.
+        ENDIF.
+        DATA lo_array_iterator_source TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_array_iterator_source ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: array iterator receiver is unsupported'.
+        ENDTRY.
+        DATA(lv_array_iterator_kind) = zcl_qjs_object=>iterator_values.
+        IF mv_id = id_array_entries.
+          lv_array_iterator_kind = zcl_qjs_object=>iterator_entries.
+        ELSEIF mv_id = id_array_keys.
+          lv_array_iterator_kind = zcl_qjs_object=>iterator_keys.
+        ENDIF.
+        DATA(lo_sequence_iterator) = mo_runtime->create_object(
+          mo_runtime->get_array_iterator_proto( ) ).
+        lo_sequence_iterator->initialize_array_iterator(
+          array = lo_array_iterator_source kind = lv_array_iterator_kind ).
+        result = zcl_qjs_value=>new_object( lo_sequence_iterator ).
+      WHEN id_string_iterator.
+        DATA(lv_iterator_string) = string_receiver( this_value ).
+        DATA(ls_iterator_string) = zcl_qjs_value=>new_string( lv_iterator_string ).
+        DATA(lo_string_iterator) = mo_runtime->create_object(
+          mo_runtime->get_string_iterator_proto( ) ).
+        lo_string_iterator->initialize_string_iterator( ls_iterator_string ).
+        result = zcl_qjs_value=>new_object( lo_string_iterator ).
+      WHEN id_collection_next.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: iterator receiver is incompatible'.
+        ENDIF.
+        DATA lo_next_iterator TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_next_iterator ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: iterator receiver is incompatible'.
+        ENDTRY.
+        IF lo_next_iterator->iterator_kind( ) = 0.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: iterator receiver is incompatible'.
+        ENDIF.
+        DATA(ls_iterator_entry) = lo_next_iterator->iterator_next( ).
+        DATA(lo_iterator_result) = mo_runtime->create_object( ).
+        lo_iterator_result->define_property(
+          name = 'done' value = zcl_qjs_value=>new_boolean(
+            xsdbool( ls_iterator_entry-found = abap_false ) ) ).
+        IF ls_iterator_entry-found = abap_false.
+          lo_iterator_result->define_property(
+            name = 'value' value = zcl_qjs_value=>new_undefined( ) ).
+        ELSEIF lo_next_iterator->iterator_kind( )
+            = zcl_qjs_object=>iterator_entries.
+          DATA(lo_iterator_pair) = mo_runtime->create_array( ).
+          lo_iterator_pair->set_element(
+            index = 0 value = ls_iterator_entry-key ).
+          lo_iterator_pair->set_element(
+            index = 1 value = ls_iterator_entry-value ).
+          lo_iterator_result->define_property(
+            name = 'value' value = zcl_qjs_value=>new_object( lo_iterator_pair ) ).
+        ELSEIF lo_next_iterator->iterator_kind( )
+            = zcl_qjs_object=>iterator_keys.
+          lo_iterator_result->define_property(
+            name = 'value' value = ls_iterator_entry-key ).
+        ELSE.
+          lo_iterator_result->define_property(
+            name = 'value' value = ls_iterator_entry-value ).
+        ENDIF.
+        result = zcl_qjs_value=>new_object( lo_iterator_result ).
+      WHEN id_iterator_self.
+        result = this_value.
       WHEN id_boolean.
         IF sy-subrc = 0.
           result = zcl_qjs_value=>new_boolean( zcl_qjs_value=>to_boolean( ls_argument ) ).
@@ -1583,12 +2924,22 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF sy-subrc = 0 AND ls_argument-tag = zcl_qjs_value=>tag_object.
           result = ls_argument.
         ELSE.
-          lo_object = mo_runtime->create_object( ).
+          IF sy-subrc = 0 AND ls_argument-tag = zcl_qjs_value=>tag_string.
+            lo_object = mo_runtime->create_object(
+              mo_runtime->get_string_prototype( ) ).
+          ELSE.
+            lo_object = mo_runtime->create_object( ).
+          ENDIF.
           IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_null
               AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
-            lo_object->define_property(
-              name = '[[PrimitiveValue]]' value = ls_argument
-              writable = abap_false enumerable = abap_false configurable = abap_false ).
+            IF ls_argument-tag = zcl_qjs_value=>tag_string.
+              initialize_string_wrapper(
+                object = lo_object primitive = ls_argument ).
+            ELSE.
+              lo_object->define_property(
+                name = '[[PrimitiveValue]]' value = ls_argument
+                writable = abap_false enumerable = abap_false configurable = abap_false ).
+            ENDIF.
           ENDIF.
           result = zcl_qjs_value=>new_object( lo_object ).
         ENDIF.
@@ -1616,6 +2967,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             IF lo_object IS BOUND.
               IF lo_object->is_array( ) = abap_true.
                 lv_object_tag = 'Array'.
+              ELSEIF lo_object->has_own( '[[ErrorData]]' ) = abap_true.
+                lv_object_tag = 'Error'.
               ELSE.
                 DATA(ls_primitive_property) = lo_object->get_own_property(
                   '[[PrimitiveValue]]' ).
@@ -1659,6 +3012,71 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           ENDLOOP.
         ENDIF.
         result = zcl_qjs_value=>new_object( lo_object ).
+      WHEN id_array_of.
+        DATA(lv_array_of_length) = CONV int8( lines( arguments ) ).
+        IF is_constructable( this_value ) = abap_true.
+          DATA lt_array_of_construct_args TYPE zif_qjs_callable=>ty_arguments.
+          APPEND array_length_value( lv_array_of_length )
+            TO lt_array_of_construct_args.
+          DATA(ls_array_of_result) = mo_runtime->construct_value(
+            constructor = this_value arguments = lt_array_of_construct_args ).
+        ELSE.
+          DATA(lo_array_of_default) = mo_runtime->create_array( ).
+          ls_array_of_result = zcl_qjs_value=>new_object( lo_array_of_default ).
+        ENDIF.
+        DATA lo_array_of_object TYPE REF TO zcl_qjs_object.
+        DATA lo_array_of_closure TYPE REF TO zcl_qjs_closure.
+        DATA lo_array_of_properties TYPE REF TO zif_qjs_property_container.
+        TRY.
+            lo_array_of_object ?= ls_array_of_result-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_array_of_object IS NOT BOUND.
+          TRY.
+              lo_array_of_closure ?= ls_array_of_result-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_array_of_object IS NOT BOUND AND lo_array_of_closure IS NOT BOUND.
+          TRY.
+              lo_array_of_properties ?= ls_array_of_result-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_array_of_object IS NOT BOUND AND lo_array_of_closure IS NOT BOUND
+            AND lo_array_of_properties IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.of constructor returned a non-object'.
+        ENDIF.
+        mo_runtime->get_limits( )->consume( lv_array_of_length ).
+        DATA(lv_array_of_index) = CONV int8( 0 ).
+        LOOP AT arguments INTO DATA(ls_array_of_item).
+          DATA(lv_array_of_name) = CONV string( lv_array_of_index ).
+          CONDENSE lv_array_of_name NO-GAPS.
+          IF lo_array_of_object IS BOUND.
+            lo_array_of_object->set(
+              name = lv_array_of_name value = ls_array_of_item ).
+          ELSEIF lo_array_of_closure IS BOUND.
+            lo_array_of_closure->set_property(
+              name = lv_array_of_name value = ls_array_of_item ).
+          ELSE.
+            lo_array_of_properties->set_property(
+              name = lv_array_of_name value = ls_array_of_item ).
+          ENDIF.
+          lv_array_of_index = lv_array_of_index + 1.
+        ENDLOOP.
+        DATA(ls_array_of_length_value) = array_length_value( lv_array_of_length ).
+        IF lo_array_of_object IS BOUND.
+          array_set_length(
+            object = lo_array_of_object length = lv_array_of_length ).
+        ELSEIF lo_array_of_closure IS BOUND.
+          lo_array_of_closure->set_property(
+            name = 'length' value = ls_array_of_length_value ).
+        ELSE.
+          lo_array_of_properties->set_property(
+            name = 'length' value = ls_array_of_length_value ).
+        ENDIF.
+        result = ls_array_of_result.
       WHEN id_array_push OR id_array_pop.
         IF this_value-tag <> zcl_qjs_value=>tag_object.
           RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1740,6 +3158,47 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_join_index = lv_join_index + 1.
         ENDWHILE.
         result = zcl_qjs_value=>new_string( lv_joined ).
+      WHEN id_array_to_string.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.toString receiver is not an object'.
+        ENDIF.
+        DATA lo_array_string_object TYPE REF TO zcl_qjs_object.
+        DATA lo_array_string_closure TYPE REF TO zcl_qjs_closure.
+        DATA lo_array_string_properties TYPE REF TO zif_qjs_property_container.
+        TRY.
+            lo_array_string_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_array_string_object IS BOUND.
+          DATA(ls_array_string_join) = lo_array_string_object->get( 'join' ).
+        ELSE.
+          TRY.
+              lo_array_string_closure ?= this_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_array_string_closure IS BOUND.
+            ls_array_string_join = lo_array_string_closure->get_property( 'join' ).
+          ELSE.
+            TRY.
+                lo_array_string_properties ?= this_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'TypeError: Array.prototype.toString requires an object'.
+            ENDTRY.
+            ls_array_string_join = lo_array_string_properties->get_property( 'join' ).
+          ENDIF.
+        ENDIF.
+        IF is_callable( ls_array_string_join ) = abap_false.
+          DATA lv_array_string_fallback TYPE string VALUE 'toString'.
+          ls_array_string_join = mo_runtime->get_object_prototype( )->get(
+            lv_array_string_fallback ).
+        ENDIF.
+        DATA lt_array_string_arguments TYPE zif_qjs_callable=>ty_arguments.
+        result = mo_runtime->invoke_callable(
+          callable   = ls_array_string_join
+          this_value = this_value
+          arguments  = lt_array_string_arguments ).
       WHEN id_array_index_of OR id_array_includes.
         IF this_value-tag <> zcl_qjs_value=>tag_object.
           RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1993,6 +3452,88 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_reverse_lower = lv_reverse_lower + 1.
         ENDWHILE.
         result = this_value.
+      WHEN id_array_to_reversed OR id_array_with.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array copy receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array copy requires an ordinary object'.
+        ENDTRY.
+        DATA(lv_array_copy_length) = array_to_length( lo_object->get( 'length' ) ).
+        DATA lv_array_copy_max TYPE int8.
+        lv_array_copy_max = '4294967295'.
+        IF lv_array_copy_length > lv_array_copy_max.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: copied array is too large'.
+        ENDIF.
+        DATA(lv_array_with_index) = CONV int8( 0 ).
+        DATA(ls_array_with_value) = zcl_qjs_value=>new_undefined( ).
+        IF mv_id = id_array_with.
+          READ TABLE arguments INDEX 1 INTO DATA(ls_array_with_index_value).
+          IF sy-subrc <> 0.
+            ls_array_with_index_value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          DATA(ls_array_with_number) = zcl_qjs_number=>to_number(
+            ls_array_with_index_value ).
+          DATA(lv_array_with_relative) = CONV int8( 0 ).
+          DATA(lv_array_with_out) = abap_false.
+          DATA lv_array_with_max_safe_f TYPE f.
+          lv_array_with_max_safe_f = '9007199254740991'.
+          IF ls_array_with_number-tag = zcl_qjs_value=>tag_int.
+            lv_array_with_relative = ls_array_with_number-int_value.
+          ELSEIF ls_array_with_number-tag = zcl_qjs_value=>tag_number
+              AND ls_array_with_number-number_kind = zcl_qjs_value=>number_finite.
+            IF ls_array_with_number-float_value >= lv_array_with_max_safe_f
+                OR ls_array_with_number-float_value < 0 - lv_array_with_max_safe_f.
+              lv_array_with_out = abap_true.
+            ELSE.
+              lv_array_with_relative = trunc( ls_array_with_number-float_value ).
+            ENDIF.
+          ELSEIF ls_array_with_number-tag = zcl_qjs_value=>tag_number
+              AND ( ls_array_with_number-number_kind = zcl_qjs_value=>number_pos_inf
+                OR ls_array_with_number-number_kind = zcl_qjs_value=>number_neg_inf ).
+            lv_array_with_out = abap_true.
+          ENDIF.
+          lv_array_with_index = lv_array_with_relative.
+          IF lv_array_with_relative < 0.
+            lv_array_with_index = lv_array_copy_length + lv_array_with_relative.
+          ENDIF.
+          IF lv_array_with_out = abap_true OR lv_array_with_index < 0
+              OR lv_array_with_index >= lv_array_copy_length.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'RangeError: Array.prototype.with index is out of range'.
+          ENDIF.
+          READ TABLE arguments INDEX 2 INTO ls_array_with_value.
+          IF sy-subrc <> 0.
+            ls_array_with_value = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+        ENDIF.
+        mo_runtime->get_limits( )->consume( lv_array_copy_length ).
+        DATA(lo_array_copy_result) = mo_runtime->create_array( ).
+        DATA(lv_array_copy_index) = CONV int8( 0 ).
+        WHILE lv_array_copy_index < lv_array_copy_length.
+          DATA(lv_array_copy_source) = lv_array_copy_index.
+          IF mv_id = id_array_to_reversed.
+            lv_array_copy_source = lv_array_copy_length - lv_array_copy_index - 1.
+          ENDIF.
+          DATA(lv_array_copy_source_name) = CONV string( lv_array_copy_source ).
+          CONDENSE lv_array_copy_source_name NO-GAPS.
+          IF mv_id = id_array_with
+              AND lv_array_copy_index = lv_array_with_index.
+            DATA(ls_array_copy_value) = ls_array_with_value.
+          ELSE.
+            ls_array_copy_value = lo_object->get( lv_array_copy_source_name ).
+          ENDIF.
+          lo_array_copy_result->set_element(
+            index = lv_array_copy_index value = ls_array_copy_value ).
+          lv_array_copy_index = lv_array_copy_index + 1.
+        ENDWHILE.
+        lo_array_copy_result->set_array_length( lv_array_copy_length ).
+        result = zcl_qjs_value=>new_object( lo_array_copy_result ).
       WHEN id_array_last_index_of.
         IF this_value-tag <> zcl_qjs_value=>tag_object.
           RAISE EXCEPTION TYPE zcx_qjs_error
@@ -2232,7 +3773,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           result = zcl_qjs_value=>new_object( lo_array_iteration_result ).
         ENDIF.
-      WHEN id_array_some OR id_array_every OR id_array_find OR id_array_find_index.
+      WHEN id_array_some OR id_array_every OR id_array_find OR id_array_find_index
+          OR id_array_find_last OR id_array_find_last_index.
         IF this_value-tag <> zcl_qjs_value=>tag_object.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'TypeError: Array predicate receiver is not an object'.
@@ -2256,16 +3798,24 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lo_object->get( 'length' ) ).
         mo_runtime->get_limits( )->consume( lv_array_predicate_length ).
         DATA(lv_array_predicate_index) = CONV int8( 0 ).
+        DATA(lv_array_predicate_step) = CONV int8( 1 ).
+        IF mv_id = id_array_find_last OR mv_id = id_array_find_last_index.
+          lv_array_predicate_index = lv_array_predicate_length - 1.
+          lv_array_predicate_step = -1.
+        ENDIF.
         DATA(lv_array_predicate_matched) = abap_false.
         DATA ls_array_predicate_value TYPE zcl_qjs_value=>ty_value.
         DATA lt_array_predicate_args TYPE zif_qjs_callable=>ty_arguments.
-        WHILE lv_array_predicate_index < lv_array_predicate_length.
+        WHILE ( lv_array_predicate_step > 0
+              AND lv_array_predicate_index < lv_array_predicate_length )
+            OR ( lv_array_predicate_step < 0 AND lv_array_predicate_index >= 0 ).
           DATA(lv_array_predicate_name) = CONV string( lv_array_predicate_index ).
           CONDENSE lv_array_predicate_name NO-GAPS.
           DATA(lv_array_predicate_present) = lo_object->has_property(
             lv_array_predicate_name ).
           IF lv_array_predicate_present = abap_true
-              OR mv_id = id_array_find OR mv_id = id_array_find_index.
+              OR mv_id = id_array_find OR mv_id = id_array_find_index
+              OR mv_id = id_array_find_last OR mv_id = id_array_find_last_index.
             ls_array_predicate_value = lo_object->get( lv_array_predicate_name ).
             CLEAR lt_array_predicate_args.
             APPEND ls_array_predicate_value TO lt_array_predicate_args.
@@ -2278,7 +3828,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             DATA(lv_array_predicate_truth) = zcl_qjs_value=>to_boolean(
               ls_array_predicate_result ).
             IF ( mv_id = id_array_some OR mv_id = id_array_find
-                OR mv_id = id_array_find_index )
+                OR mv_id = id_array_find_index OR mv_id = id_array_find_last
+                OR mv_id = id_array_find_last_index )
                 AND lv_array_predicate_truth = abap_true.
               lv_array_predicate_matched = abap_true.
               EXIT.
@@ -2288,14 +3839,15 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               EXIT.
             ENDIF.
           ENDIF.
-          lv_array_predicate_index = lv_array_predicate_index + 1.
+          lv_array_predicate_index = lv_array_predicate_index
+            + lv_array_predicate_step.
         ENDWHILE.
         IF mv_id = id_array_some.
           result = zcl_qjs_value=>new_boolean( lv_array_predicate_matched ).
         ELSEIF mv_id = id_array_every.
           result = zcl_qjs_value=>new_boolean(
             xsdbool( lv_array_predicate_matched = abap_false ) ).
-        ELSEIF mv_id = id_array_find.
+        ELSEIF mv_id = id_array_find OR mv_id = id_array_find_last.
           IF lv_array_predicate_matched = abap_true.
             result = ls_array_predicate_value.
           ELSE.
@@ -2475,6 +4027,449 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_copy_count = lv_copy_count - 1.
         ENDWHILE.
         result = this_value.
+      WHEN id_array_concat.
+        DATA(lo_concat_result) = mo_runtime->create_array( ).
+        DATA(lv_concat_target) = CONV int8( 0 ).
+        DATA lv_concat_max_length TYPE int8.
+        lv_concat_max_length = '4294967295'.
+        DATA lt_concat_items TYPE zif_qjs_callable=>ty_arguments.
+        APPEND this_value TO lt_concat_items.
+        APPEND LINES OF arguments TO lt_concat_items.
+        DATA(ls_concat_symbol) = mo_runtime->well_known_symbol(
+          'isConcatSpreadable' ).
+        LOOP AT lt_concat_items INTO DATA(ls_concat_item).
+          DATA(lv_concat_spread) = abap_false.
+          DATA lo_concat_object TYPE REF TO zcl_qjs_object.
+          CLEAR lo_concat_object.
+          IF ls_concat_item-tag = zcl_qjs_value=>tag_object.
+            TRY.
+                lo_concat_object ?= ls_concat_item-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_concat_object IS BOUND.
+              DATA(ls_concat_override) = lo_concat_object->get_symbol(
+                ls_concat_symbol-symbol_id ).
+              IF ls_concat_override-tag = zcl_qjs_value=>tag_undefined.
+                lv_concat_spread = lo_concat_object->is_array( ).
+              ELSE.
+                lv_concat_spread = zcl_qjs_value=>to_boolean( ls_concat_override ).
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          IF lv_concat_spread = abap_true.
+            DATA(lv_concat_length) = array_to_length(
+              lo_concat_object->get( 'length' ) ).
+            IF lv_concat_length > lv_concat_max_length - lv_concat_target.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'RangeError: concatenated array is too large'.
+            ENDIF.
+            mo_runtime->get_limits( )->consume( lv_concat_length ).
+            DATA(lv_concat_source) = CONV int8( 0 ).
+            WHILE lv_concat_source < lv_concat_length.
+              DATA(lv_concat_source_name) = CONV string( lv_concat_source ).
+              CONDENSE lv_concat_source_name NO-GAPS.
+              IF lo_concat_object->has_property( lv_concat_source_name ) = abap_true.
+                lo_concat_result->set_element(
+                  index = lv_concat_target
+                  value = lo_concat_object->get( lv_concat_source_name ) ).
+              ENDIF.
+              lv_concat_source = lv_concat_source + 1.
+              lv_concat_target = lv_concat_target + 1.
+            ENDWHILE.
+          ELSE.
+            IF lv_concat_target >= lv_concat_max_length.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'RangeError: concatenated array is too large'.
+            ENDIF.
+            mo_runtime->get_limits( )->consume( 1 ).
+            lo_concat_result->set_element(
+              index = lv_concat_target value = ls_concat_item ).
+            lv_concat_target = lv_concat_target + 1.
+          ENDIF.
+        ENDLOOP.
+        lo_concat_result->set_array_length( lv_concat_target ).
+        result = zcl_qjs_value=>new_object( lo_concat_result ).
+      WHEN id_array_splice.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.splice receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array.prototype.splice requires an ordinary object'.
+        ENDTRY.
+        DATA(lv_splice_length) = array_to_length( lo_object->get( 'length' ) ).
+        DATA(lv_splice_arg_count) = lines( arguments ).
+        DATA(lv_splice_start) = CONV int8( 0 ).
+        DATA(lv_splice_delete_count) = CONV int8( 0 ).
+        IF lv_splice_arg_count > 0.
+          READ TABLE arguments INDEX 1 INTO DATA(ls_splice_start_value).
+          lv_splice_start = array_slice_index(
+            value = ls_splice_start_value length = lv_splice_length ).
+          IF lv_splice_arg_count = 1.
+            lv_splice_delete_count = lv_splice_length - lv_splice_start.
+          ELSE.
+            READ TABLE arguments INDEX 2 INTO DATA(ls_splice_delete_value).
+            lv_splice_delete_count = array_clamped_count(
+              value   = ls_splice_delete_value
+              maximum = lv_splice_length - lv_splice_start ).
+          ENDIF.
+        ENDIF.
+        DATA(lv_splice_insert_count) = CONV int8( lv_splice_arg_count - 2 ).
+        IF lv_splice_insert_count < 0.
+          lv_splice_insert_count = 0.
+        ENDIF.
+        DATA(lv_splice_new_length) = lv_splice_length
+          - lv_splice_delete_count + lv_splice_insert_count.
+        DATA lv_splice_max_safe TYPE int8.
+        lv_splice_max_safe = '9007199254740991'.
+        IF lv_splice_new_length > lv_splice_max_safe.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: array-like length exceeds maximum safe integer'.
+        ENDIF.
+        DATA lv_splice_max_array TYPE int8.
+        lv_splice_max_array = '4294967295'.
+        IF lo_object->is_array( ) = abap_true
+            AND lv_splice_new_length > lv_splice_max_array.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: invalid array length'.
+        ENDIF.
+        mo_runtime->get_limits( )->consume(
+          lv_splice_length + lv_splice_insert_count + lv_splice_delete_count ).
+        DATA(lo_splice_deleted) = mo_runtime->create_array( ).
+        DATA(lv_splice_index) = CONV int8( 0 ).
+        WHILE lv_splice_index < lv_splice_delete_count.
+          DATA(lv_splice_from) = lv_splice_start + lv_splice_index.
+          DATA(lv_splice_from_name) = CONV string( lv_splice_from ).
+          CONDENSE lv_splice_from_name NO-GAPS.
+          IF lo_object->has_property( lv_splice_from_name ) = abap_true.
+            lo_splice_deleted->set_element(
+              index = lv_splice_index value = lo_object->get( lv_splice_from_name ) ).
+          ENDIF.
+          lv_splice_index = lv_splice_index + 1.
+        ENDWHILE.
+        lo_splice_deleted->set_array_length( lv_splice_delete_count ).
+        IF lv_splice_insert_count < lv_splice_delete_count.
+          lv_splice_index = lv_splice_start.
+          WHILE lv_splice_index < lv_splice_length - lv_splice_delete_count.
+            lv_splice_from = lv_splice_index + lv_splice_delete_count.
+            DATA(lv_splice_to) = lv_splice_index + lv_splice_insert_count.
+            lv_splice_from_name = CONV string( lv_splice_from ).
+            DATA(lv_splice_to_name) = CONV string( lv_splice_to ).
+            CONDENSE lv_splice_from_name NO-GAPS.
+            CONDENSE lv_splice_to_name NO-GAPS.
+            IF lo_object->has_property( lv_splice_from_name ) = abap_true.
+              lo_object->set(
+                name = lv_splice_to_name value = lo_object->get( lv_splice_from_name ) ).
+            ELSEIF lo_object->delete( lv_splice_to_name ) = abap_false.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: spliced property is not configurable'.
+            ENDIF.
+            lv_splice_index = lv_splice_index + 1.
+          ENDWHILE.
+          lv_splice_index = lv_splice_length.
+          WHILE lv_splice_index > lv_splice_new_length.
+            lv_splice_index = lv_splice_index - 1.
+            lv_splice_to_name = CONV string( lv_splice_index ).
+            CONDENSE lv_splice_to_name NO-GAPS.
+            IF lo_object->delete( lv_splice_to_name ) = abap_false.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: spliced property is not configurable'.
+            ENDIF.
+          ENDWHILE.
+        ELSEIF lv_splice_insert_count > lv_splice_delete_count.
+          lv_splice_index = lv_splice_length - lv_splice_delete_count.
+          WHILE lv_splice_index > lv_splice_start.
+            lv_splice_from = lv_splice_index + lv_splice_delete_count - 1.
+            lv_splice_to = lv_splice_index + lv_splice_insert_count - 1.
+            lv_splice_from_name = CONV string( lv_splice_from ).
+            lv_splice_to_name = CONV string( lv_splice_to ).
+            CONDENSE lv_splice_from_name NO-GAPS.
+            CONDENSE lv_splice_to_name NO-GAPS.
+            IF lo_object->has_property( lv_splice_from_name ) = abap_true.
+              lo_object->set(
+                name = lv_splice_to_name value = lo_object->get( lv_splice_from_name ) ).
+            ELSEIF lo_object->delete( lv_splice_to_name ) = abap_false.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: spliced property is not configurable'.
+            ENDIF.
+            lv_splice_index = lv_splice_index - 1.
+          ENDWHILE.
+        ENDIF.
+        lv_splice_index = 0.
+        WHILE lv_splice_index < lv_splice_insert_count.
+          READ TABLE arguments INDEX lv_splice_index + 3
+            INTO DATA(ls_splice_insert_value).
+          lv_splice_to = lv_splice_start + lv_splice_index.
+          lv_splice_to_name = CONV string( lv_splice_to ).
+          CONDENSE lv_splice_to_name NO-GAPS.
+          lo_object->set(
+            name = lv_splice_to_name value = ls_splice_insert_value ).
+          lv_splice_index = lv_splice_index + 1.
+        ENDWHILE.
+        array_set_length( object = lo_object length = lv_splice_new_length ).
+        result = zcl_qjs_value=>new_object( lo_splice_deleted ).
+      WHEN id_array_to_spliced.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.toSpliced receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array.prototype.toSpliced requires an ordinary object'.
+        ENDTRY.
+        DATA(lv_to_spliced_length) = array_to_length( lo_object->get( 'length' ) ).
+        DATA(lv_to_spliced_arg_count) = lines( arguments ).
+        DATA(lv_to_spliced_start) = CONV int8( 0 ).
+        DATA(lv_to_spliced_skip) = CONV int8( 0 ).
+        IF lv_to_spliced_arg_count > 0.
+          READ TABLE arguments INDEX 1 INTO DATA(ls_to_spliced_start_value).
+          lv_to_spliced_start = array_slice_index(
+            value = ls_to_spliced_start_value length = lv_to_spliced_length ).
+          IF lv_to_spliced_arg_count = 1.
+            lv_to_spliced_skip = lv_to_spliced_length - lv_to_spliced_start.
+          ELSE.
+            READ TABLE arguments INDEX 2 INTO DATA(ls_to_spliced_skip_value).
+            lv_to_spliced_skip = array_clamped_count(
+              value   = ls_to_spliced_skip_value
+              maximum = lv_to_spliced_length - lv_to_spliced_start ).
+          ENDIF.
+        ENDIF.
+        DATA(lv_to_spliced_insert_count) = CONV int8( lv_to_spliced_arg_count - 2 ).
+        IF lv_to_spliced_insert_count < 0.
+          lv_to_spliced_insert_count = 0.
+        ENDIF.
+        DATA(lv_to_spliced_new_length) = lv_to_spliced_length
+          - lv_to_spliced_skip + lv_to_spliced_insert_count.
+        DATA lv_to_spliced_max_safe TYPE int8.
+        lv_to_spliced_max_safe = '9007199254740991'.
+        IF lv_to_spliced_new_length > lv_to_spliced_max_safe.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: array-like length exceeds maximum safe integer'.
+        ENDIF.
+        DATA lv_to_spliced_max_array TYPE int8.
+        lv_to_spliced_max_array = '4294967295'.
+        IF lv_to_spliced_new_length > lv_to_spliced_max_array.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: copied array is too large'.
+        ENDIF.
+        mo_runtime->get_limits( )->consume( lv_to_spliced_new_length ).
+        DATA(lo_to_spliced_result) = mo_runtime->create_array( ).
+        DATA(lv_to_spliced_target) = CONV int8( 0 ).
+        WHILE lv_to_spliced_target < lv_to_spliced_start.
+          DATA(lv_to_spliced_source_name) = CONV string( lv_to_spliced_target ).
+          CONDENSE lv_to_spliced_source_name NO-GAPS.
+          lo_to_spliced_result->set_element(
+            index = lv_to_spliced_target
+            value = lo_object->get( lv_to_spliced_source_name ) ).
+          lv_to_spliced_target = lv_to_spliced_target + 1.
+        ENDWHILE.
+        DATA(lv_to_spliced_argument_index) = CONV i( 3 ).
+        WHILE lv_to_spliced_argument_index <= lv_to_spliced_arg_count.
+          READ TABLE arguments INDEX lv_to_spliced_argument_index
+            INTO DATA(ls_to_spliced_insert_value).
+          lo_to_spliced_result->set_element(
+            index = lv_to_spliced_target value = ls_to_spliced_insert_value ).
+          lv_to_spliced_target = lv_to_spliced_target + 1.
+          lv_to_spliced_argument_index = lv_to_spliced_argument_index + 1.
+        ENDWHILE.
+        DATA(lv_to_spliced_source) = lv_to_spliced_start + lv_to_spliced_skip.
+        WHILE lv_to_spliced_source < lv_to_spliced_length.
+          lv_to_spliced_source_name = CONV string( lv_to_spliced_source ).
+          CONDENSE lv_to_spliced_source_name NO-GAPS.
+          lo_to_spliced_result->set_element(
+            index = lv_to_spliced_target
+            value = lo_object->get( lv_to_spliced_source_name ) ).
+          lv_to_spliced_source = lv_to_spliced_source + 1.
+          lv_to_spliced_target = lv_to_spliced_target + 1.
+        ENDWHILE.
+        lo_to_spliced_result->set_array_length( lv_to_spliced_new_length ).
+        result = zcl_qjs_value=>new_object( lo_to_spliced_result ).
+      WHEN id_array_sort.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.sort receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array.prototype.sort requires an ordinary object'.
+        ENDTRY.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_sort_comparator).
+        IF sy-subrc <> 0.
+          ls_sort_comparator = zcl_qjs_value=>new_undefined( ).
+        ELSEIF ls_sort_comparator-tag <> zcl_qjs_value=>tag_undefined
+            AND is_callable( ls_sort_comparator ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.sort comparator is not callable'.
+        ENDIF.
+        DATA(lv_sort_length) = array_to_length( lo_object->get( 'length' ) ).
+        mo_runtime->get_limits( )->consume( lv_sort_length ).
+        DATA lt_sort_values TYPE STANDARD TABLE OF zcl_qjs_value=>ty_value
+          WITH DEFAULT KEY.
+        DATA(lv_sort_index) = CONV int8( 0 ).
+        WHILE lv_sort_index < lv_sort_length.
+          DATA(lv_sort_name) = CONV string( lv_sort_index ).
+          CONDENSE lv_sort_name NO-GAPS.
+          IF lo_object->has_property( lv_sort_name ) = abap_true.
+            APPEND lo_object->get( lv_sort_name ) TO lt_sort_values.
+          ENDIF.
+          lv_sort_index = lv_sort_index + 1.
+        ENDWHILE.
+        DATA(lv_sort_outer) = 2.
+        WHILE lv_sort_outer <= lines( lt_sort_values ).
+          READ TABLE lt_sort_values INDEX lv_sort_outer INTO DATA(ls_sort_value).
+          DATA(lv_sort_inner) = lv_sort_outer - 1.
+          WHILE lv_sort_inner >= 1.
+            READ TABLE lt_sort_values INDEX lv_sort_inner INTO DATA(ls_sort_previous).
+            mo_runtime->get_limits( )->consume( 1 ).
+            IF array_sort_compare(
+                left = ls_sort_value right = ls_sort_previous
+                comparator = ls_sort_comparator ) >= 0.
+              EXIT.
+            ENDIF.
+            MODIFY lt_sort_values FROM ls_sort_previous INDEX lv_sort_inner + 1.
+            lv_sort_inner = lv_sort_inner - 1.
+          ENDWHILE.
+          MODIFY lt_sort_values FROM ls_sort_value INDEX lv_sort_inner + 1.
+          lv_sort_outer = lv_sort_outer + 1.
+        ENDWHILE.
+        lv_sort_index = 0.
+        LOOP AT lt_sort_values INTO ls_sort_value.
+          lv_sort_name = CONV string( lv_sort_index ).
+          CONDENSE lv_sort_name NO-GAPS.
+          lo_object->set( name = lv_sort_name value = ls_sort_value ).
+          lv_sort_index = lv_sort_index + 1.
+        ENDLOOP.
+        WHILE lv_sort_index < lv_sort_length.
+          lv_sort_name = CONV string( lv_sort_index ).
+          CONDENSE lv_sort_name NO-GAPS.
+          IF lo_object->delete( lv_sort_name ) = abap_false.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: sorted property is not configurable'.
+          ENDIF.
+          lv_sort_index = lv_sort_index + 1.
+        ENDWHILE.
+        result = this_value.
+      WHEN id_array_to_sorted.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.toSorted receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array.prototype.toSorted requires an ordinary object'.
+        ENDTRY.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_to_sorted_comparator).
+        IF sy-subrc <> 0.
+          ls_to_sorted_comparator = zcl_qjs_value=>new_undefined( ).
+        ELSEIF ls_to_sorted_comparator-tag <> zcl_qjs_value=>tag_undefined
+            AND is_callable( ls_to_sorted_comparator ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array.prototype.toSorted comparator is not callable'.
+        ENDIF.
+        DATA(lv_to_sorted_length) = array_to_length( lo_object->get( 'length' ) ).
+        DATA lv_to_sorted_max TYPE int8.
+        lv_to_sorted_max = '4294967295'.
+        IF lv_to_sorted_length > lv_to_sorted_max.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'RangeError: copied array is too large'.
+        ENDIF.
+        mo_runtime->get_limits( )->consume( lv_to_sorted_length ).
+        DATA lt_to_sorted_values TYPE STANDARD TABLE OF zcl_qjs_value=>ty_value
+          WITH DEFAULT KEY.
+        DATA(lv_to_sorted_index) = CONV int8( 0 ).
+        WHILE lv_to_sorted_index < lv_to_sorted_length.
+          DATA(lv_to_sorted_name) = CONV string( lv_to_sorted_index ).
+          CONDENSE lv_to_sorted_name NO-GAPS.
+          APPEND lo_object->get( lv_to_sorted_name ) TO lt_to_sorted_values.
+          lv_to_sorted_index = lv_to_sorted_index + 1.
+        ENDWHILE.
+        DATA(lv_to_sorted_outer) = 2.
+        WHILE lv_to_sorted_outer <= lines( lt_to_sorted_values ).
+          READ TABLE lt_to_sorted_values INDEX lv_to_sorted_outer
+            INTO DATA(ls_to_sorted_value).
+          DATA(lv_to_sorted_inner) = lv_to_sorted_outer - 1.
+          WHILE lv_to_sorted_inner >= 1.
+            READ TABLE lt_to_sorted_values INDEX lv_to_sorted_inner
+              INTO DATA(ls_to_sorted_previous).
+            mo_runtime->get_limits( )->consume( 1 ).
+            IF array_sort_compare(
+                left = ls_to_sorted_value right = ls_to_sorted_previous
+                comparator = ls_to_sorted_comparator ) >= 0.
+              EXIT.
+            ENDIF.
+            MODIFY lt_to_sorted_values FROM ls_to_sorted_previous
+              INDEX lv_to_sorted_inner + 1.
+            lv_to_sorted_inner = lv_to_sorted_inner - 1.
+          ENDWHILE.
+          MODIFY lt_to_sorted_values FROM ls_to_sorted_value
+            INDEX lv_to_sorted_inner + 1.
+          lv_to_sorted_outer = lv_to_sorted_outer + 1.
+        ENDWHILE.
+        DATA(lo_to_sorted_result) = mo_runtime->create_array( ).
+        lv_to_sorted_index = 0.
+        LOOP AT lt_to_sorted_values INTO ls_to_sorted_value.
+          lo_to_sorted_result->set_element(
+            index = lv_to_sorted_index value = ls_to_sorted_value ).
+          lv_to_sorted_index = lv_to_sorted_index + 1.
+        ENDLOOP.
+        lo_to_sorted_result->set_array_length( lv_to_sorted_length ).
+        result = zcl_qjs_value=>new_object( lo_to_sorted_result ).
+      WHEN id_array_flat OR id_array_flat_map.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Array flatten receiver is not an object'.
+        ENDIF.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array flatten requires an ordinary object'.
+        ENDTRY.
+        DATA(lv_flat_length) = array_to_length( lo_object->get( 'length' ) ).
+        DATA(lv_flat_depth) = CONV int8( 1 ).
+        DATA(ls_flat_mapper) = zcl_qjs_value=>new_undefined( ).
+        DATA(ls_flat_mapper_this) = zcl_qjs_value=>new_undefined( ).
+        DATA(lv_flat_use_mapper) = abap_false.
+        IF mv_id = id_array_flat.
+          READ TABLE arguments INDEX 1 INTO DATA(ls_flat_depth_value).
+          IF sy-subrc = 0
+              AND ls_flat_depth_value-tag <> zcl_qjs_value=>tag_undefined.
+            DATA lv_flat_max_depth TYPE int8.
+            lv_flat_max_depth = '9007199254740991'.
+            lv_flat_depth = array_clamped_count(
+              value = ls_flat_depth_value maximum = lv_flat_max_depth ).
+          ENDIF.
+        ELSE.
+          READ TABLE arguments INDEX 1 INTO ls_flat_mapper.
+          IF sy-subrc <> 0 OR is_callable( ls_flat_mapper ) = abap_false.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: Array.prototype.flatMap mapper is not callable'.
+          ENDIF.
+          READ TABLE arguments INDEX 2 INTO ls_flat_mapper_this.
+          IF sy-subrc <> 0.
+            ls_flat_mapper_this = zcl_qjs_value=>new_undefined( ).
+          ENDIF.
+          lv_flat_use_mapper = abap_true.
+        ENDIF.
+        DATA(lo_flat_result) = mo_runtime->create_array( ).
+        DATA(lv_flat_target_index) = CONV int8( 0 ).
+        array_flatten_into(
+          EXPORTING source = lo_object target = lo_flat_result
+            source_length = lv_flat_length depth = lv_flat_depth
+            mapper = ls_flat_mapper mapper_this = ls_flat_mapper_this
+            use_mapper = lv_flat_use_mapper
+          CHANGING target_index = lv_flat_target_index ).
+        lo_flat_result->set_array_length( lv_flat_target_index ).
+        result = zcl_qjs_value=>new_object( lo_flat_result ).
       WHEN id_is_nan.
         IF sy-subrc <> 0.
           result = zcl_qjs_value=>new_boolean( abap_true ).
@@ -3114,9 +5109,17 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         TRY.
             lo_object ?= ls_define_target-object_ref.
           CATCH cx_sy_move_cast_error.
-            RAISE EXCEPTION TYPE zcx_qjs_error
-              EXPORTING reason = 'TypeError: Object.defineProperty requires an ordinary object'.
+            DATA lo_define_closure TYPE REF TO zcl_qjs_closure.
+            TRY.
+                lo_define_closure ?= ls_define_target-object_ref.
+                lo_object = lo_define_closure->get_property_storage( ).
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
         ENDTRY.
+        IF lo_object IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Object.defineProperty target is unsupported'.
+        ENDIF.
         READ TABLE arguments INDEX 2 INTO DATA(ls_define_key).
         IF sy-subrc <> 0.
           ls_define_key = zcl_qjs_value=>new_undefined( ).
@@ -3245,46 +5248,91 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'TypeError: descriptor target is not an object'.
         ENDIF.
+        DATA lo_own_native TYPE REF TO zcl_qjs_native_function.
+        DATA lo_own_closure TYPE REF TO zcl_qjs_closure.
         TRY.
             lo_object ?= ls_own_target-object_ref.
           CATCH cx_sy_move_cast_error.
-            RAISE EXCEPTION TYPE zcx_qjs_error
-              EXPORTING reason = 'TypeError: descriptor target must be ordinary'.
         ENDTRY.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_own_closure ?= ls_own_target-object_ref.
+              lo_object = lo_own_closure->get_property_storage( ).
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_own_native ?= ls_own_target-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND AND lo_own_native IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: descriptor target is unsupported'.
+        ENDIF.
         READ TABLE arguments INDEX 2 INTO DATA(ls_own_key).
         IF sy-subrc <> 0.
           ls_own_key = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        DATA ls_own_property TYPE zcl_qjs_object=>ty_own_property.
-        IF ls_own_key-tag = zcl_qjs_value=>tag_symbol.
-          ls_own_property = lo_object->get_own_symbol_property(
-            ls_own_key-symbol_id ).
+        DATA lv_own_found TYPE abap_bool.
+        DATA lv_own_writable TYPE abap_bool.
+        DATA lv_own_enumerable TYPE abap_bool.
+        DATA lv_own_configurable TYPE abap_bool.
+        DATA lv_own_accessor TYPE abap_bool.
+        DATA ls_own_value TYPE zcl_qjs_value=>ty_value.
+        DATA ls_own_getter TYPE zcl_qjs_value=>ty_value.
+        DATA ls_own_setter TYPE zcl_qjs_value=>ty_value.
+        IF lo_object IS BOUND.
+          DATA ls_own_property TYPE zcl_qjs_object=>ty_own_property.
+          IF ls_own_key-tag = zcl_qjs_value=>tag_symbol.
+            ls_own_property = lo_object->get_own_symbol_property(
+              ls_own_key-symbol_id ).
+          ELSE.
+            DATA(lv_own_name) = zcl_qjs_value=>to_string( ls_own_key ).
+            ls_own_property = lo_object->get_own_property( lv_own_name ).
+          ENDIF.
+          lv_own_found = ls_own_property-found.
+          lv_own_writable = ls_own_property-writable.
+          lv_own_enumerable = ls_own_property-enumerable.
+          lv_own_configurable = ls_own_property-configurable.
+          lv_own_accessor = ls_own_property-accessor.
+          ls_own_value = ls_own_property-value.
+          ls_own_getter = ls_own_property-getter.
+          ls_own_setter = ls_own_property-setter.
+        ELSEIF ls_own_key-tag = zcl_qjs_value=>tag_symbol.
+          lv_own_found = abap_false.
         ELSE.
-          DATA(lv_own_name) = zcl_qjs_value=>to_string( ls_own_key ).
-          ls_own_property = lo_object->get_own_property( lv_own_name ).
+          DATA(ls_native_own_property) = lo_own_native->get_own_property(
+            zcl_qjs_value=>to_string( ls_own_key ) ).
+          lv_own_found = ls_native_own_property-found.
+          lv_own_writable = ls_native_own_property-writable.
+          lv_own_enumerable = ls_native_own_property-enumerable.
+          lv_own_configurable = ls_native_own_property-configurable.
+          ls_own_value = ls_native_own_property-value.
         ENDIF.
-        IF ls_own_property-found = abap_false.
+        IF lv_own_found = abap_false.
           result = zcl_qjs_value=>new_undefined( ).
         ELSE.
           DATA(lo_descriptor_result) = mo_runtime->create_object( ).
-          IF ls_own_property-accessor = abap_true.
+          IF lv_own_accessor = abap_true.
             lo_descriptor_result->set(
-              name = 'get' value = ls_own_property-getter ).
+              name = 'get' value = ls_own_getter ).
             lo_descriptor_result->set(
-              name = 'set' value = ls_own_property-setter ).
+              name = 'set' value = ls_own_setter ).
           ELSE.
             lo_descriptor_result->set(
-              name = 'value' value = ls_own_property-value ).
+              name = 'value' value = ls_own_value ).
             lo_descriptor_result->set(
               name = 'writable' value = zcl_qjs_value=>new_boolean(
-                ls_own_property-writable ) ).
+                lv_own_writable ) ).
           ENDIF.
           lo_descriptor_result->set(
             name = 'enumerable' value = zcl_qjs_value=>new_boolean(
-              ls_own_property-enumerable ) ).
+              lv_own_enumerable ) ).
           lo_descriptor_result->set(
             name = 'configurable' value = zcl_qjs_value=>new_boolean(
-              ls_own_property-configurable ) ).
+              lv_own_configurable ) ).
           result = zcl_qjs_value=>new_object( lo_descriptor_result ).
         ENDIF.
       WHEN id_object_create.
@@ -3357,13 +5405,18 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'TypeError: prototype target is not an object'.
         ENDIF.
+        DATA lo_current_proto TYPE REF TO zcl_qjs_object.
         TRY.
             lo_object ?= ls_proto_target-object_ref.
+            lo_current_proto = lo_object->get_prototype( ).
           CATCH cx_sy_move_cast_error.
-            RAISE EXCEPTION TYPE zcx_qjs_error
-              EXPORTING reason = 'TypeError: prototype target must be ordinary'.
+            IF is_callable( ls_proto_target ) = abap_true.
+              lo_current_proto = mo_runtime->get_function_prototype( ).
+            ELSE.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: prototype target is unsupported'.
+            ENDIF.
         ENDTRY.
-        DATA(lo_current_proto) = lo_object->get_prototype( ).
         IF lo_current_proto IS BOUND.
           result = zcl_qjs_value=>new_object( lo_current_proto ).
         ELSE.
@@ -3378,19 +5431,35 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'TypeError: Object.setPrototypeOf arguments are invalid'.
         ENDIF.
+        DATA lo_set_proto_closure TYPE REF TO zcl_qjs_closure.
         TRY.
             lo_object ?= ls_set_proto_target-object_ref.
           CATCH cx_sy_move_cast_error.
-            RAISE EXCEPTION TYPE zcx_qjs_error
-              EXPORTING reason = 'TypeError: prototype target must be ordinary'.
+            TRY.
+                lo_set_proto_closure ?= ls_set_proto_target-object_ref.
+                lo_object = lo_set_proto_closure->get_property_storage( ).
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_object IS NOT BOUND.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: prototype target must be ordinary'.
+            ENDIF.
         ENDTRY.
         DATA lo_new_prototype TYPE REF TO zcl_qjs_object.
         IF ls_set_proto_value-tag = zcl_qjs_value=>tag_object.
           TRY.
               lo_new_prototype ?= ls_set_proto_value-object_ref.
             CATCH cx_sy_move_cast_error.
-              RAISE EXCEPTION TYPE zcx_qjs_error
-                EXPORTING reason = 'TypeError: prototype value must be ordinary'.
+              DATA lo_set_proto_base TYPE REF TO zcl_qjs_closure.
+              TRY.
+                  lo_set_proto_base ?= ls_set_proto_value-object_ref.
+                  lo_new_prototype = lo_set_proto_base->get_property_storage( ).
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+              IF lo_new_prototype IS NOT BOUND.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'TypeError: prototype value must be ordinary'.
+              ENDIF.
           ENDTRY.
         ENDIF.
         lo_object->set_prototype( lo_new_prototype ).
@@ -3576,29 +5645,158 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_index = lv_index + 1.
         ENDLOOP.
         result = zcl_qjs_value=>new_object( lo_object ).
-      WHEN id_object_has_own.
-        READ TABLE arguments INDEX 1 INTO DATA(ls_has_own_target).
-        IF sy-subrc <> 0 OR ls_has_own_target-tag <> zcl_qjs_value=>tag_object.
-          RAISE EXCEPTION TYPE zcx_qjs_error
-            EXPORTING reason = 'TypeError: Object.hasOwn target is not an object'.
+      WHEN id_object_has_own OR id_object_has_own_property.
+        DATA(lv_has_own_has_key) = abap_false.
+        IF mv_id = id_object_has_own_property.
+          DATA(ls_has_own_target) = this_value.
+          READ TABLE arguments INDEX 1 INTO DATA(ls_has_own_key).
+          lv_has_own_has_key = xsdbool( sy-subrc = 0 ).
+        ELSE.
+          READ TABLE arguments INDEX 1 INTO ls_has_own_target.
+          IF sy-subrc = 0.
+            READ TABLE arguments INDEX 2 INTO ls_has_own_key.
+            lv_has_own_has_key = xsdbool( sy-subrc = 0 ).
+          ENDIF.
         ENDIF.
+        IF ls_has_own_target-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: own-property target is not an object'.
+        ENDIF.
+        DATA lo_has_own_native TYPE REF TO zcl_qjs_native_function.
+        DATA lo_has_own_closure TYPE REF TO zcl_qjs_closure.
         TRY.
             lo_object ?= ls_has_own_target-object_ref.
           CATCH cx_sy_move_cast_error.
-            RAISE EXCEPTION TYPE zcx_qjs_error
-              EXPORTING reason = 'TypeError: Object.hasOwn target must be ordinary'.
         ENDTRY.
-        READ TABLE arguments INDEX 2 INTO DATA(ls_has_own_key).
-        IF sy-subrc <> 0.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_has_own_closure ?= ls_has_own_target-object_ref.
+              lo_object = lo_has_own_closure->get_property_storage( ).
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_has_own_native ?= ls_has_own_target-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND AND lo_has_own_native IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Object.hasOwn target is unsupported'.
+        ENDIF.
+        IF lv_has_own_has_key = abap_false.
           ls_has_own_key = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        IF ls_has_own_key-tag = zcl_qjs_value=>tag_symbol.
+        IF lo_has_own_native IS BOUND AND ls_has_own_key-tag = zcl_qjs_value=>tag_symbol.
+          result = zcl_qjs_value=>new_boolean( abap_false ).
+        ELSEIF lo_has_own_native IS BOUND.
+          DATA(ls_has_own_native_property) = lo_has_own_native->get_own_property(
+            zcl_qjs_value=>to_string( ls_has_own_key ) ).
+          result = zcl_qjs_value=>new_boolean(
+            ls_has_own_native_property-found ).
+        ELSEIF ls_has_own_key-tag = zcl_qjs_value=>tag_symbol.
           result = zcl_qjs_value=>new_boolean(
             lo_object->has_own_symbol( ls_has_own_key-symbol_id ) ).
         ELSE.
           result = zcl_qjs_value=>new_boolean( lo_object->has_own(
             zcl_qjs_value=>to_string( ls_has_own_key ) ) ).
         ENDIF.
+      WHEN id_object_value_of.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Object.prototype.valueOf receiver is null or undefined'.
+        ENDIF.
+        result = this_value.
+      WHEN id_object_property_is_enum.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: propertyIsEnumerable receiver is not an object'.
+        ENDIF.
+        DATA lo_enum_native TYPE REF TO zcl_qjs_native_function.
+        DATA lo_enum_closure TYPE REF TO zcl_qjs_closure.
+        TRY.
+            lo_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_enum_closure ?= this_value-object_ref.
+              lo_object = lo_enum_closure->get_property_storage( ).
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND.
+          TRY.
+              lo_enum_native ?= this_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_object IS NOT BOUND AND lo_enum_native IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: propertyIsEnumerable receiver is unsupported'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_property_is_enum_key).
+        IF sy-subrc <> 0.
+          ls_property_is_enum_key = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(lv_property_is_enum) = abap_false.
+        IF lo_enum_native IS BOUND
+            AND ls_property_is_enum_key-tag = zcl_qjs_value=>tag_symbol.
+          lv_property_is_enum = abap_false.
+        ELSEIF lo_enum_native IS BOUND.
+          DATA(ls_property_is_enum_native) = lo_enum_native->get_own_property(
+            zcl_qjs_value=>to_string( ls_property_is_enum_key ) ).
+          lv_property_is_enum = xsdbool(
+            ls_property_is_enum_native-found = abap_true
+            AND ls_property_is_enum_native-enumerable = abap_true ).
+        ELSEIF ls_property_is_enum_key-tag = zcl_qjs_value=>tag_symbol.
+          DATA(ls_property_is_enum_symbol) = lo_object->get_own_symbol_property(
+            ls_property_is_enum_key-symbol_id ).
+          lv_property_is_enum = xsdbool(
+            ls_property_is_enum_symbol-found = abap_true
+            AND ls_property_is_enum_symbol-enumerable = abap_true ).
+        ELSE.
+          DATA(ls_property_is_enum_string) = lo_object->get_own_property(
+            zcl_qjs_value=>to_string( ls_property_is_enum_key ) ).
+          lv_property_is_enum = xsdbool(
+            ls_property_is_enum_string-found = abap_true
+            AND ls_property_is_enum_string-enumerable = abap_true ).
+        ENDIF.
+        result = zcl_qjs_value=>new_boolean( lv_property_is_enum ).
+      WHEN id_object_is_prototype_of.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_is_prototype_value).
+        IF sy-subrc <> 0 OR ls_is_prototype_value-tag <> zcl_qjs_value=>tag_object.
+          result = zcl_qjs_value=>new_boolean( abap_false ).
+          RETURN.
+        ENDIF.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: isPrototypeOf receiver is not an object'.
+        ENDIF.
+        DATA lo_is_prototype_target TYPE REF TO object.
+        DATA lo_is_prototype_value TYPE REF TO zcl_qjs_object.
+        lo_is_prototype_target = this_value-object_ref.
+        TRY.
+            lo_is_prototype_value ?= ls_is_prototype_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            CLEAR lo_is_prototype_value.
+        ENDTRY.
+        DATA lo_is_prototype_current TYPE REF TO zcl_qjs_object.
+        IF lo_is_prototype_value IS BOUND.
+          lo_is_prototype_current = lo_is_prototype_value->get_prototype( ).
+        ELSEIF is_callable( ls_is_prototype_value ) = abap_true.
+          lo_is_prototype_current = mo_runtime->get_function_prototype( ).
+        ENDIF.
+        DATA(lv_is_prototype) = abap_false.
+        WHILE lo_is_prototype_current IS BOUND.
+          IF lo_is_prototype_current = lo_is_prototype_target.
+            lv_is_prototype = abap_true.
+            EXIT.
+          ENDIF.
+          lo_is_prototype_current = lo_is_prototype_current->get_prototype( ).
+        ENDWHILE.
+        result = zcl_qjs_value=>new_boolean( lv_is_prototype ).
       WHEN id_object_is.
         READ TABLE arguments INDEX 1 INTO DATA(ls_is_left).
         IF sy-subrc <> 0.
@@ -3666,9 +5864,11 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         CLEAR lv_error_message.
         IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
           lv_error_message = zcl_qjs_value=>to_string( ls_argument ).
+          result = mo_runtime->create_error(
+            name = lv_error_name message = lv_error_message ).
+        ELSE.
+          result = mo_runtime->create_error( name = lv_error_name ).
         ENDIF.
-        result = mo_runtime->create_error(
-          name = lv_error_name message = lv_error_message ).
       WHEN id_error_to_string.
         IF this_value-tag <> zcl_qjs_value=>tag_object.
           RAISE EXCEPTION TYPE zcx_qjs_error
@@ -3680,9 +5880,17 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             RAISE EXCEPTION TYPE zcx_qjs_error
               EXPORTING reason = 'TypeError: Error.prototype.toString receiver is invalid'.
         ENDTRY.
-        DATA(lv_to_string_name) = zcl_qjs_value=>to_string( lo_object->get( 'name' ) ).
-        DATA(lv_to_string_message) = zcl_qjs_value=>to_string(
-          lo_object->get( 'message' ) ).
+        DATA(ls_error_name_value) = lo_object->get( 'name' ).
+        DATA(lv_to_string_name) = CONV string( 'Error' ).
+        IF ls_error_name_value-tag <> zcl_qjs_value=>tag_undefined.
+          lv_to_string_name = zcl_qjs_value=>to_string( ls_error_name_value ).
+        ENDIF.
+        DATA(ls_error_message_value) = lo_object->get( 'message' ).
+        DATA(lv_to_string_message) = CONV string( '' ).
+        IF ls_error_message_value-tag <> zcl_qjs_value=>tag_undefined.
+          lv_to_string_message = zcl_qjs_value=>to_string(
+            ls_error_message_value ).
+        ENDIF.
         IF lv_to_string_name IS INITIAL.
           result = zcl_qjs_value=>new_string( lv_to_string_message ).
         ELSEIF lv_to_string_message IS INITIAL.
@@ -3732,10 +5940,65 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       WHEN id_number OR id_string OR id_boolean.
         ls_primitive = zif_qjs_callable~call(
           this_value = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
-        lo_object = runtime->create_object( ).
-        lo_object->define_property(
-          name = '[[PrimitiveValue]]' value = ls_primitive
-          writable = abap_false enumerable = abap_false configurable = abap_false ).
+        IF mv_id = id_string.
+          lo_object = runtime->create_object( runtime->get_string_prototype( ) ).
+        ELSE.
+          lo_object = runtime->create_object( ).
+        ENDIF.
+        IF mv_id = id_string.
+          initialize_string_wrapper(
+            object = lo_object primitive = ls_primitive ).
+        ELSE.
+          lo_object->define_property(
+            name = '[[PrimitiveValue]]' value = ls_primitive
+            writable = abap_false enumerable = abap_false configurable = abap_false ).
+        ENDIF.
+        result = zcl_qjs_value=>new_object( lo_object ).
+      WHEN id_map OR id_set.
+        IF mv_id = id_map.
+          lo_object = runtime->create_object( runtime->get_map_prototype( ) ).
+          lo_object->initialize_collection( zcl_qjs_object=>collection_map ).
+        ELSE.
+          lo_object = runtime->create_object( runtime->get_set_prototype( ) ).
+          lo_object->initialize_collection( zcl_qjs_object=>collection_set ).
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_collection_source).
+        IF sy-subrc = 0
+            AND ls_collection_source-tag <> zcl_qjs_value=>tag_undefined
+            AND ls_collection_source-tag <> zcl_qjs_value=>tag_null.
+          DATA(lv_adder_name) = COND string(
+            WHEN mv_id = id_map THEN 'set' ELSE 'add' ).
+          DATA(ls_collection_adder) = lo_object->get( lv_adder_name ).
+          DATA(ls_source_iterator) = runtime->get_iterator( ls_collection_source ).
+          WHILE abap_true = abap_true.
+            DATA(ls_source_step) = runtime->iterator_next( ls_source_iterator ).
+            IF ls_source_step-done = abap_true.
+              EXIT.
+            ENDIF.
+            DATA lt_adder_arguments TYPE zif_qjs_callable=>ty_arguments.
+            IF mv_id = id_map.
+              IF ls_source_step-value-tag <> zcl_qjs_value=>tag_object.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'TypeError: Map entry is not an object'.
+              ENDIF.
+              DATA lo_source_pair TYPE REF TO zcl_qjs_object.
+              TRY.
+                  lo_source_pair ?= ls_source_step-value-object_ref.
+                CATCH cx_sy_move_cast_error.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason = 'TypeError: Map entry is unsupported'.
+              ENDTRY.
+              APPEND lo_source_pair->get_element( 0 ) TO lt_adder_arguments.
+              APPEND lo_source_pair->get_element( 1 ) TO lt_adder_arguments.
+            ELSE.
+              APPEND ls_source_step-value TO lt_adder_arguments.
+            ENDIF.
+            DATA(ls_adder_ignored) = runtime->invoke_callable(
+              callable   = ls_collection_adder
+              this_value = zcl_qjs_value=>new_object( lo_object )
+              arguments  = lt_adder_arguments ).
+          ENDWHILE.
+        ENDIF.
         result = zcl_qjs_value=>new_object( lo_object ).
       WHEN id_symbol.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -3762,7 +6025,35 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_object_to_string OR id_array_for_each OR id_array_map
           OR id_array_filter OR id_array_some OR id_array_every
           OR id_array_find OR id_array_find_index OR id_array_reduce
-          OR id_array_reduce_right OR id_array_fill OR id_array_copy_within.
+          OR id_array_reduce_right OR id_array_fill OR id_array_copy_within
+          OR id_array_concat OR id_array_splice OR id_array_sort
+          OR id_array_find_last OR id_array_find_last_index
+          OR id_array_flat OR id_array_flat_map OR id_array_of
+          OR id_array_to_string OR id_array_to_reversed OR id_array_with
+          OR id_array_to_sorted OR id_array_to_spliced
+          OR id_object_has_own_property OR id_object_value_of
+          OR id_object_property_is_enum OR id_object_is_prototype_of
+          OR id_string_to_string OR id_string_value_of OR id_string_char_at
+          OR id_string_char_code_at OR id_string_at OR id_string_index_of
+          OR id_string_last_index_of OR id_string_includes
+          OR id_string_starts_with OR id_string_ends_with OR id_string_slice
+          OR id_string_substring OR id_string_concat OR id_string_repeat
+          OR id_string_to_lower OR id_string_to_upper OR id_string_trim
+          OR id_string_trim_start OR id_string_trim_end
+          OR id_reflect_apply OR id_reflect_construct
+          OR id_reflect_define_property OR id_reflect_delete_property
+          OR id_reflect_get OR id_reflect_get_own_descriptor
+          OR id_reflect_get_prototype OR id_reflect_has
+          OR id_reflect_is_extensible OR id_reflect_own_keys
+          OR id_reflect_prevent_extensions OR id_reflect_set
+          OR id_reflect_set_prototype OR id_object_is_extensible
+          OR id_object_prevent_extensions OR id_map_get OR id_map_set
+          OR id_map_has OR id_map_delete OR id_map_clear OR id_map_size
+          OR id_map_entries OR id_map_keys OR id_map_values OR id_map_for_each
+          OR id_set_add OR id_set_has OR id_set_delete OR id_set_clear
+          OR id_set_size OR id_set_entries OR id_set_values OR id_set_for_each
+          OR id_collection_next OR id_iterator_self OR id_array_entries
+          OR id_array_keys OR id_array_values OR id_string_iterator.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.

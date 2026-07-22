@@ -283,8 +283,8 @@ carry a **Partial** note. Verification on a representative real ABAP stack is st
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 74 opcodes; abaplint covers 60 files with no findings; all
-current ABAP Unit suites pass; and the pinned test262 slice reports 282 pass, 2
+QuickJS table contains 87 opcodes; abaplint covers 64 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 685 pass, 3
 reasoned unsupported, and 0 fail.
 
 ### Phase 0 — Scope, reproducibility & host proof
@@ -365,15 +365,18 @@ reasoned unsupported, and 0 fail.
       **Status:** complete in the transpiled lane; real-ABAP execution remains.
 
 ### Phase 3 — Core language, one vertical slice at a time
-- [x] Expand tokens/grammar incrementally: comparisons, assignments, blocks,
-      `if`, loops, `break`/`continue`, ASI, and functions. Add template/regex lexical
-      modes only with the parser productions that consume them.
+- [x] Expand tokens/grammar incrementally: comparisons, assignments, conditional
+      expressions, blocks, `if`, classic `for`, `for..in`, `break`/`continue`, ASI,
+      and functions. `for..in` includes ordered own/prototype enumeration, duplicate
+      suppression, deletion checks, and fresh `let`/`const` cells per iteration. Add
+      template/regex lexical modes only with the parser productions that consume them.
 - [x] Pass 2: `var`/`let`/`const`, TDZ, args/locals/closure slots, labels, and closure
       capture. Its rules follow the language profile fixed in Phase 0.
 - [x] Expand the same explicit-frame VM: locals/args, jumps, calls/returns, closures,
       lexical environments, and stack metadata verification.
 - [x] Exceptions end-to-end now: `throw`, `try/catch/finally`, internal TypeError/
-      RangeError/SyntaxError creation, and abrupt-completion unwinding.
+      RangeError/SyntaxError creation, real Error/native-error prototype identity,
+      and abrupt-completion unwinding.
 - [x] Enforce instruction/stack/parser/allocation limits in all new paths.
 - **Exit:** arithmetic, `if`/`while`/`for`, recursion, closure counters, and caught/finally
       exceptions pass their test262 subsets and host-differential tests.
@@ -414,38 +417,70 @@ reasoned unsupported, and 0 fail.
 - [ ] Priority built-ins: global functions, `Object`, `Function`, `Array`, `String`,
       `Number`, `Boolean`, `Math`, `JSON`, `Symbol`, and the `Error` hierarchy.
       **Partial:** Object, Array, String, Number, Boolean, Math, bounded JSON, the
-      Error hierarchy, Symbol creation/global-registry operations, numeric globals,
+      Error hierarchy with constructor/prototype identity, Symbol creation/global-registry operations, numeric globals,
       Number static predicates/constants, Math's eight standard numeric constants plus
       `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cbrt`,
       `ceil`, `clz32`, `cos`, `cosh`, `exp`, `expm1`, `f16round`, `floor`, `fround`,
       `hypot`, `imul`, `log`, `log1p`, `log10`, `log2`, `max`, `min`, `pow`, `round`,
       `random`, `sign`, `sin`, `sinh`, `sqrt`, `tan`, `tanh`, and `trunc`, and
       Object `assign`, `values`, `entries`, `hasOwn`, and `is`, a real
-      `Object.prototype` with `toString`, the four URI transform
+      `Object.prototype` with `toString`, `valueOf`, `hasOwnProperty`,
+      `propertyIsEnumerable`, and `isPrototypeOf`, the four URI transform
       globals, `URIError`, dynamic `Function` construction, and
       `Function.prototype.call`/`apply`/`bind`, runtime-stable well-known Symbols,
       separate symbol-keyed property storage, and Symbol-aware Object reflection are
-      present; arrays inherit a real `Array.prototype` with generic `push`, `pop`,
-      `shift`, `unshift`, `reverse`, `slice`, `forEach`, `map`, `filter`, `join`,
-      `some`, `every`, `find`, `findIndex`, `reduce`, `reduceRight`, `fill`,
-      `copyWithin`, `indexOf`,
+      present; `Array.of` honors constructor receivers, and arrays inherit a real
+      `Array.prototype` with generic `push`, `pop`,
+      `shift`, `unshift`, `reverse`, `toReversed`, `toSorted`, `toSpliced`, `with`,
+      `slice`, `forEach`, `map`, `filter`, `join`,
+      `some`, `every`, `find`, `findIndex`, `findLast`, `findLastIndex`,
+      `reduce`, `reduceRight`, `fill`,
+      `copyWithin`, `concat`, `splice`, `sort`, `flat`, `flatMap`, `toString`, `indexOf`,
       `lastIndexOf`, `includes`, and `at`,
       shared `ToLength` handling, uint32 index boundaries, and truncating `length`
-      assignment. The
-      broader Function/Array/String prototypes, well-known Symbol property attributes,
+      assignment. String primitives and wrappers share a real `String.prototype` with
+      `toString`, `valueOf`, `charAt`, `charCodeAt`, `at`, `indexOf`, `lastIndexOf`,
+      `includes`, `startsWith`, `endsWith`, `slice`, `substring`, `concat`, `repeat`,
+      `toLowerCase`, `toUpperCase`, `trim`, `trimStart`, and `trimEnd`, including
+      built-in metadata and generic object coercion. All 13 Reflect methods, their
+      metadata, receiver-aware access, symbol keys, prototype operations, and object
+      extensibility are implemented and covered by ABAP Unit and pinned test262 cases. The
+      broader Function/Array/String surfaces, well-known Symbol property attributes,
       other prototypes, and built-in function metadata remain incomplete.
-- [ ] Then `Map`, `Set`, and `Reflect`. Keep `Date`, weak collections, Proxy, and binary
+- [x] Then `Map` and `Set`. Ordered SameValueZero storage and arbitrary iterable
+      construction, core prototype methods, live iterators, `forEach`, metadata, and
+      tags are verified through the general iterator protocol. `Reflect` is complete for ordinary objects
+      and the declared callable/constructable profile. Keep `Date`, weak collections, Proxy, and binary
       data in explicit later/deferred feature groups rather than silently omitting them.
 - **Exit:** JSON and the declared core built-in profile pass published test262 subsets;
       Number formatting passes a named corpus with every remaining divergence listed.
-      **Status:** selected JSON, Symbol, Function, Array, numeric-global, URI-global, Number, Math, and Object slices
+      **Status:** selected JSON, Symbol, Function, Array, String, Reflect, Map, Set, numeric-global, URI-global, Number, Math, and Object slices
       pass pinned test262 cases; the broader built-in profile, named formatting corpus,
       and divergence catalog remain.
 
 ### Phase 6 — Advanced language features
-- [ ] Destructuring, spread/rest, default parameters, template literals, computed keys.
+- [x] Destructuring, spread/rest, default parameters, template literals, computed keys.
+      Computed string/Symbol object-literal keys and default parameters
+      (including references to prior parameters and default-aware function `length`
+      descriptors), rest parameters, array/call/constructor spread over arbitrary
+      iterables, object spread/rest, and nested array/object
+      destructuring (defaults, elisions, computed keys, rest, and member targets in
+      declarations, assignments, parameters, loop heads, and catch bindings) are
+      implemented and verified. Untagged templates support cooked substitutions;
+      tagged templates add cooked/raw frozen arrays, per-site caching, ordered
+      substitution arguments, and member-call receiver semantics.
 - [ ] Classes (fields, private fields, static elements, inheritance, `super`).
-- [ ] Iterators and `for..of`; generators by suspending the existing explicit frames.
+      **Partial:** lexical class declarations, default and explicit constructors,
+      instance/static methods, prototype and static inheritance, `instanceof`, and
+      `super(...)` constructor calls are implemented and verified. Class expressions,
+      fields/private elements, accessors, computed names, strict class-call rejection,
+      and `super` property access remain.
+- [ ] Synchronous iterators and `for..of`.
+      **Partial:** Array, String, Map, Set, and user-defined iterables; fresh lexical
+      cells; explicit `break`/`return`/`throw` iterator closing; and astral string
+      code-point iteration are implemented and verified. Automatic IteratorClose for
+      every indirectly thrown runtime exception remains a conformance gap.
+- [ ] Generators by suspending the existing explicit frames.
 - [ ] Promises + bounded microtask/job queue; async functions/`await`; then async
       generators if included in the profile.
 - [ ] ES modules: parse/link/evaluate, host resolver/loader, import/export, and dynamic

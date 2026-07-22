@@ -15,7 +15,10 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS insert_three TYPE i VALUE 22.
   CONSTANTS permute_three TYPE i VALUE 24.
   CONSTANTS permute_four TYPE i VALUE 25.
+  CONSTANTS swap TYPE i VALUE 27.
+  CONSTANTS rest TYPE i VALUE 13.
   CONSTANTS call TYPE i VALUE 34.
+  CONSTANTS apply TYPE i VALUE 39.
   CONSTANTS new_array TYPE i VALUE 38.
   CONSTANTS call_method TYPE i VALUE 36.
   CONSTANTS call_constructor TYPE i VALUE 33.
@@ -28,6 +31,14 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS get_field_for_call TYPE i VALUE 62.
   CONSTANTS get_element_for_call TYPE i VALUE 68.
   CONSTANTS put_element TYPE i VALUE 70.
+  CONSTANTS append TYPE i VALUE 79.
+  CONSTANTS copy_data_properties TYPE i VALUE 80.
+  CONSTANTS for_in_start TYPE i VALUE 122.
+  CONSTANTS for_of_start TYPE i VALUE 123.
+  CONSTANTS for_in_next TYPE i VALUE 125.
+  CONSTANTS for_of_next TYPE i VALUE 126.
+  CONSTANTS iterator_close TYPE i VALUE 130.
+  CONSTANTS to_object TYPE i VALUE 111.
   CONSTANTS if_false TYPE i VALUE 104.
   CONSTANTS if_true TYPE i VALUE 105.
   CONSTANTS goto TYPE i VALUE 106.
@@ -36,6 +47,7 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS ret TYPE i VALUE 109.
   CONSTANTS leave_catch TYPE i VALUE 110.
   CONSTANTS get_local TYPE i VALUE 85.
+  CONSTANTS get_arg TYPE i VALUE 88.
   CONSTANTS put_local TYPE i VALUE 86.
   CONSTANTS set_local TYPE i VALUE 87.
   CONSTANTS get_capture TYPE i VALUE 91.
@@ -67,6 +79,7 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS greater_than TYPE i VALUE 163.
   CONSTANTS greater_equal TYPE i VALUE 164.
   CONSTANTS instance_of TYPE i VALUE 165.
+  CONSTANTS in_operator TYPE i VALUE 166.
   CONSTANTS equal TYPE i VALUE 167.
   CONSTANTS not_equal TYPE i VALUE 168.
   CONSTANTS strict_equal TYPE i VALUE 169.

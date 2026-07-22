@@ -18,6 +18,9 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS delete_property
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_property
+      IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_symbol_property
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -28,7 +31,11 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS delete_symbol_property
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_symbol_property
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_prototype_object RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS get_property_storage RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS invoke
       IMPORTING this_value TYPE zcl_qjs_value=>ty_value
         arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
@@ -36,6 +43,11 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS construct
       IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS construct_with_prototype
+      IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        prototype TYPE REF TO zcl_qjs_object OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
@@ -60,7 +72,7 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
         writable = abap_true enumerable = abap_false configurable = abap_false ).
       mo_properties->define_property(
         name = 'length' value = zcl_qjs_value=>new_int(
-          mo_function->get_parameter_count( ) )
+          mo_function->get_function_length( ) )
         writable = abap_false enumerable = abap_false configurable = abap_true ).
       mo_properties->define_property(
         name = 'name' value = zcl_qjs_value=>new_string( mo_function->get_name( ) )
@@ -106,6 +118,11 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       result = abap_true.
     ENDIF.
   ENDMETHOD.
+  METHOD has_property.
+    IF mo_properties IS BOUND.
+      result = mo_properties->has_property( name ).
+    ENDIF.
+  ENDMETHOD.
   METHOD get_symbol_property.
     IF mo_properties IS BOUND.
       result = mo_properties->get_symbol( identity ).
@@ -125,8 +142,16 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       result = abap_true.
     ENDIF.
   ENDMETHOD.
+  METHOD has_symbol_property.
+    IF mo_properties IS BOUND.
+      result = mo_properties->has_symbol_property( identity ).
+    ENDIF.
+  ENDMETHOD.
   METHOD get_prototype_object.
     result = mo_prototype_object.
+  ENDMETHOD.
+  METHOD get_property_storage.
+    result = mo_properties.
   ENDMETHOD.
   METHOD invoke.
     DATA lo_vm TYPE REF TO zcl_qjs_vm.
@@ -150,7 +175,12 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD construct.
-    DATA(lo_object) = mo_runtime->create_object( prototype = mo_prototype_object ).
+    result = construct_with_prototype(
+      arguments = arguments prototype = mo_prototype_object ).
+  ENDMETHOD.
+
+  METHOD construct_with_prototype.
+    DATA(lo_object) = mo_runtime->create_object( prototype = prototype ).
     DATA(ls_this) = zcl_qjs_value=>new_object( lo_object ).
     DATA(ls_returned) = invoke(
       this_value = ls_this arguments = arguments ).

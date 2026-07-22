@@ -16,7 +16,7 @@ The current implementation contains a growing embedded-language profile:
   C-style `for`, `break`, and `continue`;
 - hoisted named functions, parameters, calls, returns, recursion, and mutable lexical
   closures;
-- 73 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
+- 87 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
   disassembler, and an iterative VM with explicit frames;
 - shape-backed ordinary objects, data and accessor property descriptors,
   prototypes, constructors, `this`, `instanceof`, object/array literals,
@@ -28,6 +28,8 @@ The current implementation contains a growing embedded-language profile:
 - abstract equality, logical short-circuiting, remainder, unary logical negation,
   comments, and line-terminator-sensitive `return`/`throw` handling;
 - ordinary arrays with indexed reads/writes, sparse growth, and `length`;
+- String primitive and wrapper indexing plus foundational `String.prototype` search,
+  extraction, concatenation, repeat, case-conversion, and trim methods;
 - initial intrinsics for `Object`, `Array`, `Number`, `String`, `Boolean`, `Math`,
   `JSON`, `isNaN`, `NaN`, and `Infinity`, including `Object` reflection methods,
   strict JSON parsing/stringification, the core `Error` constructors, and
@@ -58,8 +60,8 @@ npm test
 
 `npm test` verifies the pinned QuickJS opcode metadata and normalized compiler-oracle
 fixture, runs abaplint, transpiles the ABAP, executes the ABAP Unit suite with
-`node --expose-gc`, self-tests the test262 metadata parser, and then runs thirteen pinned
-test262 language and JSON cases through the transpiled zqjs engine. Positive and negative
+`node --expose-gc`, self-tests the test262 metadata parser, and then runs 688 pinned
+  test262 language and built-in cases through the transpiled zqjs engine. Positive and negative
 tests, feature exclusions, harness includes, and pass/fail/unsupported/infrastructure
 skip outcomes are handled explicitly.
 

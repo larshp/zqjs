@@ -18,6 +18,14 @@ CLASS zcl_qjs_string DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RAISING
         zcx_qjs_error.
 
+    METHODS code_unit_value_at
+      IMPORTING
+        index TYPE i
+      RETURNING
+        VALUE(result) TYPE i
+      RAISING
+        zcx_qjs_error.
+
     METHODS concat
       IMPORTING
         other         TYPE REF TO zcl_qjs_string
@@ -64,6 +72,18 @@ CLASS zcl_qjs_string IMPLEMENTATION.
           reason = 'String code-unit index out of bounds'.
     ENDIF.
     result = mv_value+index(1).
+  ENDMETHOD.
+
+  METHOD code_unit_value_at.
+    DATA lv_hex TYPE x LENGTH 2.
+    TRY.
+        lv_hex = cl_abap_conv_out_ce=>uccp( code_unit_at( index ) ).
+      CATCH cx_sy_conversion_codepage cx_sy_codepage_converter_init
+          cx_parameter_invalid_range.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid UTF-16 code unit'.
+    ENDTRY.
+    result = lv_hex.
   ENDMETHOD.
 
   METHOD concat.

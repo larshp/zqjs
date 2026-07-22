@@ -52,6 +52,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>if_true. result = 'if_true'.
       WHEN zif_qjs_opcodes=>goto. result = 'goto'.
       WHEN zif_qjs_opcodes=>get_local. result = 'get_local'.
+      WHEN zif_qjs_opcodes=>get_arg. result = 'get_arg'.
       WHEN zif_qjs_opcodes=>put_local. result = 'put_local'.
       WHEN zif_qjs_opcodes=>set_local. result = 'set_local'.
       WHEN zif_qjs_opcodes=>call. result = 'call'.
@@ -63,6 +64,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>insert_three. result = 'insert_three'.
       WHEN zif_qjs_opcodes=>permute_three. result = 'permute_three'.
       WHEN zif_qjs_opcodes=>permute_four. result = 'permute_four'.
+      WHEN zif_qjs_opcodes=>swap. result = 'swap'.
       WHEN zif_qjs_opcodes=>new_array. result = 'new_array'.
       WHEN zif_qjs_opcodes=>call_method. result = 'call_method'.
       WHEN zif_qjs_opcodes=>call_constructor. result = 'call_constructor'.
@@ -72,6 +74,14 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>get_element. result = 'get_element'.
       WHEN zif_qjs_opcodes=>get_element_for_call. result = 'get_element_for_call'.
       WHEN zif_qjs_opcodes=>put_element. result = 'put_element'.
+      WHEN zif_qjs_opcodes=>copy_data_properties.
+        result = 'copy_data_properties'.
+      WHEN zif_qjs_opcodes=>for_in_start. result = 'for_in_start'.
+      WHEN zif_qjs_opcodes=>for_of_start. result = 'for_of_start'.
+      WHEN zif_qjs_opcodes=>for_in_next. result = 'for_in_next'.
+      WHEN zif_qjs_opcodes=>for_of_next. result = 'for_of_next'.
+      WHEN zif_qjs_opcodes=>iterator_close. result = 'iterator_close'.
+      WHEN zif_qjs_opcodes=>to_object. result = 'to_object'.
       WHEN zif_qjs_opcodes=>throw. result = 'throw'.
       WHEN zif_qjs_opcodes=>catch. result = 'catch'.
       WHEN zif_qjs_opcodes=>leave_catch. result = 'leave_catch'.
@@ -102,6 +112,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>equal. result = 'equal'.
       WHEN zif_qjs_opcodes=>not_equal. result = 'not_equal'.
       WHEN zif_qjs_opcodes=>instance_of. result = 'instance_of'.
+      WHEN zif_qjs_opcodes=>in_operator. result = 'in_operator'.
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING

@@ -17,7 +17,7 @@ silently treated as conforming.
 - Bytecode is internal to zqjs; serialized QuickJS bytecode compatibility is excluded.
 - BigInt, Intl/ECMA-402, SharedArrayBuffer/Atomics, tail calls, `with`, and Annex B are
   initially excluded.
-- Direct `eval`, the dynamic `Function` constructor, modules, Proxy, typed arrays,
+- Direct `eval`, modules, Proxy, typed arrays,
   async generators, RegExp `v`, and String normalization remain disabled until their
   implementation phase is complete and covered by the target contract.
 
@@ -34,31 +34,41 @@ silently treated as conforming.
 | Shape transitions, data/accessor descriptors, and Object reflection | verified by ABAP Unit | unverified |
 | Host callbacks, constructors, error translation, disposal, and cancellation | verified by ABAP Unit | unverified |
 | JSON parse/stringify core algorithms | verified by ABAP Unit | unverified |
-| Error constructors and catchable language/host error objects | verified by ABAP Unit | unverified |
+| Error constructors, Error/native-error prototype identity, and catchable language/host error objects | verified by ABAP Unit and selected test262 cases | unverified |
 | `parseInt`, `parseFloat`, `isFinite`, and `isNaN` | verified by ABAP Unit and selected test262 cases | unverified |
 | `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`, and `URIError` | URI transforms verified by ABAP Unit and selected test262 cases; `URIError` verified by ABAP Unit | unverified |
 | `Function`, dynamic function construction, and `Function.prototype.call`, `apply`, and `bind` | verified by ABAP Unit and selected test262 cases; broader prototype and metadata coverage remains partial | unverified |
 | Runtime-stable well-known Symbols and symbol-keyed ordinary/callable properties and Object reflection | verified by ABAP Unit and selected test262 cases; well-known Symbol property attributes remain partial | unverified |
-| `Array.prototype`, generic `push`/`pop`/`shift`/`unshift`/`reverse`/`slice`/`forEach`/`map`/`filter`/`some`/`every`/`find`/`findIndex`/`reduce`/`reduceRight`/`fill`/`copyWithin`/`join`/`indexOf`/`lastIndexOf`/`includes`/`at`, shared `ToLength`, uint32 index boundaries, sparse array literals, and truncating array `length` assignment | verified by ABAP Unit and selected test262 cases; broader Array prototype remains partial | unverified |
+| Constructor-sensitive `Array.of`; `Array.prototype`; generic `push`/`pop`/`shift`/`unshift`/`reverse`/`toReversed`/`toSorted`/`toSpliced`/`with`/`slice`/`forEach`/`map`/`filter`/`some`/`every`/`find`/`findIndex`/`findLast`/`findLastIndex`/`reduce`/`reduceRight`/`fill`/`copyWithin`/`concat`/`splice`/`sort`/`flat`/`flatMap`/`toString`/`join`/`indexOf`/`lastIndexOf`/`includes`/`at`; shared `ToLength`; uint32 index boundaries; sparse array literals; and truncating array `length` assignment | verified by ABAP Unit and selected test262 cases; broader Array prototype remains partial | unverified |
+| String primitive/wrapper prototype identity and indexed access; `toString`, `valueOf`, `charAt`, `charCodeAt`, `at`, `indexOf`, `lastIndexOf`, `includes`, `startsWith`, `endsWith`, `slice`, `substring`, `concat`, `repeat`, case conversion, and trim methods | verified by ABAP Unit and selected test262 cases; locale methods, normalization, and exact lone-surrogate preservation remain outside the verified profile | unverified |
 | Number static predicates, safe-integer bounds, and core constants | verified by ABAP Unit and selected test262 cases | unverified |
 | Math numeric constants and `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cbrt`, `ceil`, `clz32`, `cos`, `cosh`, `exp`, `expm1`, `f16round`, `floor`, `fround`, `hypot`, `imul`, `log`, `log1p`, `log10`, `log2`, `max`, `min`, `pow`, `random`, `round`, `sign`, `sin`, `sinh`, `sqrt`, `tan`, `tanh`, and `trunc` | verified by ABAP Unit and selected test262 cases (`f16round` upstream vector deferred with `Float16Array`) | unverified |
-| Object `assign`, `values`, `entries`, `hasOwn`, and SameValue `is`; real `Object.prototype` inheritance and `Object.prototype.toString` tags | verified by ABAP Unit and selected test262 cases | unverified |
+| Object `assign`, `values`, `entries`, `hasOwn`, and SameValue `is`; real `Object.prototype` inheritance with `toString`, `valueOf`, `hasOwnProperty`, `propertyIsEnumerable`, `isPrototypeOf`, and built-in tags | verified by ABAP Unit and selected test262 cases | unverified |
+| All 13 `Reflect` methods, method metadata, receiver-aware access, symbol keys, prototype operations, and extensibility; Object `isExtensible` and `preventExtensions` | verified by ABAP Unit and selected test262 cases | unverified |
+| `Map` and `Set` ordered SameValueZero storage, constructors over arbitrary iterables, core prototype methods, live iterators, `forEach`, size accessors, well-known iterator aliases, and built-in tags | verified by ABAP Unit and selected test262 cases | unverified |
+| Binary `in`; `for..in` over ordinary objects, prototype chains, strings, `null`, and `undefined`; ordered keys, non-enumerable shadow suppression, deletion checks, and fresh lexical cells | verified by ABAP Unit and selected test262 cases | unverified |
+| General synchronous iterator protocol; Array/String/Map/Set iterators; `for..of`; fresh lexical cells; iterator closing for explicit `break`, `return`, and `throw`; astral string code-point iteration | verified by ABAP Unit and selected test262 cases; automatic closing for every indirectly thrown runtime exception remains partial | unverified |
+| Computed string/Symbol object-literal keys; default and rest parameters; default/rest-aware function `length`; array/call/constructor/object spread; object rest; nested array/object destructuring with defaults, elisions, computed keys, rest, and member targets in declarations, assignments, parameters, loop heads, and catch bindings; untagged templates with cooked substitutions; tagged templates with frozen cooked/raw arrays, per-site caching, ordered substitutions, and member receiver semantics | verified by ABAP Unit and selected test262 cases | unverified |
+| Class declarations with default/explicit constructors, instance/static methods, prototype and static inheritance, `instanceof`, and `super(...)` constructor calls | verified by ABAP Unit and selected test262 cases; class expressions, fields/private elements, accessors, computed names, strict class-call rejection, and `super` property access remain outside the enabled slice | unverified |
 
 Unverified capabilities are release blockers only for the feature groups that require
 them; they do not block development of the arithmetic vertical slice.
 
-Two hundred eighty-four pinned test262 cases are selected for the transpiled ABAP engine across
-Symbol, Function, Array and Object methods, Number statics, Math, numeric and URI global functions, JSON, addition,
-bitwise-and, compound assignment, left-shift, logical-and, and postfix increment. The runner installs its base assertion
+Six hundred eighty-eight pinned test262 cases are selected for the transpiled ABAP engine across
+Symbol, Function, Array, String, Object, Reflect, Map, Set, and Error methods, Number statics, Math, numeric and URI global functions, JSON, addition,
+bitwise-and, compound assignment, conditional and `in` expressions, array/call/object spread, rest parameters, declaration destructuring, untagged and tagged template literals, `for..in`, `for..of`, iterators, left-shift, logical-and, and postfix increment. The runner installs its base assertion
 harness, parses front matter, loads
 requested harness includes, executes positive and parse/runtime-negative tests, filters
 unsupported features/flags, and reports pass, fail, unsupported, and infrastructure
-skip separately. The current set reports two hundred eighty-two passes, one explicit `onlyStrict`
-unsupported case, and one `f16round` vector deferred because it requires `Float16Array`.
+skip separately. The current set reports six hundred eighty-five passes, one explicit `onlyStrict`
+unsupported case, one `f16round` vector deferred because it requires `Float16Array`, and one
+String-iterator vector deferred because exact standalone lone-surrogate preservation is outside
+the current host profile.
 
 The currently enabled language surface includes the implemented statement, function-declaration,
 anonymous/named function-expression, IIFE,
-closure, exception, lexical-binding, ordinary-object, array, prototype, constructor,
-bitwise, and embedding slices. This is not yet a claim of general ECMAScript or test262
-conformance. Regular expressions, classes, generators, promises, modules, exact `dtoa`,
+closure, exception, conditional-expression, lexical-binding, ordinary-object, array, prototype, constructor,
+`for..in`, `for..of`, synchronous-iterator, binary `in`, bitwise, and embedding slices. Constructors accept both parenthesized
+argument lists and the standard no-argument `new Constructor` form. This is not yet a claim of general ECMAScript or test262
+conformance. Regular expressions, the remaining class surface, generators, promises, modules, exact `dtoa`,
 and the broader built-in library remain outside the enabled profile.

@@ -747,6 +747,8 @@ CLASS zcl_qjs_number IMPLEMENTATION.
   METHOD to_number.
     DATA lv_text TYPE string.
     DATA lv_zero TYPE f.
+    DATA lv_sign TYPE i VALUE 1.
+    DATA lv_had_sign TYPE abap_bool VALUE abap_false.
     CASE value-tag.
       WHEN zcl_qjs_value=>tag_int OR zcl_qjs_value=>tag_number.
         result = normalized( value ).
@@ -767,8 +769,33 @@ CLASS zcl_qjs_number IMPLEMENTATION.
         IF lv_text IS INITIAL.
           result = zcl_qjs_value=>new_finite( lv_zero ).
         ELSE.
+          IF lv_text+0(1) = '+'.
+            lv_had_sign = abap_true.
+            lv_text = lv_text+1.
+          ELSEIF lv_text+0(1) = '-'.
+            lv_had_sign = abap_true.
+            lv_sign = -1.
+            lv_text = lv_text+1.
+          ENDIF.
+          IF lv_text = 'Infinity'.
+            result = infinity_with_sign( lv_sign ).
+            RETURN.
+          ELSEIF lv_text IS INITIAL.
+            result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+            RETURN.
+          ELSEIF lv_had_sign = abap_true AND strlen( lv_text ) >= 2
+              AND lv_text+0(1) = '0'
+              AND ( lv_text+1(1) = 'x' OR lv_text+1(1) = 'X'
+                OR lv_text+1(1) = 'o' OR lv_text+1(1) = 'O'
+                OR lv_text+1(1) = 'b' OR lv_text+1(1) = 'B' ).
+            result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
+            RETURN.
+          ENDIF.
           TRY.
               result = parse_literal( lv_text ).
+              IF lv_sign < 0.
+                result = negate( result ).
+              ENDIF.
             CATCH zcx_qjs_error.
               result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
           ENDTRY.

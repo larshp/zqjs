@@ -75,15 +75,26 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS token_shift_left_assign TYPE i VALUE 72.
     CONSTANTS token_shift_right_assign TYPE i VALUE 73.
     CONSTANTS token_ushift_right_assign TYPE i VALUE 74.
+    CONSTANTS token_question TYPE i VALUE 75.
+    CONSTANTS token_in TYPE i VALUE 76.
+    CONSTANTS token_template_head TYPE i VALUE 77.
+    CONSTANTS token_template_middle TYPE i VALUE 78.
+    CONSTANTS token_template_tail TYPE i VALUE 79.
+    CONSTANTS token_ellipsis TYPE i VALUE 80.
+    CONSTANTS token_class TYPE i VALUE 81.
+    CONSTANTS token_extends TYPE i VALUE 82.
+    CONSTANTS token_super TYPE i VALUE 83.
 
     TYPES:
       BEGIN OF ty_token,
         kind   TYPE i,
         number TYPE i,
         text   TYPE string,
+        raw    TYPE string,
         offset TYPE i,
         line_terminator_before TYPE abap_bool,
         integer_literal TYPE abap_bool,
+        template_continuation TYPE abap_bool,
       END OF ty_token.
 
     METHODS constructor
@@ -100,14 +111,178 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set_offset IMPORTING offset TYPE i RAISING zcx_qjs_error.
 
   PRIVATE SECTION.
+    TYPES ty_template_depths TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     DATA mv_source TYPE string.
     DATA mv_offset TYPE i.
     DATA mv_had_line_terminator TYPE abap_bool.
+    DATA mt_template_depths TYPE ty_template_depths.
 
     METHODS skip_whitespace RAISING zcx_qjs_error.
+    METHODS decode_hex_escape
+      IMPORTING digits TYPE string
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_qjs_error.
+    METHODS hex_escape_value
+      IMPORTING digits TYPE string
+      RETURNING VALUE(result) TYPE i
+      RAISING zcx_qjs_error.
+    METHODS decode_surrogate_pair
+      IMPORTING high TYPE i low TYPE i
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_qjs_error.
+    METHODS scan_template_part
+      IMPORTING first TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(result) TYPE ty_token
+      RAISING zcx_qjs_error.
 ENDCLASS.
 
 CLASS zcl_qjs_lexer IMPLEMENTATION.
+  METHOD decode_hex_escape.
+    DATA(lv_code) = hex_escape_value( digits ).
+    TRY.
+        IF lv_code >= 55296 AND lv_code <= 57343.
+          result = cl_abap_conv_in_ce=>uccpi( 65533 ).
+        ELSE.
+          result = cl_abap_conv_in_ce=>uccpi( lv_code ).
+        ENDIF.
+      CATCH cx_sy_conversion_codepage.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid Unicode string escape'.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD hex_escape_value.
+    DATA lv_digit TYPE i.
+    DATA lv_character TYPE string.
+    DATA lv_hex_digits TYPE string VALUE '0123456789ABCDEFabcdef'.
+    DATA lv_index TYPE i.
+    WHILE lv_index < strlen( digits ).
+      lv_character = digits+lv_index(1).
+      FIND FIRST OCCURRENCE OF lv_character IN lv_hex_digits
+        MATCH OFFSET lv_digit.
+      IF sy-subrc <> 0.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid hexadecimal string escape'.
+      ENDIF.
+      IF lv_digit >= 16.
+        lv_digit = lv_digit - 6.
+      ENDIF.
+      result = result * 16 + lv_digit.
+      lv_index = lv_index + 1.
+    ENDWHILE.
+  ENDMETHOD.
+
+  METHOD decode_surrogate_pair.
+    DATA lv_high_hex TYPE x LENGTH 2.
+    DATA lv_low_hex TYPE x LENGTH 2.
+    DATA lv_utf16 TYPE xstring.
+    DATA lv_converter TYPE REF TO cl_abap_conv_in_ce.
+    lv_high_hex = high.
+    lv_low_hex = low.
+    CONCATENATE lv_high_hex+1(1) lv_high_hex(1)
+      lv_low_hex+1(1) lv_low_hex(1) INTO lv_utf16 IN BYTE MODE.
+    TRY.
+        lv_converter = cl_abap_conv_in_ce=>create( encoding = '4103' ).
+        lv_converter->convert(
+          EXPORTING input = lv_utf16
+          IMPORTING data  = result ).
+      CATCH cx_sy_conversion_codepage.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid Unicode surrogate pair'.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD scan_template_part.
+    DATA lv_char TYPE string.
+    DATA lv_next_offset TYPE i.
+    DATA lv_raw_start TYPE i.
+    DATA lv_raw_length TYPE i.
+    result-offset = mv_offset.
+    result-template_continuation = xsdbool( first = abap_false ).
+    lv_raw_start = mv_offset.
+    WHILE mv_offset < strlen( mv_source ).
+      lv_char = mv_source+mv_offset(1).
+      IF lv_char = '`'.
+        lv_raw_length = mv_offset - lv_raw_start.
+        result-raw = mv_source+lv_raw_start(lv_raw_length).
+        result-kind = token_template_tail.
+        mv_offset = mv_offset + 1.
+        RETURN.
+      ENDIF.
+      lv_next_offset = mv_offset + 1.
+      IF lv_char = '$' AND lv_next_offset < strlen( mv_source )
+          AND mv_source+lv_next_offset(1) = '{'.
+        lv_raw_length = mv_offset - lv_raw_start.
+        result-raw = mv_source+lv_raw_start(lv_raw_length).
+        IF first = abap_true.
+          result-kind = token_template_head.
+        ELSE.
+          result-kind = token_template_middle.
+        ENDIF.
+        mv_offset = mv_offset + 2.
+        APPEND 0 TO mt_template_depths.
+        RETURN.
+      ENDIF.
+      mv_offset = mv_offset + 1.
+      IF lv_char <> `\`.
+        result-text = result-text && lv_char.
+        CONTINUE.
+      ENDIF.
+      IF mv_offset >= strlen( mv_source ).
+        EXIT.
+      ENDIF.
+      lv_char = mv_source+mv_offset(1).
+      mv_offset = mv_offset + 1.
+      CASE lv_char.
+        WHEN 'n'.
+          result-text = result-text && cl_abap_char_utilities=>newline.
+        WHEN 't'.
+          result-text = result-text && cl_abap_char_utilities=>horizontal_tab.
+        WHEN 'r'.
+          result-text = result-text && cl_abap_char_utilities=>cr_lf+0(1).
+        WHEN 'x'.
+          IF mv_offset + 2 > strlen( mv_source ).
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Incomplete hexadecimal template escape'.
+          ENDIF.
+          DATA(lv_hex_byte) = mv_source+mv_offset(2).
+          result-text = result-text && decode_hex_escape( lv_hex_byte ).
+          mv_offset = mv_offset + 2.
+        WHEN 'u'.
+          IF mv_offset + 4 > strlen( mv_source ).
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Incomplete Unicode template escape'.
+          ENDIF.
+          DATA(lv_hex_unit) = mv_source+mv_offset(4).
+          DATA(lv_hex_code) = hex_escape_value( lv_hex_unit ).
+          DATA(lv_pair_offset) = mv_offset + 4.
+          IF lv_hex_code >= 55296 AND lv_hex_code <= 56319
+              AND lv_pair_offset + 6 <= strlen( mv_source )
+              AND mv_source+lv_pair_offset(2) = `\u`.
+            DATA(lv_low_offset) = lv_pair_offset + 2.
+            DATA(lv_low_digits) = mv_source+lv_low_offset(4).
+            DATA(lv_low_code) = hex_escape_value( lv_low_digits ).
+            IF lv_low_code >= 56320 AND lv_low_code <= 57343.
+              result-text = result-text && decode_surrogate_pair(
+                high = lv_hex_code low = lv_low_code ).
+              mv_offset = mv_offset + 10.
+            ELSE.
+              result-text = result-text && decode_hex_escape( lv_hex_unit ).
+              mv_offset = mv_offset + 4.
+            ENDIF.
+          ELSE.
+            result-text = result-text && decode_hex_escape( lv_hex_unit ).
+            mv_offset = mv_offset + 4.
+          ENDIF.
+        WHEN cl_abap_char_utilities=>newline.
+        WHEN OTHERS.
+          result-text = result-text && lv_char.
+      ENDCASE.
+    ENDWHILE.
+    RAISE EXCEPTION TYPE zcx_qjs_error
+      EXPORTING reason = 'Unterminated JavaScript template literal'.
+  ENDMETHOD.
+
   METHOD constructor.
     mv_source = source.
     mv_offset = 0.
@@ -182,6 +357,8 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
     DATA lv_has_dot TYPE abap_bool.
     DATA lv_has_exponent TYPE abap_bool.
     DATA lv_is_radix TYPE abap_bool.
+    DATA lv_template_index TYPE i.
+    FIELD-SYMBOLS <template_depth> TYPE i.
     skip_whitespace( ).
     CLEAR result.
     result-offset = mv_offset.
@@ -247,14 +424,44 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
         result-kind = token_semicolon.
       WHEN '{'.
         result-kind = token_lbrace.
+        lv_template_index = lines( mt_template_depths ).
+        IF lv_template_index > 0.
+          READ TABLE mt_template_depths INDEX lv_template_index
+            ASSIGNING <template_depth>.
+          <template_depth> = <template_depth> + 1.
+        ENDIF.
       WHEN '}'.
+        lv_template_index = lines( mt_template_depths ).
+        IF lv_template_index > 0.
+          READ TABLE mt_template_depths INDEX lv_template_index
+            ASSIGNING <template_depth>.
+          IF <template_depth> = 0.
+            DELETE mt_template_depths INDEX lv_template_index.
+            mv_offset = mv_offset + 1.
+            result = scan_template_part( ).
+            RETURN.
+          ENDIF.
+          <template_depth> = <template_depth> - 1.
+        ENDIF.
         result-kind = token_rbrace.
       WHEN ','.
         result-kind = token_comma.
       WHEN '.'.
-        result-kind = token_dot.
+        IF mv_offset + 2 < strlen( mv_source )
+            AND mv_source+mv_offset(3) = '...'.
+          result-kind = token_ellipsis.
+          mv_offset = mv_offset + 2.
+        ELSE.
+          result-kind = token_dot.
+        ENDIF.
       WHEN ':'.
         result-kind = token_colon.
+      WHEN '?'.
+        result-kind = token_question.
+      WHEN '`'.
+        mv_offset = mv_offset + 1.
+        result = scan_template_part( first = abap_true ).
+        RETURN.
       WHEN '<'.
         result-kind = token_lt.
         IF mv_offset + 2 < strlen( mv_source ) AND mv_source+mv_offset(3) = '<<='.
@@ -432,8 +639,12 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             WHEN 'const'. result-kind = token_const.
             WHEN 'this'. result-kind = token_this.
             WHEN 'instanceof'. result-kind = token_instanceof.
+            WHEN 'in'. result-kind = token_in.
             WHEN 'delete'. result-kind = token_delete.
             WHEN 'typeof'. result-kind = token_typeof.
+            WHEN 'class'. result-kind = token_class.
+            WHEN 'extends'. result-kind = token_extends.
+            WHEN 'super'. result-kind = token_super.
             WHEN OTHERS. result-kind = token_identifier.
           ENDCASE.
           RETURN.
@@ -462,6 +673,41 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
                   result-text = result-text && cl_abap_char_utilities=>horizontal_tab.
                 WHEN 'r'.
                   result-text = result-text && cl_abap_char_utilities=>cr_lf+0(1).
+                WHEN 'x'.
+                  IF mv_offset + 2 > strlen( mv_source ).
+                    RAISE EXCEPTION TYPE zcx_qjs_error
+                      EXPORTING reason = 'Incomplete hexadecimal string escape'.
+                  ENDIF.
+                  DATA(lv_hex_byte) = mv_source+mv_offset(2).
+                  result-text = result-text && decode_hex_escape( lv_hex_byte ).
+                  mv_offset = mv_offset + 2.
+                WHEN 'u'.
+                  IF mv_offset + 4 > strlen( mv_source ).
+                    RAISE EXCEPTION TYPE zcx_qjs_error
+                      EXPORTING reason = 'Incomplete Unicode string escape'.
+                  ENDIF.
+                  DATA(lv_hex_unit) = mv_source+mv_offset(4).
+                  DATA(lv_hex_code) = hex_escape_value( lv_hex_unit ).
+                  DATA(lv_pair_offset) = mv_offset + 4.
+                  IF lv_hex_code >= 55296 AND lv_hex_code <= 56319
+                      AND lv_pair_offset + 6 <= strlen( mv_source )
+                      AND mv_source+lv_pair_offset(2) = `\u`.
+                    DATA(lv_low_offset) = lv_pair_offset + 2.
+                    DATA(lv_low_digits) = mv_source+lv_low_offset(4).
+                    DATA(lv_low_code) = hex_escape_value( lv_low_digits ).
+                    IF lv_low_code >= 56320 AND lv_low_code <= 57343.
+                      result-text = result-text
+                        && decode_surrogate_pair(
+                          high = lv_hex_code low = lv_low_code ).
+                      mv_offset = mv_offset + 10.
+                    ELSE.
+                      result-text = result-text && decode_hex_escape( lv_hex_unit ).
+                      mv_offset = mv_offset + 4.
+                    ENDIF.
+                  ELSE.
+                    result-text = result-text && decode_hex_escape( lv_hex_unit ).
+                    mv_offset = mv_offset + 4.
+                  ENDIF.
                 WHEN OTHERS.
                   result-text = result-text && lv_string_char.
               ENDCASE.

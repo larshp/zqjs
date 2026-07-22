@@ -34,6 +34,23 @@ function assert(mustBeTrue, message) {
 }
 assert.sameValue = __zqjsSameValue;
 assert.notSameValue = __zqjsNotSameValue;
+assert.throws = function (expectedErrorConstructor, func, message) {
+  if (typeof func !== "function") {
+    throw new Test262Error("assert.throws requires an error constructor and function");
+  }
+  try {
+    func();
+  } catch (thrown) {
+    if (typeof thrown !== "object" || thrown === null) {
+      throw new Test262Error(message || "Thrown value was not an object");
+    }
+    if (thrown.constructor !== expectedErrorConstructor) {
+      throw new Test262Error(message || "Unexpected error constructor");
+    }
+    return;
+  }
+  throw new Test262Error(message || "Expected an exception");
+};
 assert.compareArray = function (actual, expected, message) {
   if (actual.length !== expected.length) throw new Test262Error(message);
   for (var index = 0; index < actual.length; index++) {
@@ -50,11 +67,16 @@ function git(args) {
 
 function normalizeTest(entry) {
   if (typeof entry === "string") {
-    return { path: entry, expectedOutcome: config.expectedOutcome ?? "pass" };
+    return {
+      path: entry,
+      expectedOutcome: config.expectedOutcome ?? "pass",
+      unsupportedReason: ""
+    };
   }
   return {
     path: entry.path ?? entry.test,
-    expectedOutcome: entry.expectedOutcome ?? config.expectedOutcome ?? "pass"
+    expectedOutcome: entry.expectedOutcome ?? config.expectedOutcome ?? "pass",
+    unsupportedReason: entry.unsupportedReason ?? ""
   };
 }
 
@@ -110,6 +132,9 @@ for (const configured of config.tests) {
   if (!test.path || !existsSync(fixture)) {
     outcome = "infrastructure-skip";
     reason = test.path ? "fixture is missing" : "test path is missing";
+  } else if (test.unsupportedReason) {
+    outcome = "unsupported";
+    reason = test.unsupportedReason;
   } else {
     const raw = readFileSync(fixture, "utf8").replaceAll("\r\n", "\n");
     const parsed = parseTest262Metadata(raw);
@@ -150,7 +175,7 @@ for (const configured of config.tests) {
           }
           if (outcome === "pass") {
             try {
-              await zcl_qjs.eval({ source, max_steps: 100000 });
+              await zcl_qjs.eval({ source, max_steps: config.maxSteps ?? 100000 });
               outcome = "fail";
               reason = `expected runtime ${negative.type ?? "error"}`;
             } catch (error) {
@@ -162,7 +187,7 @@ for (const configured of config.tests) {
           }
         } else {
           try {
-            await zcl_qjs.eval({ source, max_steps: 100000 });
+            await zcl_qjs.eval({ source, max_steps: config.maxSteps ?? 100000 });
           } catch (error) {
             outcome = "fail";
             reason = errorText(error);

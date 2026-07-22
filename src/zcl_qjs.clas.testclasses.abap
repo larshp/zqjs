@@ -129,10 +129,18 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
     METHODS variables FOR TESTING RAISING cx_root.
     METHODS while_loops FOR TESTING RAISING cx_root.
     METHODS for_break_continue FOR TESTING RAISING cx_root.
+    METHODS for_in_enumeration FOR TESTING RAISING cx_root.
+    METHODS for_of_iteration FOR TESTING RAISING cx_root.
     METHODS functions_and_recursion FOR TESTING RAISING cx_root.
     METHODS ordinary_objects FOR TESTING RAISING cx_root.
     METHODS object_syntax FOR TESTING RAISING cx_root.
+    METHODS destructuring_bindings FOR TESTING RAISING cx_root.
+    METHODS tagged_templates FOR TESTING RAISING cx_root.
+    METHODS class_syntax FOR TESTING RAISING cx_root.
     METHODS string_operators FOR TESTING RAISING cx_root.
+    METHODS string_prototype_methods FOR TESTING RAISING cx_root.
+    METHODS reflect_intrinsic FOR TESTING RAISING cx_root.
+    METHODS map_set_intrinsics FOR TESTING RAISING cx_root.
     METHODS object_constructor FOR TESTING RAISING cx_root.
     METHODS thrown_values FOR TESTING RAISING cx_root.
     METHODS try_catch FOR TESTING RAISING cx_root.
@@ -362,6 +370,36 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_number )
       exp = CONV f( 42 ) ).
 
+    ls_value = zcl_qjs_value=>new_string( '-42' ).
+    ls_number = zcl_qjs_number=>to_number( ls_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_number )
+      exp = CONV f( -42 ) ).
+
+    ls_value = zcl_qjs_value=>new_string( '-0' ).
+    ls_number = zcl_qjs_number=>to_number( ls_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_number-number_kind
+      exp = zcl_qjs_value=>number_neg_zero ).
+
+    ls_value = zcl_qjs_value=>new_string( '+Infinity' ).
+    ls_number = zcl_qjs_number=>to_number( ls_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_number-number_kind
+      exp = zcl_qjs_value=>number_pos_inf ).
+
+    ls_value = zcl_qjs_value=>new_string( '-Infinity' ).
+    ls_number = zcl_qjs_number=>to_number( ls_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_number-number_kind
+      exp = zcl_qjs_value=>number_neg_inf ).
+
+    ls_value = zcl_qjs_value=>new_string( '-0x1' ).
+    ls_number = zcl_qjs_number=>to_number( ls_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_number-number_kind
+      exp = zcl_qjs_value=>number_nan ).
+
     ls_value = zcl_qjs_value=>new_undefined( ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
@@ -511,6 +549,22 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval( `"hello world"` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = 'hello world' ).
+
+    ls_result = zcl_qjs=>eval(
+      'var value = 2; `value ${value}, next ${value + 1}`;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_result-string_ref->as_string( ) exp = 'value 2, next 3' ).
+
+    ls_result = zcl_qjs=>eval(
+      '`object ${({ value: 7 }).value}; nested ${`item ${2}`}`;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_result-string_ref->as_string( )
+      exp = 'object 7; nested item 2' ).
+
+    ls_result = zcl_qjs=>eval(
+      'function render(value) { return `answer: ${value}`; } render(42);' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_result-string_ref->as_string( ) exp = 'answer: 42' ).
   ENDMETHOD.
 
   METHOD comparisons.
@@ -527,6 +581,17 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval( `"x" !== "y"` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-bool_value exp = abap_true ).
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
+      && ' object.own = 2; var symbol = Symbol("key"); object[symbol] = 3;'
+      && ' "own" in object && "inherited" in object'
+      && ' && !("missing" in object) && symbol in object'
+      && ' && "prototype" in Object;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; try { "x" in 1; }'
+      && ' catch (error) { caught = error instanceof TypeError; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD primitive_literals.
@@ -611,6 +676,114 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 3 ) ).
   ENDMETHOD.
 
+  METHOD for_in_enumeration.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { inherited: 1, duplicate: 2 };'
+      && ' Object.defineProperty(prototype, "hidden",'
+      && ' { value: 3, enumerable: false });'
+      && ' var object = Object.create(prototype);'
+      && ' object.own = 4; object.duplicate = 5;'
+      && ' var symbol = Symbol("ignored"); object[symbol] = 6;'
+      && ' var keys = ""; for (var key in object) { keys = keys + key + ","; }'
+      && ' keys === "own,duplicate,inherited,";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { shadowed: 1 }; var object = Object.create(prototype);'
+      && ' Object.defineProperty(object, "shadowed",'
+      && ' { value: 2, enumerable: false });'
+      && ' var count = 0; for (var key in object) { count = count + 1; }'
+      && ' count === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = { a: 1, b: 2, c: 3 }; var keys = "";'
+      && ' for (var key in object) {'
+      && ' keys = keys + key; if (key === "a") delete object.b; }'
+      && ' keys === "ac";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = { a: 1, b: 2, c: 3 }; var keys = "";'
+      && ' for (var key in object) {'
+      && ' if (key === "a") continue; keys = keys + key;'
+      && ' if (key === "b") break; } keys === "b";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var count = 0, key; for (key in null) { count = count + 1; }'
+      && ' for (key in undefined) { count = count + 1; }'
+      && ' var keys = ""; for (key in "ab") { keys = keys + key; }'
+      && ' count === 0 && keys === "01";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var keys = ""; for (let key in { a: 1, b: 2 }) { keys = keys + key; }'
+      && ' for (const key in { c: 3 }) { keys = keys + key; }'
+      && ' keys === "abc";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var functions = {}; var object = Object.create(null);'
+      && ' object.a = 1; object.b = 2; object.c = 3;'
+      && ' for (let key in object) {'
+      && ' functions[key] = function() { return key; }; }'
+      && ' functions.a() === "a" && functions.b() === "b"'
+      && ' && functions.c() === "c";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD for_of_iteration.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var total = 0; for (var value of [1, 2, 3]) total = total + value;'
+      && ' var text = ""; for (var character of "ab") text = text + character;'
+      && ' total === 6 && text === "ab";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var map = new Map([["a", 1], ["b", 2]]); var mapped = "";'
+      && ' for (var entry of map) mapped = mapped + entry[0] + entry[1];'
+      && ' var set = new Set([3, 4]); var summed = 0;'
+      && ' for (var item of set) summed = summed + item;'
+      && ' mapped === "a1b2" && summed === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var iterable = {}; iterable[Symbol.iterator] = function() {'
+      && ' var next = 1; return { next: function() {'
+      && ' if (next < 3) return { value: next++, done: false };'
+      && ' return { value: undefined, done: true }; } }; };'
+      && ' var total = 0; for (var value of iterable) total = total + value;'
+      && ' var set = new Set(iterable);'
+      && ' var mapSource = {}; mapSource[Symbol.iterator] = function() {'
+      && ' var done = false; return { next: function() {'
+      && ' if (!done) { done = true; return { value: ["key", 9], done: false }; }'
+      && ' return { done: true }; } }; }; var map = new Map(mapSource);'
+      && ' total === 3 && set.size === 2 && map.get("key") === 9;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var functions = []; for (let value of [1, 2]) {'
+      && ' functions.push(function() { return value; }); }'
+      && ' functions[0]() === 1 && functions[1]() === 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var closed = 0; function iterable() { var source = {};'
+      && ' source[Symbol.iterator] = function() { return {'
+      && ' next: function() { return { value: 1, done: false }; },'
+      && ' return: function() { closed++; return {}; } }; }; return source; }'
+      && ' for (var first of iterable()) { break; }'
+      && ' function leave() { for (var second of iterable()) { return 7; } }'
+      && ' var returned = leave(); var thrown = false; try {'
+      && ' for (var third of iterable()) { throw 9; }'
+      && ' } catch (error) { thrown = error === 9; }'
+      && ' closed === 3 && returned === 7 && thrown;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
   METHOD functions_and_recursion.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval(
@@ -659,6 +832,36 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'var named = function inner() {}; named.name === "inner"'
       && ' && named.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; function count() { calls++; return 3; }'
+      && ' function defaults(a, b = a + 1, c = count()) {'
+      && ' return a + b + c; } var expression = function(value = 42) {'
+      && ' return value; }; defaults(1) === 6 && calls === 1'
+      && ' && defaults(5, 6, 7) === 18 && calls === 1'
+      && ' && expression() === 42 && expression(9) === 9'
+      && ' && defaults.length === 1 && expression.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var described = function(value = 42) {};'
+      && ' var descriptor = Object.getOwnPropertyDescriptor(described, "length");'
+      && ' descriptor.value === 0 && descriptor.writable === false'
+      && ' && descriptor.enumerable === false'
+      && ' && descriptor.configurable === true'
+      && ' && Object.prototype.hasOwnProperty.call(described, "length")'
+      && ' && !Object.prototype.propertyIsEnumerable.call(described, "length")'
+      && ' && delete described.length'
+      && ' && !Object.prototype.hasOwnProperty.call(described, "length");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function collect(first, ...rest) {'
+      && ' return first + rest[0] + rest[1] + rest.length; }'
+      && ' var expression = function(...items) { return items.length; };'
+      && ' collect(10, 20, 9) === 41 && collect.length === 1'
+      && ' && expression(1, 2, 3) === 3 && expression.length === 0;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
@@ -739,7 +942,192 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.prototype.toString.name === "toString";' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; var object = Object.create(prototype);'
+      && ' var symbol = Symbol("enumerable"); object.visible = 1; object[symbol] = 2;'
+      && ' Object.defineProperty(object, "hidden", { value: 3, enumerable: false });'
+      && ' object.valueOf() === object && prototype.isPrototypeOf(object)'
+      && ' && Object.prototype.isPrototypeOf.call(null, 1) === false'
+      && ' && object.propertyIsEnumerable("visible")'
+      && ' && object.propertyIsEnumerable(symbol)'
+      && ' && !object.propertyIsEnumerable("hidden")'
+      && ' && !object.propertyIsEnumerable("toString")'
+      && ' && Object.prototype.valueOf.length === 0'
+      && ' && Object.prototype.propertyIsEnumerable.length === 1'
+      && ' && Object.prototype.isPrototypeOf.length === 1'
+      && ' && Object.prototype.valueOf.name === "valueOf"'
+      && ' && Object.prototype.propertyIsEnumerable.name === "propertyIsEnumerable"'
+      && ' && Object.prototype.isPrototypeOf.name === "isPrototypeOf";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Parent() {} function Child() {} var prototype = new Parent();'
+      && ' Child.prototype = prototype; var child = new Child();'
+      && ' prototype.isPrototypeOf(child);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Parent() {} function Child() {} var prototype = new Parent();'
+      && ' Child.prototype = prototype; var child = new Child();'
+      && ' Parent.prototype.isPrototypeOf(child);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Parent() {} function Child() {} var prototype = new Parent();'
+      && ' Child.prototype = prototype; var child = new Child();'
+      && ' !Number.isPrototypeOf(child);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
     ls_result = zcl_qjs=>eval( 'var o = {}; o === o;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var key = "answer"; var symbol = Symbol("computed");'
+      && ' var object = { [key]: 42, [symbol]: 7 };'
+      && ' object.answer === 42 && object[symbol] === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var symbol = Symbol("spread"); var source = { first: 1 };'
+      && ' source[symbol] = 2;'
+      && ' Object.defineProperty(source, "hidden",'
+      && ' { value: 3, enumerable: false });'
+      && ' var target = { before: 0, ...source, first: 4, ...null, ..."xy" };'
+      && ' target.before === 0 && target.first === 4'
+      && ' && target[symbol] === 2 && target.hidden === undefined'
+      && ' && target[0] === "x" && target[1] === "y";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD destructuring_bindings.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+
+    ls_result = zcl_qjs=>eval(
+      'var [first, , third = 3, ...tail] = [1, 2, undefined, 4, 5];'
+      && ' first === 1 && third === 3 && tail.join("") === "45";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var [outer, { value: inner = 7 }] = [1, { value: undefined }];'
+      && ' outer === 1 && inner === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var symbol = Symbol("binding"); var source = { x: 1, y: 2 };'
+      && ' source[symbol] = 3;'
+      && ' const { x: alias, [symbol]: symbolic, ...rest } = source;'
+      && ' let { missing = 4 } = source;'
+      && ' alias === 1 && symbolic === 3 && missing === 4'
+      && ' && rest.y === 2 && rest.x === undefined'
+      && ' && rest[symbol] === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var closed = false; var iterable = {};'
+      && ' iterable[Symbol.iterator] = function() { var index = 0; return {'
+      && ' next: function() { index = index + 1;'
+      && ' return { value: index, done: false }; },'
+      && ' return: function() { closed = true; return { done: true }; } }; };'
+      && ' var [only] = iterable; only === 1 && closed;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var a = 0; var b = 0; var rest; var result;'
+      && ' result = ([a, b = 2, ...rest] = [1, undefined, 3, 4]);'
+      && ' var c = 0; var others; var source = { c: 5, d: 6 };'
+      && ' var objectResult = ({ c, ...others } = source);'
+      && ' a === 1 && b === 2 && rest.join("") === "34"'
+      && ' && result[0] === 1 && c === 5 && others.d === 6'
+      && ' && objectResult === source;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function read([a = 1, { b }], { c, ...rest } = { c: 3, d: 4 }, last) {'
+      && ' return a + b + c + rest.d + last; }'
+      && ' var expression = function({ value: renamed }, [tail]) {'
+      && ' return renamed + tail; };'
+      && ' read([undefined, { b: 2 }], undefined, 5) === 15'
+      && ' && read.length === 1'
+      && ' && expression({ value: 6 }, [7]) === 13;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var total = 0; for (var [x, y] of [[1, 2], [3, 4]]) {'
+      && ' total = total + x + y; }'
+      && ' var readers = []; for (let { value } of [{ value: 5 }, { value: 6 }]) {'
+      && ' readers.push(function() { return value; }); }'
+      && ' var initials = ""; for (var [initial] in { alpha: 1, beta: 2 }) {'
+      && ' initials = initials + initial; }'
+      && ' total === 10 && readers[0]() === 5 && readers[1]() === 6'
+      && ' && initials === "ab";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = 0; try { throw { code: 7, detail: 8 }; }'
+      && ' catch ({ code, ...extra }) { caught = code + extra.detail; }'
+      && ' caught === 15;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var target = { nested: {} }; var key = "second";'
+      && ' [target.first, target[key], target.fallback = 4] = [1, 2, undefined];'
+      && ' ({ value: target.nested.answer } = { value: 3 });'
+      && ' target.first === 1 && target.second === 2 && target.fallback === 4'
+      && ' && target.nested.answer === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Box(left, right) { this.total = left + right; }'
+      && ' var values = [4, 5]; var box = new Box(...values);'
+      && ' box instanceof Box && box.total === 9;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD tagged_templates.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'var cached; function tag(site, value) {'
+      && ' if (cached === undefined) cached = site;'
+      && ' return site === cached && site[0] === "a\n"'
+      && ' && site.raw[0] === "a\\n" && site[1] === "b" && value > 0; }'
+      && ' function run(value) { return tag`a\n${value}b`; }'
+      && ' var object = { tag: function(site) {'
+      && ' return this === object && site[0] === "member"; } };'
+      && ' var first = run(1);'
+      && ' var descriptor = Object.getOwnPropertyDescriptor(cached, "length");'
+      && ' first && run(2) && object.tag`member`'
+      && ' && descriptor.writable === false'
+      && ' && descriptor.enumerable === false'
+      && ' && descriptor.configurable === false;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD class_syntax.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'class Point {'
+      && ' constructor(x, y) { this.x = x; this.y = y; }'
+      && ' sum() { return this.x + this.y; }'
+      && ' static create(value) { return new Point(value, 2); }'
+      && ' }'
+      && ' class Empty {}'
+      && ' var point = Point.create(5); var empty = new Empty;'
+      && ' point instanceof Point && point.sum() === 7'
+      && ' && Point.prototype.sum !== undefined'
+      && ' && empty instanceof Empty;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'class Base {'
+      && ' constructor(value) { this.value = value; }'
+      && ' read() { return this.value; }'
+      && ' static kind() { return "base"; }'
+      && ' }'
+      && ' class Child extends Base {'
+      && ' constructor(value) { super(value); this.extra = 1; }'
+      && ' total() { return this.read() + this.extra; }'
+      && ' }'
+      && ' var child = new Child(6);'
+      && ' child instanceof Child && child instanceof Base'
+      && ' && child.total() === 7 && Child.kind() === "base";' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
@@ -753,6 +1141,181 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval( `"2" + true` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = '2true' ).
+  ENDMETHOD.
+
+  METHOD string_prototype_methods.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'String.prototype.constructor === String'
+      && ' && Object.getPrototypeOf(new String("abc")) === String.prototype'
+      && ' && new String("abc").valueOf() === "abc"'
+      && ' && String.prototype.toString() === "";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '"abc".length === 3 && "abc"[0] === "a" && "abc"["1"] === "b"'
+      && ' && "abc"[3] === undefined && new String("abc")[2] === "c"'
+      && ' && Object.keys(new String("abc")).join("") === "012";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '"abc".charAt(1) === "b" && "abc".charAt(-1) === ""'
+      && ' && "abc".charCodeAt(0) === 97 && "abc".charCodeAt(9) !== "abc".charCodeAt(9)'
+      && ' && "abc".at(-1) === "c" && "abc".at(3) === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '"bananas".indexOf("na") === 2 && "bananas".indexOf("na", 3) === 4'
+      && ' && "bananas".lastIndexOf("na") === 4'
+      && ' && "bananas".includes("ana") && !"bananas".includes("xyz")'
+      && ' && "bananas".startsWith("ban") && "bananas".startsWith("ana", 1)'
+      && ' && "bananas".endsWith("nas") && "bananas".endsWith("ana", 4);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '"abcdef".slice(1, 4) === "bcd" && "abcdef".slice(-3) === "def"'
+      && ' && "abcdef".substring(4, 1) === "bcd"'
+      && ' && "a".concat("b", 3) === "ab3" && "ab".repeat(3) === "ababab"'
+      && ' && "  Ab C  ".trim() === "Ab C"'
+      && ' && "  x ".trimStart() === "x " && " x  ".trimEnd() === " x"'
+      && ' && "AbC".toLowerCase() === "abc" && "AbC".toUpperCase() === "ABC";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'String.prototype.indexOf.length === 1'
+      && ' && String.prototype.substring.length === 2'
+      && ' && String.prototype.repeat.name === "repeat"'
+      && ' && Object.keys(String.prototype).length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var wrong = false, range = false;'
+      && ' try { String.prototype.toString.call({}); }'
+      && ' catch (error) { wrong = error instanceof TypeError; }'
+      && ' try { "x".repeat(-1); }'
+      && ' catch (error) { range = error instanceof RangeError; } wrong && range;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD reflect_intrinsic.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'typeof Reflect === "object"'
+      && ' && Object.prototype.toString.call(Reflect) === "[object Reflect]"'
+      && ' && Reflect.apply.length === 3 && Reflect.construct.length === 2'
+      && ' && Reflect.defineProperty.length === 3 && Reflect.set.length === 3'
+      && ' && Reflect.ownKeys.name === "ownKeys"'
+      && ' && Object.keys(Reflect).length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var receiver = { base: 40 }; var target = {};'
+      && ' Object.defineProperty(target, "value", {'
+      && ' get: function() { return this.base + 2; },'
+      && ' set: function(value) { this.stored = value; } });'
+      && ' Reflect.get(target, "value", receiver) === 42'
+      && ' && Reflect.set(target, "value", 9, receiver)'
+      && ' && receiver.stored === 9;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = {}; var symbol = Symbol("key");'
+      && ' Reflect.defineProperty(object, "fixed", {'
+      && ' value: 4, writable: false, enumerable: false, configurable: false })'
+      && ' && Reflect.defineProperty(object, symbol, { value: 7, configurable: true })'
+      && ' && Reflect.getOwnPropertyDescriptor(object, "fixed").value === 4'
+      && ' && Reflect.get(object, symbol) === 7'
+      && ' && Reflect.set(object, "fixed", 8) === false'
+      && ' && Reflect.deleteProperty(object, "fixed") === false'
+      && ' && Reflect.deleteProperty(object, symbol)'
+      && ' && !Reflect.has(object, symbol);' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
+      && ' var symbol = Symbol("own"); object.visible = 2; object[symbol] = 3;'
+      && ' var keys = Reflect.ownKeys(object);'
+      && ' Reflect.has(object, "inherited") && keys.length === 2'
+      && ' && keys[0] === "visible" && keys[1] === symbol'
+      && ' && Reflect.getPrototypeOf(object) === prototype'
+      && ' && Reflect.setPrototypeOf(object, null)'
+      && ' && Reflect.getPrototypeOf(object) === null;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var object = {}; Reflect.isExtensible(object)'
+      && ' && Reflect.preventExtensions(object)'
+      && ' && !Reflect.isExtensible(object)'
+      && ' && Reflect.defineProperty(object, "late", { value: 1 }) === false'
+      && ' && Reflect.set(object, "late", 1) === false'
+      && ' && Reflect.setPrototypeOf(object, {}) === false;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function sum(left, right) { return this.base + left + right; }'
+      && ' function Box(left, right) { this.total = left + right; }'
+      && ' function Other() {}'
+      && ' var box = Reflect.construct(Box, [2, 3], Other);'
+      && ' Reflect.apply(sum, { base: 10 }, [4, 5]) === 19'
+      && ' && box.total === 5 && Object.getPrototypeOf(box) === Other.prototype;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = 0;'
+      && ' try { Reflect.get(1, "x"); } catch (error) {'
+      && ' if (error instanceof TypeError) { caught = caught + 1; } }'
+      && ' try { Reflect.apply({}, null, []); } catch (error) {'
+      && ' if (error instanceof TypeError) { caught = caught + 1; } }'
+      && ' try { Reflect.construct(function() {}, 1); } catch (error) {'
+      && ' if (error instanceof TypeError) { caught = caught + 1; } } caught === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD map_set_intrinsics.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    ls_result = zcl_qjs=>eval(
+      'var key = {}; var map = new Map([[key, 1], [NaN, 2], [-0, 3]]);'
+      && ' map.size === 3 && map.get(key) === 1 && map.get(NaN) === 2'
+      && ' && map.has(0) && map.set("next", 4) === map'
+      && ' && map.get("next") === 4 && map instanceof Map'
+      && ' && Object.prototype.toString.call(map) === "[object Map]";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var map = new Map([["a", 1], ["b", 2]]); var iterator = map.entries();'
+      && ' var first = iterator.next(); map.delete("b"); map.set("c", 3);'
+      && ' var second = iterator.next(); var done = iterator.next();'
+      && ' first.value[0] === "a" && first.value[1] === 1'
+      && ' && second.value[0] === "c" && second.value[1] === 3'
+      && ' && done.done && iterator[Symbol.iterator]() === iterator;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var map = new Map([["a", 1], ["b", 2]]); var seen = "";'
+      && ' map.forEach(function(value, key, owner) {'
+      && ' seen = seen + key + value; if (key === "a") owner.set("c", 3); });'
+      && ' seen === "a1b2c3";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var set = new Set([1, 2, 2, NaN, NaN]); var entries = set.entries();'
+      && ' var first = entries.next().value; var values = set.values();'
+      && ' set.size === 3 && set.has(NaN) && set.add(3) === set'
+      && ' && set.delete(2) && !set.has(2) && first[0] === first[1]'
+      && ' && Set.prototype.keys === Set.prototype.values'
+      && ' && Set.prototype[Symbol.iterator] === Set.prototype.values'
+      && ' && values.next().value === 1 && set instanceof Set'
+      && ' && Object.prototype.toString.call(set) === "[object Set]";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = 0; try { Map(); } catch (error) {'
+      && ' if (error instanceof TypeError) caught = caught + 1; }'
+      && ' try { Map.prototype.get.call({}); } catch (error) {'
+      && ' if (error instanceof TypeError) caught = caught + 1; }'
+      && ' try { new Map([1]); } catch (error) {'
+      && ' if (error instanceof TypeError) caught = caught + 1; } caught === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD object_constructor.
@@ -1007,6 +1570,21 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && !Object.hasOwn(values, "0") && values[1] === 1'
       && ' && !Object.hasOwn(values, "2");' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [0, ...[1, 2], 3];'
+      && ' var sparse = [, ...[4, 5]];'
+      && ' values.length === 4 && values[0] === 0 && values[3] === 3'
+      && ' && sparse.length === 3 && !Object.hasOwn(sparse, "0")'
+      && ' && sparse[1] === 4 && sparse[2] === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function sum(a, b, c) { return a + b + c; }'
+      && ' var receiver = { base: 10, add: function(a, b) {'
+      && ' return this.base + a + b; } };'
+      && ' sum(...[1, 2], 3) === 6 && receiver.add(...[4, 5]) === 19;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD comments_and_asi.
@@ -1251,6 +1829,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var keys = Object.keys({ first: 1, second: 2 }); keys.length;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 2 ) ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; var first = true ? (calls = calls + 1) : (calls = 99);'
+      && ' var second = false ? 10 : true ? 20 : 30;'
+      && ' first === 1 && second === 20 && calls === 1'
+      && ' && (false || true ? 3 : 4) === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
   METHOD bitwise_operators.
@@ -1623,6 +2208,47 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
     ls_result = zcl_qjs=>eval(
+      'Object.prototype.toString.call(new Error()) === "[object Error]"'
+      && ' && Error.prototype.toString.call({}) === "Error"'
+      && ' && Error.prototype.toString.call({ message: "42" }) === "Error: 42"'
+      && ' && Error.prototype.toString.call({ name: "24" }) === "24";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var error = new TypeError("bad value"); var empty = new TypeError();'
+      && ' error instanceof TypeError && error instanceof Error'
+      && ' && !(error instanceof RangeError)'
+      && ' && TypeError.prototype instanceof Error'
+      && ' && Object.getPrototypeOf(TypeError.prototype) === Error.prototype'
+      && ' && TypeError.prototype.constructor === TypeError'
+      && ' && Error.prototype.constructor === Error'
+      && ' && !Object.hasOwn(empty, "message")'
+      && ' && Object.hasOwn(error, "message")'
+      && ' && Error.length === 1 && TypeError.length === 1'
+      && ' && Error.name === "Error" && TypeError.name === "TypeError"'
+      && ' && Error.prototype.toString.length === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; try { var object = null; object.value; }'
+      && ' catch (error) { caught = error instanceof TypeError'
+      && ' && error instanceof Error && error.constructor === TypeError; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; try { Object.prototype.valueOf.call(undefined); }'
+      && ' catch (error) { caught = error.constructor === TypeError'
+      && ' && error instanceof TypeError && error.name === "TypeError"; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; try {'
+      && ' Object.prototype.isPrototypeOf.call(null, function() {}); }'
+      && ' catch (error) { caught = error.constructor === TypeError'
+      && ' && error instanceof TypeError && error.name === "TypeError"; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
       'var names = Error().name + RangeError().name + SyntaxError().name'
       && ' + ReferenceError().name;'
       && ' names === "ErrorRangeErrorSyntaxErrorReferenceError";' ).
@@ -1672,7 +2298,9 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Symbol.iterator === Symbol.iterator'
       && ' && Symbol.iterator !== Symbol.asyncIterator'
       && ' && Symbol.dispose !== Symbol.asyncDispose'
-      && ' && Symbol.keyFor(Symbol.toPrimitive) === undefined;' ).
+      && ' && Symbol.keyFor(Symbol.toPrimitive) === undefined'
+      && ' && String(Symbol("item")) === "Symbol(item)"'
+      && ' && String(Symbol()) === "Symbol()";' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 
@@ -2436,6 +3064,358 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' sparse[2] === 1 && !Object.hasOwn(sparse, "3")'
       && ' && returned === object && Object.hasOwn(object, "1")'
       && ' && object[1] === "inherited";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var source = [1]; var result = source.concat([2, 3], 4);'
+      && ' result.join(",") === "1,2,3,4" && source.join(",") === "1"'
+      && ' && result !== source && Array.prototype.concat.length === 1'
+      && ' && Array.prototype.concat.name === "concat";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = []; prototype[0] = "inherited";'
+      && ' var source = [, 2]; Object.setPrototypeOf(source, prototype);'
+      && ' var result = source.concat([3, , 5]);'
+      && ' result.length === 5 && Object.hasOwn(result, "0")'
+      && ' && result[0] === "inherited" && result[1] === 2 && result[2] === 3'
+      && ' && !Object.hasOwn(result, "3") && result[4] === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var receiver = { 0: "a", length: 1 };'
+      && ' var generic = Array.prototype.concat.call(receiver, ["b"]);'
+      && ' var nested = [1, 2]; nested[Symbol.isConcatSpreadable] = false;'
+      && ' var nestedResult = [].concat(nested);'
+      && ' generic.length === 2 && generic[0] === receiver && generic[1] === "b"'
+      && ' && nestedResult.length === 1 && nestedResult[0] === nested;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = "inherited";'
+      && ' var spread = Object.create(prototype); spread.length = 2;'
+      && ' spread[1] = "own"; spread[Symbol.isConcatSpreadable] = true;'
+      && ' var result = ["start"].concat(spread);'
+      && ' result.length === 3 && result[0] === "start"'
+      && ' && result[1] === "inherited" && result[2] === "own";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3, 4]; var deleted = values.splice(1, 2, 9);'
+      && ' var grown = [1, 4]; grown.splice(1, 0, 2, 3);'
+      && ' values.join(",") === "1,9,4" && deleted.join(",") === "2,3"'
+      && ' && grown.join(",") === "1,2,3,4"'
+      && ' && Array.prototype.splice.length === 2'
+      && ' && Array.prototype.splice.name === "splice";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var untouched = [1, 2]; var none = untouched.splice();'
+      && ' var explicit = [1, 2]; var explicitNone = explicit.splice(1, undefined);'
+      && ' var tail = [1, 2, 3]; var removed = tail.splice(1);'
+      && ' none.length === 0 && untouched.join(",") === "1,2"'
+      && ' && explicitNone.length === 0 && explicit.join(",") === "1,2"'
+      && ' && removed.join(",") === "2,3" && tail.join(",") === "1";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = [, 1, , 3]; var deleted = sparse.splice(1, 2);'
+      && ' sparse.length === 2 && !Object.hasOwn(sparse, "0")'
+      && ' && sparse[1] === 3 && deleted.length === 2'
+      && ' && deleted[0] === 1 && !Object.hasOwn(deleted, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "inherited";'
+      && ' var object = Object.create(prototype); object[0] = "head";'
+      && ' object[3] = "tail"; object.length = "4";'
+      && ' var deleted = Array.prototype.splice.call(object, 1, 2, "inserted");'
+      && ' object.length === 3 && object[0] === "head"'
+      && ' && object[1] === "inserted" && object[2] === "tail"'
+      && ' && !Object.hasOwn(object, "3") && deleted.length === 2'
+      && ' && deleted[0] === "inherited" && !Object.hasOwn(deleted, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [0, 1, 2]; var deleted = values.splice(-2, -1, 9);'
+      && ' deleted.length === 0 && values.join(",") === "0,9,1,2";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [10, 2, 1]; var returned = values.sort();'
+      && ' function numeric(left, right) { return left - right; }'
+      && ' var numbers = [10, 2, 1]; numbers.sort(numeric);'
+      && ' returned === values && values.join(",") === "1,10,2"'
+      && ' && numbers.join(",") === "1,2,10"'
+      && ' && Array.prototype.sort.length === 1'
+      && ' && Array.prototype.sort.name === "sort";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function byKey(left, right) { return left.key - right.key; }'
+      && ' var values = [{ key: 1, id: "a" }, { key: 0, id: "b" },'
+      && ' { key: 1, id: "c" }]; values.sort(byKey);'
+      && ' values[0].id === "b" && values[1].id === "a"'
+      && ' && values[2].id === "c";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [undefined, 3, , 1]; values.sort();'
+      && ' values.length === 4 && values[0] === 1 && values[1] === 3'
+      && ' && Object.hasOwn(values, "2") && values[2] === undefined'
+      && ' && !Object.hasOwn(values, "3");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "b";'
+      && ' var object = Object.create(prototype); object[0] = "c";'
+      && ' object[2] = "a"; object.length = 4;'
+      && ' var returned = Array.prototype.sort.call(object);'
+      && ' returned === object && object.length === 4'
+      && ' && object[0] === "a" && object[1] === "b" && object[2] === "c"'
+      && ' && Object.hasOwn(object, "1") && !Object.hasOwn(object, "3");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var stable = [3, 2, 1]; function equal() { return NaN; } stable.sort(equal);'
+      && ' var caught = false; try { stable.sort(1); }'
+      && ' catch (error) { caught = error.name === "TypeError"; }'
+      && ' stable.join(",") === "3,2,1" && caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var order = ""; var receiver = { target: 2 };'
+      && ' function match(value, index, array) {'
+      && ' order = order + index; return value === this.target && array.length === 4; }'
+      && ' var values = [1, 2, 3, 2]; var found = values.findLast(match, receiver);'
+      && ' found === 2 && order === "3"'
+      && ' && values.findLastIndex(match, receiver) === 3'
+      && ' && Array.prototype.findLast.length === 1'
+      && ' && Array.prototype.findLastIndex.length === 1'
+      && ' && Array.prototype.findLast.name === "findLast"'
+      && ' && Array.prototype.findLastIndex.name === "findLastIndex";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; function missing(value) { calls++; return value === undefined; }'
+      && ' var sparse = Array(3); var found = sparse.findLast(missing);'
+      && ' var findCalls = calls; calls = 0;'
+      && ' var index = sparse.findLastIndex(missing);'
+      && ' found === undefined && findCalls === 1 && index === 2 && calls === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[2] = 7;'
+      && ' var object = Object.create(prototype); object.length = 3;'
+      && ' function isSeven(value, index, array) {'
+      && ' return value === 7 && index === 2 && array === object; }'
+      && ' Array.prototype.findLast.call(object, isSeven) === 7'
+      && ' && Array.prototype.findLastIndex.call(object, isSeven) === 2;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var nested = [1, [2, [3]], 4]; var once = nested.flat();'
+      && ' var twice = nested.flat(2); var defaulted = nested.flat(undefined);'
+      && ' once.length === 4 && once[0] === 1 && once[1] === 2'
+      && ' && Array.isArray(once[2]) && once[2][0] === 3 && once[3] === 4'
+      && ' && twice.join(",") === "1,2,3,4"'
+      && ' && defaulted.length === once.length'
+      && ' && Array.prototype.flat.length === 0'
+      && ' && Array.prototype.flat.name === "flat";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var inner = [1]; var sparse = [, inner, 2]; var copied = sparse.flat(0);'
+      && ' var deep = [1, [2, [3]]].flat(Infinity);'
+      && ' copied.length === 2 && copied[0] === inner && copied[1] === 2'
+      && ' && deep.join(",") === "1,2,3";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = [1, 2];'
+      && ' var object = Object.create(prototype); object[1] = 3; object.length = 2;'
+      && ' Array.prototype.flat.call(object).join(",") === "1,2,3";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = [, 2]; var receiver = { factor: 3 }; var calls = 0;'
+      && ' function expand(value, index, array) { calls++;'
+      && ' if (array !== sparse) return []; return [value * this.factor, index]; }'
+      && ' var mapped = sparse.flatMap(expand, receiver);'
+      && ' var nested = [1].flatMap(function(value) { return [[value]]; });'
+      && ' mapped.join(",") === "6,1" && calls === 1'
+      && ' && nested.length === 1 && Array.isArray(nested[0])'
+      && ' && nested[0][0] === 1 && Array.prototype.flatMap.length === 1'
+      && ' && Array.prototype.flatMap.name === "flatMap";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caught = false; try { [1].flatMap(1); }'
+      && ' catch (error) { caught = error.name === "TypeError"; } caught;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = Array.of(1, undefined, 3); var empty = Array.of();'
+      && ' Array.isArray(values) && values.length === 3 && values[0] === 1'
+      && ' && Object.hasOwn(values, "1") && values[1] === undefined'
+      && ' && values[2] === 3 && Array.isArray(empty) && empty.length === 0'
+      && ' && Array.of.length === 0 && Array.of.name === "of";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Collection(length) { this.constructedLength = length; }'
+      && ' var result = Array.of.call(Collection, "a", "b");'
+      && ' result instanceof Collection && result.constructedLength === 2'
+      && ' && result.length === 2 && result[0] === "a" && result[1] === "b";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'function Collection(length) { this.constructedLength = length; }'
+      && ' var Bound = Collection.bind(null);'
+      && ' var boundResult = Array.of.call(Bound, 4, 5);'
+      && ' var receiver = {}; var fallback = Array.of.call(receiver, 6, 7);'
+      && ' boundResult instanceof Collection && boundResult.constructedLength === 2'
+      && ' && boundResult.length === 2 && boundResult[0] === 4'
+      && ' && Array.isArray(fallback) && fallback.length === 2'
+      && ' && fallback[0] === 6 && fallback[1] === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3]; values.toString() === "1,2,3"'
+      && ' && Array.prototype.toString.length === 0'
+      && ' && Array.prototype.toString.name === "toString"'
+      && ' && Array.prototype.toString.call({ length: 0, join: function() {'
+      && ' if (this.length === 0) return "generic"; return "bad";'
+      && ' } }) === "generic";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2]; values.join = function() {'
+      && ' if (this === values) return "custom"; return "bad"; };'
+      && ' var fallback = [1, 2]; fallback.join = 1;'
+      && ' values.toString() === "custom"'
+      && ' && fallback.toString() === "[object Array]";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var calls = 0; var values = [];'
+      && ' Object.defineProperty(values, "join", { get: function() {'
+      && ' calls++; return function() { return "dynamic"; }; } });'
+      && ' values.toString() === "dynamic" && calls === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3]; var reversed = values.toReversed();'
+      && ' reversed.join(",") === "3,2,1" && values.join(",") === "1,2,3"'
+      && ' && reversed !== values && Array.prototype.toReversed.length === 0'
+      && ' && Array.prototype.toReversed.name === "toReversed";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sparse = Array(3); sparse[1] = 1; var reversed = sparse.toReversed();'
+      && ' reversed.length === 3 && Object.hasOwn(reversed, "0")'
+      && ' && Object.hasOwn(reversed, "1") && Object.hasOwn(reversed, "2")'
+      && ' && reversed[0] === undefined && reversed[1] === 1'
+      && ' && reversed[2] === undefined;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = "a";'
+      && ' var object = Object.create(prototype); object[2] = "c"; object.length = 3;'
+      && ' var reversed = Array.prototype.toReversed.call(object);'
+      && ' reversed.length === 3 && reversed[0] === "c"'
+      && ' && reversed[1] === undefined && reversed[2] === "a"'
+      && ' && Object.hasOwn(reversed, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3]; var changed = values.with(-1, 9);'
+      && ' var fractional = values.with(1.9, 8);'
+      && ' changed.join(",") === "1,2,9" && values.join(",") === "1,2,3"'
+      && ' && fractional.join(",") === "1,8,3" && changed !== values'
+      && ' && Array.prototype.with.length === 2'
+      && ' && Array.prototype.with.name === "with";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '[0, 4, 16].with("1", 3).join(",") === "0,3,16";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '[0, 4, 16].with("-1", 5).join(",") === "0,4,5";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '[0, 4, 16].with(NaN, 2).join(",") === "2,4,16";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      '[0, 4, 16].with("dog", "cat").join(",") === "cat,4,16";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = "inherited";'
+      && ' var object = Object.create(prototype); object.length = 2;'
+      && ' var changed = Array.prototype.with.call(object, 1, "new");'
+      && ' changed.length === 2 && changed[0] === "inherited"'
+      && ' && changed[1] === "new" && Object.hasOwn(changed, "0")'
+      && ' && Object.hasOwn(changed, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var caughtHigh = false; var caughtLow = false; var caughtInfinity = false;'
+      && ' try { [1, 2, 3].with(3, 0); } catch (error) {'
+      && ' caughtHigh = error.name === "RangeError"; }'
+      && ' try { [1, 2, 3].with(-4, 0); } catch (error) {'
+      && ' caughtLow = error.name === "RangeError"; }'
+      && ' try { [1, 2, 3].with(Infinity, 0); } catch (error) {'
+      && ' caughtInfinity = error.name === "RangeError"; }'
+      && ' caughtHigh && caughtLow && caughtInfinity;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [3, 1, 2]; var sorted = values.toSorted();'
+      && ' var descending = values.toSorted(function(a, b) { return b - a; });'
+      && ' sorted.join(",") === "1,2,3" && descending.join(",") === "3,2,1"'
+      && ' && values.join(",") === "3,1,2" && sorted !== values'
+      && ' && Array.prototype.toSorted.length === 1'
+      && ' && Array.prototype.toSorted.name === "toSorted";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
+      && ' var key = Symbol("key"); object.own = 2; object[key] = 3;'
+      && ' object.hasOwnProperty("own") && !object.hasOwnProperty("inherited")'
+      && ' && object.hasOwnProperty(key)'
+      && ' && Object.prototype.hasOwnProperty.length === 1'
+      && ' && Object.prototype.hasOwnProperty.name === "hasOwnProperty";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[1] = "a";'
+      && ' var object = Object.create(prototype); object[2] = "b"; object.length = 4;'
+      && ' var sorted = Array.prototype.toSorted.call(object);'
+      && ' sorted.length === 4 && sorted[0] === "a" && sorted[1] === "b"'
+      && ' && sorted[2] === undefined && sorted[3] === undefined'
+      && ' && Object.hasOwn(sorted, "2") && Object.hasOwn(sorted, "3");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var values = [1, 2, 3, 4]; var changed = values.toSpliced(1, 2, "a", "b");'
+      && ' changed.join(",") === "1,a,b,4" && values.join(",") === "1,2,3,4"'
+      && ' && changed !== values && Array.prototype.toSpliced.length === 2'
+      && ' && Array.prototype.toSpliced.name === "toSpliced"'
+      && ' && values.toSpliced().join(",") === "1,2,3,4"'
+      && ' && values.toSpliced(2).join(",") === "1,2";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var prototype = {}; prototype[0] = "inherited";'
+      && ' var object = Object.create(prototype); object[2] = "tail"; object.length = 3;'
+      && ' var changed = Array.prototype.toSpliced.call(object, 1, 1, "new");'
+      && ' changed.length === 3 && changed[0] === "inherited"'
+      && ' && changed[1] === "new" && changed[2] === "tail"'
+      && ' && Object.hasOwn(changed, "0") && object[1] === undefined;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 ENDCLASS.

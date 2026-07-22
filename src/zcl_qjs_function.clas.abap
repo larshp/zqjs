@@ -27,6 +27,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
         constants TYPE ty_constants OPTIONAL
         local_count TYPE i DEFAULT 0
         parameter_count TYPE i DEFAULT 0
+        function_length TYPE i DEFAULT -1
         name TYPE string OPTIONAL
         has_self TYPE abap_bool DEFAULT abap_false
         has_this TYPE abap_bool DEFAULT abap_false
@@ -57,6 +58,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS get_local_count RETURNING VALUE(result) TYPE i.
     METHODS get_parameter_count RETURNING VALUE(result) TYPE i.
+    METHODS get_function_length RETURNING VALUE(result) TYPE i.
     METHODS get_name RETURNING VALUE(result) TYPE string.
     METHODS has_self_binding RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_this_binding RETURNING VALUE(result) TYPE abap_bool.
@@ -76,6 +78,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mt_constants TYPE ty_constants.
     DATA mv_local_count TYPE i.
     DATA mv_parameter_count TYPE i.
+    DATA mv_function_length TYPE i.
     DATA mv_name TYPE string.
     DATA mv_has_self TYPE abap_bool.
     DATA mv_has_this TYPE abap_bool.
@@ -91,6 +94,11 @@ CLASS zcl_qjs_function IMPLEMENTATION.
     mt_constants = constants.
     mv_local_count = local_count.
     mv_parameter_count = parameter_count.
+    IF function_length < 0.
+      mv_function_length = parameter_count.
+    ELSE.
+      mv_function_length = function_length.
+    ENDIF.
     mv_name = name.
     mv_has_self = has_self.
     mv_has_this = has_this.
@@ -133,6 +141,10 @@ CLASS zcl_qjs_function IMPLEMENTATION.
 
   METHOD get_parameter_count.
     result = mv_parameter_count.
+  ENDMETHOD.
+
+  METHOD get_function_length.
+    result = mv_function_length.
   ENDMETHOD.
 
   METHOD get_name.
