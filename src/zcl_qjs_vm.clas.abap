@@ -1334,8 +1334,12 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             APPEND lo_cell TO lt_capture_cells.
           ENDLOOP.
           lo_properties = mo_runtime->create_function_properties(
-            generator = lo_called->is_generator( ) ).
-          IF lo_called->is_generator( ) = abap_true.
+            generator = lo_called->is_generator( ) async = lo_called->is_async( ) ).
+          IF lo_called->is_generator( ) = abap_true
+              AND lo_called->is_async( ) = abap_true.
+            lo_prototype = mo_runtime->create_object(
+              prototype = mo_runtime->get_async_generator_prototype( ) ).
+          ELSEIF lo_called->is_generator( ) = abap_true.
             lo_prototype = mo_runtime->create_object(
               prototype = mo_runtime->get_generator_prototype( ) ).
           ELSEIF lo_called->is_constructible( ) = abap_true.
@@ -1956,6 +1960,18 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             lo_object = mo_runtime->create_object( prototype = lo_prototype ).
             ls_this = zcl_qjs_value=>new_object( lo_object ).
+          ENDIF.
+          IF lo_called->is_generator( ) = abap_true
+              AND lo_called->is_async( ) = abap_true.
+            IF lo_closure IS NOT BOUND.
+              throw_error(
+                name = 'TypeError' message = 'async generator has no closure' ).
+            ENDIF.
+            lo_object = mo_runtime->create_async_generator(
+              closure = lo_closure this_value = ls_this arguments = lt_arguments ).
+            APPEND zcl_qjs_value=>new_object( lo_object ) TO lt_stack.
+            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            CONTINUE.
           ENDIF.
           IF lo_called->is_generator( ) = abap_true.
             IF lo_closure IS NOT BOUND.

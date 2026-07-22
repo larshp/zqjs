@@ -77,6 +77,9 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_string_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA lo_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_generator_function_proto TYPE REF TO zcl_qjs_object.
+    DATA lo_async_iterator_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_async_generator_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_async_gen_function_proto TYPE REF TO zcl_qjs_object.
     DATA lo_promise_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_reference TYPE REF TO object.
     DATA lo_object_intrinsic TYPE REF TO zcl_qjs_native_function.
@@ -316,6 +319,11 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_string_iterator_proto = mo_runtime->create_object( lo_object_prototype ).
     lo_generator_prototype = mo_runtime->create_object( lo_object_prototype ).
     lo_generator_function_proto = mo_runtime->create_object( lo_function_prototype ).
+    lo_async_iterator_prototype = mo_runtime->create_object( lo_object_prototype ).
+    lo_async_generator_prototype = mo_runtime->create_object(
+      lo_async_iterator_prototype ).
+    lo_async_gen_function_proto = mo_runtime->create_object(
+      lo_function_prototype ).
     lo_promise_prototype = mo_runtime->create_object( lo_object_prototype ).
     mo_runtime->set_map_prototype( lo_map_prototype ).
     mo_runtime->set_set_prototype( lo_set_prototype ).
@@ -325,6 +333,8 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     mo_runtime->set_string_iterator_proto( lo_string_iterator_proto ).
     mo_runtime->set_generator_prototype( lo_generator_prototype ).
     mo_runtime->set_generator_function_proto( lo_generator_function_proto ).
+    mo_runtime->set_async_generator_prototype( lo_async_generator_prototype ).
+    mo_runtime->set_async_gen_function_proto( lo_async_gen_function_proto ).
     mo_runtime->set_promise_prototype( lo_promise_prototype ).
     lo_generator_function_proto->define_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_generator_prototype )
@@ -341,6 +351,22 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_generator_prototype->define_symbol_property(
       identity = ls_to_string_tag-symbol_id
       value = zcl_qjs_value=>new_string( 'Generator' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_async_gen_function_proto->define_property(
+      name = 'prototype'
+      value = zcl_qjs_value=>new_object( lo_async_generator_prototype )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_async_generator_prototype->define_property(
+      name = lv_constructor_property
+      value = zcl_qjs_value=>new_object( lo_async_gen_function_proto )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_async_gen_function_proto->define_symbol_property(
+      identity = ls_to_string_tag-symbol_id
+      value = zcl_qjs_value=>new_string( 'AsyncGeneratorFunction' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_async_generator_prototype->define_symbol_property(
+      identity = ls_to_string_tag-symbol_id
+      value = zcl_qjs_value=>new_string( 'AsyncGenerator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
 
     CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise
@@ -599,6 +625,15 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     install_collection_method(
       prototype = lo_generator_prototype name = 'return'
       id = zcl_qjs_native_function=>id_generator_return length = 1 ).
+    install_collection_method(
+      prototype = lo_async_generator_prototype name = 'next'
+      id = zcl_qjs_native_function=>id_async_generator_next length = 1 ).
+    install_collection_method(
+      prototype = lo_async_generator_prototype name = 'throw'
+      id = zcl_qjs_native_function=>id_async_generator_throw length = 1 ).
+    install_collection_method(
+      prototype = lo_async_generator_prototype name = 'return'
+      id = zcl_qjs_native_function=>id_async_generator_return length = 1 ).
     DATA(ls_iterator_symbol) = mo_runtime->well_known_symbol( 'iterator' ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_iterator_self runtime = mo_runtime.
@@ -624,6 +659,20 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_generator_prototype->define_symbol_property(
       identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    DATA(ls_async_iterator_symbol) = mo_runtime->well_known_symbol( 'asyncIterator' ).
+    CREATE OBJECT lo_native
+      EXPORTING id = zcl_qjs_native_function=>id_iterator_self runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 0 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( '[Symbol.asyncIterator]' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_async_iterator_prototype->define_symbol_property(
+      identity = ls_async_iterator_symbol-symbol_id
+      value = zcl_qjs_value=>new_object( lo_reference )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     DATA(ls_map_entries) = lo_map_prototype->get_own_property( 'entries' ).
     lo_map_prototype->define_symbol_property(

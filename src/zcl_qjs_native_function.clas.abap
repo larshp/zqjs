@@ -220,6 +220,13 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_async_from_sync_next TYPE i VALUE 225.
     CONSTANTS id_async_from_sync_result TYPE i VALUE 226.
     CONSTANTS id_async_from_sync_return TYPE i VALUE 227.
+    CONSTANTS id_async_generator_next TYPE i VALUE 228.
+    CONSTANTS id_async_generator_throw TYPE i VALUE 229.
+    CONSTANTS id_async_generator_return TYPE i VALUE 230.
+    CONSTANTS id_async_generator_await_fulfill TYPE i VALUE 231.
+    CONSTANTS id_async_generator_await_reject TYPE i VALUE 232.
+    CONSTANTS id_async_generator_result_fulfill TYPE i VALUE 233.
+    CONSTANTS id_async_generator_result_reject TYPE i VALUE 234.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -2387,6 +2394,53 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           value    = zcl_qjs_value=>new_object( lo_async_sync_return_result )
           rejected = abap_false ).
         result = zcl_qjs_value=>new_object( lo_async_sync_return_promise ).
+      WHEN id_async_generator_next OR id_async_generator_throw
+          OR id_async_generator_return.
+        DATA lo_async_generator_object TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_async_generator_object ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_async_generator_object IS NOT BOUND
+            OR lo_async_generator_object->is_async_generator( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: async generator receiver is incompatible'.
+        ENDIF.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        result = lo_async_generator_object->async_generator_enqueue(
+          kind  = COND i(
+            WHEN mv_id = id_async_generator_return THEN 1
+            WHEN mv_id = id_async_generator_throw THEN 2
+            ELSE 0 )
+          input = ls_argument ).
+      WHEN id_async_generator_await_fulfill OR id_async_generator_await_reject
+          OR id_async_generator_result_fulfill OR id_async_generator_result_reject.
+        DATA lo_async_generator TYPE REF TO zcl_qjs_async_generator.
+        TRY.
+            lo_async_generator ?= ms_bound_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_async_generator IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: invalid async generator continuation'.
+        ENDIF.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF mv_id = id_async_generator_await_fulfill
+            OR mv_id = id_async_generator_await_reject.
+          lo_async_generator->resume_await(
+            value = ls_argument rejected = xsdbool(
+              mv_id = id_async_generator_await_reject ) ).
+        ELSE.
+          lo_async_generator->resume_result(
+            value = ls_argument rejected = xsdbool(
+              mv_id = id_async_generator_result_reject )
+            done = ms_bound_this-bool_value ).
+        ENDIF.
+        result = zcl_qjs_value=>new_undefined( ).
       WHEN id_promise_capability_executor.
         DATA(ls_existing_capability_resolve) = get_own_property( '[[Resolve]]' ).
         DATA(ls_existing_capability_reject) = get_own_property( '[[Reject]]' ).
@@ -7092,7 +7146,11 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_promise_any_reject OR id_promise_capability_executor
           OR id_async_resume_fulfill OR id_async_resume_reject
           OR id_async_from_sync_next OR id_async_from_sync_result
-          OR id_async_from_sync_return.
+          OR id_async_from_sync_return OR id_async_generator_next
+          OR id_async_generator_throw OR id_async_generator_return
+          OR id_async_generator_await_fulfill OR id_async_generator_await_reject
+          OR id_async_generator_result_fulfill
+          OR id_async_generator_result_reject.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.

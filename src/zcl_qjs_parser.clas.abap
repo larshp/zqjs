@@ -1105,10 +1105,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       lv_generator = abap_true.
       advance( ).
     ENDIF.
-    IF lv_async = abap_true AND lv_generator = abap_true.
-      RAISE EXCEPTION TYPE zcx_qjs_error
-        EXPORTING reason = 'Async generators are not supported'.
-    ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected function name'.
@@ -1365,10 +1361,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF ms_token-kind = zcl_qjs_lexer=>token_star.
       lv_generator = abap_true.
       advance( ).
-    ENDIF.
-    IF lv_async = abap_true AND lv_generator = abap_true.
-      RAISE EXCEPTION TYPE zcx_qjs_error
-        EXPORTING reason = 'Async generators are not supported'.
     ENDIF.
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
       lv_name = ms_token-text.
@@ -1911,10 +1903,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ls_method-generator = abap_true.
         advance( ).
       ENDIF.
-      IF ls_method-async = abap_true AND ls_method-generator = abap_true.
-        RAISE EXCEPTION TYPE zcx_qjs_error
-          EXPORTING reason = 'Async generators are not supported'.
-      ENDIF.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
         CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
@@ -2455,7 +2443,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF lv_has_element = abap_true.
       lv_done_jump = mo_emitter->position( ).
       mo_emitter->emit( zif_qjs_opcodes=>if_true ).
-      emit_iterator_close( <loop>-async_iterator ).
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
       mo_emitter->patch(
         instruction = lv_done_jump target = mo_emitter->position( ) ).
     ELSE.
@@ -2717,7 +2705,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         mo_emitter->emit(  opcode = zif_qjs_opcodes=>get_local
                           operand = <loop>-iterator_local ).
       ENDIF.
-      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+      emit_iterator_close( <loop>-async_iterator ).
     ENDIF.
     lv_jump = mo_emitter->position( ).
     mo_emitter->emit( zif_qjs_opcodes=>goto ).
@@ -3644,6 +3632,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
     IF ms_token-kind = zcl_qjs_lexer=>token_star
         AND ms_token-line_terminator_before = abap_false.
+      IF mv_in_async = abap_true.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Async generator yield* is not supported'.
+      ENDIF.
       advance( ).
       parse_assignment( ).
       mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
@@ -4793,9 +4785,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 AND ls_object_async_lookahead-kind
                   <> zcl_qjs_lexer=>token_semicolon.
               advance( ).
-              IF ms_token-kind = zcl_qjs_lexer=>token_star.
-                RAISE EXCEPTION TYPE zcx_qjs_error
-                  EXPORTING reason = 'Async generators are not supported'.
+              DATA(lv_object_async_generator) = xsdbool(
+                ms_token-kind = zcl_qjs_lexer=>token_star ).
+              IF lv_object_async_generator = abap_true.
+                advance( ).
               ENDIF.
               DATA lv_object_async_computed TYPE abap_bool.
               DATA lv_object_async_name TYPE string.
@@ -4833,6 +4826,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               mv_super_call_allowed = abap_false.
               mv_parsing_class_method = abap_true.
               mv_parsing_async_function = abap_true.
+              mv_parsing_generator_method = lv_object_async_generator.
               ms_token-kind = zcl_qjs_lexer=>token_function.
               parse_function_expression( ).
               ms_super_binding = ls_old_object_async_super.

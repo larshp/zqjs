@@ -47,7 +47,7 @@
     "promises": "partial",
     "promiseRejectionTracking": "enabled",
     "asyncFunctions": "partial",
-    "asyncGenerators": "deferred",
+    "asyncGenerators": "partial",
     "modules": "deferred",
     "regexp": "deferred",
     "stringNormalization": "unsupported",
@@ -64,15 +64,15 @@
   "conformance": {
     "test262": {
       "selectionFile": "test262-smoke.json",
-      "selected": 941,
+      "selected": 962,
       "expected": {
-        "pass": 938,
+        "pass": 959,
         "fail": 0,
         "unsupported": 3,
         "infrastructureSkip": 0
       }
     },
-    "quickjsOpcodes": 100,
+    "quickjsOpcodes": 105,
     "normalizedOracleCases": 1
   }
 }

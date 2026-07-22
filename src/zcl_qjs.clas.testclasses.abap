@@ -424,16 +424,105 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = lo_context->eval( 'asyncLoopClosed;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
+    ls_result = lo_context->eval(
+      'var asyncCloseOrder = ""; var closeIterable = {};'
+      && ' closeIterable[Symbol.asyncIterator] = function() {'
+      && ' return { next: function() {'
+      && ' return Promise.resolve({ value: 1, done: false }); },'
+      && ' return: function() { asyncCloseOrder += "return";'
+      && ' return Promise.resolve().then(function() {'
+      && ' asyncCloseOrder += ":awaited"; return {}; }); } }; };'
+      && ' async function awaitAsyncClose() {'
+      && ' for await (var value of closeIterable) { break; }'
+      && ' asyncCloseOrder += ":after"; } awaitAsyncClose(); asyncCloseOrder;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'asyncCloseOrder;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result )
+      exp = 'return:awaited:after' ).
+
     TRY.
         lo_context->eval( 'for await (var value of []) {}' ).
         cl_abap_unit_assert=>fail( 'Expected top-level for-await rejection' ).
       CATCH zcx_qjs_error.
     ENDTRY.
 
+    ls_result = lo_context->eval(
+      'var asyncGeneratorLog = ""; async function* asyncValues() {'
+      && ' asyncGeneratorLog += "start";'
+      && ' var sent = yield Promise.resolve(1);'
+      && ' asyncGeneratorLog += ":" + sent;'
+      && ' yield await Promise.resolve(2); return 3; }'
+      && ' var asyncValuesIterator = asyncValues();'
+      && ' var asyncGeneratorResults = "";'
+      && ' var asyncNextOne = asyncValuesIterator.next();'
+      && ' var asyncNextTwo = asyncValuesIterator.next(4);'
+      && ' var asyncNextThree = asyncValuesIterator.next();'
+      && ' asyncNextOne.then(function(step) {'
+      && ' asyncGeneratorResults += step.value + ":" + step.done + ";"; });'
+      && ' asyncNextTwo.then(function(step) {'
+      && ' asyncGeneratorResults += step.value + ":" + step.done + ";"; });'
+      && ' asyncNextThree.then(function(step) {'
+      && ' asyncGeneratorResults += step.value + ":" + step.done; });'
+      && ' asyncValuesIterator[Symbol.asyncIterator]() === asyncValuesIterator'
+      && ' && asyncGeneratorLog === "start";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval(
+      'asyncGeneratorLog === "start:4"'
+      && ' && asyncGeneratorResults === "1:false;2:false;3:true";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var asyncGeneratorCaught = ""; async function* catchesAwait() {'
+      && ' try { await Promise.reject("awaited"); }'
+      && ' catch (error) { yield error; } throw "finished"; }'
+      && ' var caughtIterator = catchesAwait();'
+      && ' caughtIterator.next().then(function(step) {'
+      && ' asyncGeneratorCaught += step.value; });'
+      && ' caughtIterator.next().catch(function(error) {'
+      && ' asyncGeneratorCaught += ":" + error; }); asyncGeneratorCaught;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'asyncGeneratorCaught;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'awaited:finished' ).
+
+    ls_result = lo_context->eval(
+      'var asyncGeneratorAbrupt = ""; async function* abruptGenerator() {'
+      && ' try { yield 1; } catch (error) { yield error; }'
+      && ' finally { asyncGeneratorAbrupt += "finally";'
+      && ' await Promise.resolve(); asyncGeneratorAbrupt += ":awaited"; } }'
+      && ' var abruptIterator = abruptGenerator();'
+      && ' var abruptResults = "";'
+      && ' abruptIterator.next().then(function(step) {'
+      && ' abruptResults += step.value + ":" + step.done + ";"; });'
+      && ' abruptIterator.throw(5).then(function(step) {'
+      && ' abruptResults += step.value + ":" + step.done + ";"; });'
+      && ' abruptIterator.return(Promise.resolve(9)).then(function(step) {'
+      && ' abruptResults += step.value + ":" + step.done; });'
+      && ' abruptResults;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval(
+      'abruptResults === "1:false;5:false;9:true"'
+      && ' && asyncGeneratorAbrupt === "finally:awaited";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var asyncGeneratorConstructThrows = false;'
+      && ' try { new asyncValues(); } catch (error) {'
+      && ' asyncGeneratorConstructThrows = error instanceof TypeError; }'
+      && ' asyncGeneratorConstructThrows;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
     TRY.
-        lo_context->eval( 'async function* unsupportedAsyncGenerator() {}' ).
-        cl_abap_unit_assert=>fail( 'Expected async generator syntax rejection' ).
-      CATCH zcx_qjs_error.
+        lo_context->eval( 'async function* delegate() { yield* []; }' ).
+        cl_abap_unit_assert=>fail( 'Expected async yield* rejection' ).
+      CATCH zcx_qjs_error INTO DATA(lx_async_yield_star).
+        cl_abap_unit_assert=>assert_equals(
+          act = lx_async_yield_star->reason
+          exp = 'Async generator yield* is not supported' ).
     ENDTRY.
 
     ls_result = lo_context->eval(
@@ -482,11 +571,22 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' asyncMethodConstructThrows;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
-    TRY.
-        lo_context->eval( 'class InvalidAsync { async *items() {} }' ).
-        cl_abap_unit_assert=>fail( 'Expected async generator method rejection' ).
-      CATCH zcx_qjs_error.
-    ENDTRY.
+    ls_result = lo_context->eval(
+      'var asyncGeneratorMethodValue = 0;'
+      && ' class AsyncGeneratorMethods {'
+      && ' async *items(value) { yield await value; } }'
+      && ' var objectAsyncGenerator = {'
+      && ' async *items(value) { yield await value + 1; } };'
+      && ' new AsyncGeneratorMethods().items(Promise.resolve(6)).next()'
+      && ' .then(function(step) { asyncGeneratorMethodValue += step.value; });'
+      && ' objectAsyncGenerator.items(7).next().then(function(step) {'
+      && ' asyncGeneratorMethodValue += step.value; });'
+      && ' asyncGeneratorMethodValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'asyncGeneratorMethodValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 14 ).
   ENDMETHOD.
 
   METHOD global_object.

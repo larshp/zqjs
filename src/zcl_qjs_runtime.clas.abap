@@ -63,6 +63,12 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
         arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
+    METHODS create_async_generator
+      IMPORTING closure TYPE REF TO zcl_qjs_closure
+        this_value TYPE zcl_qjs_value=>ty_value
+        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
     METHODS create_promise
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
@@ -151,6 +157,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_generator_function_proto
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_async_gen_function_proto
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_async_gen_function_proto
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_object_prototype
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_object_prototype
@@ -191,6 +201,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_generator_prototype
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_async_generator_prototype
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_async_generator_prototype
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_promise_prototype
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_promise_prototype
@@ -202,6 +216,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS create_function_properties
       IMPORTING generator TYPE abap_bool DEFAULT abap_false
+        async TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_error
@@ -260,6 +275,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_object_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_function_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_generator_function_proto TYPE REF TO zcl_qjs_object.
+    DATA mo_async_gen_function_proto TYPE REF TO zcl_qjs_object.
     DATA mo_array_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_string_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_map_prototype TYPE REF TO zcl_qjs_object.
@@ -269,6 +285,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_array_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_string_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_generator_prototype TYPE REF TO zcl_qjs_object.
+    DATA mo_async_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_promise_prototype TYPE REF TO zcl_qjs_object.
     TYPES: BEGIN OF ty_promise_job,
       kind TYPE i,
@@ -424,6 +441,17 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     ENDIF.
     result = create_object( prototype = lo_prototype ).
     result->initialize_generator(
+      function = closure->get_function( ) closure = closure
+      this_value = this_value arguments = arguments ).
+  ENDMETHOD.
+
+  METHOD create_async_generator.
+    DATA(lo_prototype) = closure->get_prototype_object( ).
+    IF lo_prototype IS NOT BOUND.
+      lo_prototype = mo_async_generator_prototype.
+    ENDIF.
+    result = create_object( prototype = lo_prototype ).
+    result->initialize_async_generator(
       function = closure->get_function( ) closure = closure
       this_value = this_value arguments = arguments ).
   ENDMETHOD.
@@ -1126,6 +1154,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     result = mo_generator_function_proto.
   ENDMETHOD.
 
+  METHOD set_async_gen_function_proto.
+    mo_async_gen_function_proto = prototype.
+  ENDMETHOD.
+
+  METHOD get_async_gen_function_proto.
+    result = mo_async_gen_function_proto.
+  ENDMETHOD.
+
   METHOD set_array_prototype.
     mo_array_prototype = prototype.
   ENDMETHOD.
@@ -1198,6 +1234,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     result = mo_generator_prototype.
   ENDMETHOD.
 
+  METHOD set_async_generator_prototype.
+    mo_async_generator_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD get_async_generator_prototype.
+    result = mo_async_generator_prototype.
+  ENDMETHOD.
+
   METHOD set_promise_prototype.
     mo_promise_prototype = prototype.
   ENDMETHOD.
@@ -1221,7 +1265,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD create_function_properties.
-    IF generator = abap_true AND mo_generator_function_proto IS BOUND.
+    IF generator = abap_true AND async = abap_true
+        AND mo_async_gen_function_proto IS BOUND.
+      result = create_object( prototype = mo_async_gen_function_proto ).
+    ELSEIF generator = abap_true AND mo_generator_function_proto IS BOUND.
       result = create_object( prototype = mo_generator_function_proto ).
     ELSE.
       result = create_object( prototype = mo_function_prototype ).
@@ -1326,6 +1373,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     CLEAR mo_object_prototype.
     CLEAR mo_function_prototype.
     CLEAR mo_generator_function_proto.
+    CLEAR mo_async_gen_function_proto.
     CLEAR mo_array_prototype.
     CLEAR mo_string_prototype.
     CLEAR mo_map_prototype.
@@ -1335,6 +1383,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     CLEAR mo_array_iterator_proto.
     CLEAR mo_string_iterator_proto.
     CLEAR mo_generator_prototype.
+    CLEAR mo_async_generator_prototype.
     CLEAR mo_promise_prototype.
     CLEAR mo_promise_rejection.
     CLEAR mt_promise_jobs.

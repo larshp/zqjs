@@ -205,6 +205,17 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS is_generator RETURNING VALUE(result) TYPE abap_bool.
+    METHODS initialize_async_generator
+      IMPORTING function TYPE REF TO zcl_qjs_function
+        closure TYPE REF TO zcl_qjs_closure
+        this_value TYPE zcl_qjs_value=>ty_value
+        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RAISING zcx_qjs_error.
+    METHODS async_generator_enqueue
+      IMPORTING kind TYPE i input TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS is_async_generator RETURNING VALUE(result) TYPE abap_bool.
     METHODS initialize_promise.
     METHODS is_promise RETURNING VALUE(result) TYPE abap_bool.
     METHODS promise_state RETURNING VALUE(result) TYPE i.
@@ -273,6 +284,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA ms_generator_this TYPE zcl_qjs_value=>ty_value.
     DATA mt_generator_arguments TYPE zif_qjs_callable=>ty_arguments.
     DATA mv_generator_state TYPE i.
+    DATA mo_async_generator TYPE REF TO zcl_qjs_async_generator.
     TYPES: BEGIN OF ty_promise_reaction,
       on_fulfilled TYPE zcl_qjs_value=>ty_value,
       on_rejected TYPE zcl_qjs_value=>ty_value,
@@ -1488,6 +1500,24 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD is_generator.
     result = xsdbool( mo_generator_function IS BOUND ).
+  ENDMETHOD.
+
+  METHOD initialize_async_generator.
+    CREATE OBJECT mo_async_generator
+      EXPORTING runtime = mo_runtime function = function closure = closure
+        this_value = this_value arguments = arguments.
+  ENDMETHOD.
+
+  METHOD async_generator_enqueue.
+    IF mo_async_generator IS NOT BOUND.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: async generator receiver is incompatible'.
+    ENDIF.
+    result = mo_async_generator->enqueue( kind = kind input = input ).
+  ENDMETHOD.
+
+  METHOD is_async_generator.
+    result = xsdbool( mo_async_generator IS BOUND ).
   ENDMETHOD.
 
   METHOD initialize_promise.

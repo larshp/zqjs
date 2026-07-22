@@ -392,6 +392,13 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Closure has no active runtime'.
     ENDIF.
+    IF mo_function->is_async( ) = abap_true
+        AND mo_function->is_generator( ) = abap_true.
+      result = zcl_qjs_value=>new_object(
+        mo_runtime->create_async_generator(
+          closure = me this_value = this_value arguments = arguments ) ).
+      RETURN.
+    ENDIF.
     IF mo_function->is_async( ) = abap_true.
       DATA(lo_async_task) = NEW zcl_qjs_async_task(
         runtime = mo_runtime closure = me this_value = this_value
