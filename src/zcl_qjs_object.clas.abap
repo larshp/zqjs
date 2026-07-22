@@ -100,6 +100,26 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS has_symbol_property
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS add_private_field
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+        writable TYPE abap_bool DEFAULT abap_true
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS has_private_field
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS get_private_field
+      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS set_private_field
+      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+        receiver TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS add_private_accessor
+      IMPORTING identity TYPE int8 getter TYPE zcl_qjs_value=>ty_value
+        setter TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS own_property_count RETURNING VALUE(result) TYPE i.
     METHODS get_prototype RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS get_descriptor
@@ -157,6 +177,25 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE ty_collection_entry
       RAISING zcx_qjs_error.
     METHODS iterator_kind RETURNING VALUE(result) TYPE i.
+    METHODS initialize_generator
+      IMPORTING function TYPE REF TO zcl_qjs_function
+        closure TYPE REF TO zcl_qjs_closure
+        this_value TYPE zcl_qjs_value=>ty_value
+        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RAISING zcx_qjs_error.
+    METHODS generator_next
+      IMPORTING input TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS generator_throw
+      IMPORTING input TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS generator_return
+      IMPORTING input TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS is_generator RETURNING VALUE(result) TYPE abap_bool.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_property,
       name TYPE string,
@@ -178,8 +217,19 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     END OF ty_symbol_property.
     TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
       WITH UNIQUE KEY identity.
+    TYPES: BEGIN OF ty_private_field,
+      identity TYPE int8,
+      value TYPE zcl_qjs_value=>ty_value,
+      writable TYPE abap_bool,
+      accessor TYPE abap_bool,
+      getter TYPE zcl_qjs_value=>ty_value,
+      setter TYPE zcl_qjs_value=>ty_value,
+    END OF ty_private_field.
+    TYPES ty_private_fields TYPE HASHED TABLE OF ty_private_field
+      WITH UNIQUE KEY identity.
     DATA mt_properties TYPE ty_properties.
     DATA mt_symbol_properties TYPE ty_symbol_properties.
+    DATA mt_private_fields TYPE ty_private_fields.
     DATA mv_next_symbol_order TYPE i.
     DATA mo_prototype TYPE REF TO zcl_qjs_object.
     DATA mv_is_array TYPE abap_bool.
@@ -193,6 +243,12 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_iterator_index TYPE i.
     DATA mv_iterator_source_kind TYPE i.
     DATA ms_iterator_string TYPE zcl_qjs_value=>ty_value.
+    DATA mo_generator_function TYPE REF TO zcl_qjs_function.
+    DATA mo_generator_closure TYPE REF TO zcl_qjs_closure.
+    DATA mo_generator_vm TYPE REF TO zcl_qjs_vm.
+    DATA ms_generator_this TYPE zcl_qjs_value=>ty_value.
+    DATA mt_generator_arguments TYPE zif_qjs_callable=>ty_arguments.
+    DATA mv_generator_state TYPE i.
     DATA mv_length TYPE int8.
     DATA mv_length_writable TYPE abap_bool VALUE abap_true.
     DATA mo_shape TYPE REF TO zcl_qjs_shape.
@@ -406,7 +462,12 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     TRY.
         lo_receiver ?= receiver-object_ref.
       CATCH cx_sy_move_cast_error.
-        RETURN.
+        TRY.
+            DATA(lo_receiver_closure) = CAST zcl_qjs_closure( receiver-object_ref ).
+            lo_receiver = lo_receiver_closure->get_property_storage( ).
+          CATCH cx_sy_move_cast_error.
+            RETURN.
+        ENDTRY.
     ENDTRY.
     DATA(ls_receiver_property) = lo_receiver->get_own_symbol_property( identity ).
     IF ls_receiver_property-found = abap_true.
@@ -538,7 +599,12 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     TRY.
         lo_receiver ?= receiver-object_ref.
       CATCH cx_sy_move_cast_error.
-        RETURN.
+        TRY.
+            DATA(lo_receiver_closure) = CAST zcl_qjs_closure( receiver-object_ref ).
+            lo_receiver = lo_receiver_closure->get_property_storage( ).
+          CATCH cx_sy_move_cast_error.
+            RETURN.
+        ENDTRY.
     ENDTRY.
     DATA(ls_receiver_property) = lo_receiver->get_own_property( name ).
     IF ls_receiver_property-found = abap_true.
@@ -759,6 +825,97 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     IF result = abap_false AND mo_prototype IS BOUND.
       result = mo_prototype->has_symbol_property( identity ).
     ENDIF.
+  ENDMETHOD.
+
+  METHOD add_private_field.
+    DATA ls_field TYPE ty_private_field.
+    READ TABLE mt_private_fields WITH TABLE KEY identity = identity
+      TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      RETURN.
+    ENDIF.
+    ls_field-identity = identity.
+    ls_field-value = value.
+    ls_field-writable = writable.
+    INSERT ls_field INTO TABLE mt_private_fields.
+    result = abap_true.
+  ENDMETHOD.
+
+  METHOD has_private_field.
+    READ TABLE mt_private_fields WITH TABLE KEY identity = identity
+      TRANSPORTING NO FIELDS.
+    result = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD get_private_field.
+    READ TABLE mt_private_fields WITH TABLE KEY identity = identity
+      INTO DATA(ls_field).
+    IF sy-subrc = 0.
+      IF ls_field-accessor = abap_true.
+        IF ls_field-getter-tag = zcl_qjs_value=>tag_undefined.
+          raise_error(
+            name = 'TypeError' message = 'private accessor has no getter' ).
+        ENDIF.
+        result = invoke_callable(
+          callable = ls_field-getter this_value = receiver ).
+      ELSE.
+        result = ls_field-value.
+      ENDIF.
+    ELSE.
+      result = zcl_qjs_value=>new_undefined( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD set_private_field.
+    FIELD-SYMBOLS <field> TYPE ty_private_field.
+    READ TABLE mt_private_fields WITH TABLE KEY identity = identity
+      ASSIGNING <field>.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    IF <field>-accessor = abap_true.
+      IF <field>-setter-tag = zcl_qjs_value=>tag_undefined.
+        RETURN.
+      ENDIF.
+      DATA lt_private_setter_args TYPE zif_qjs_callable=>ty_arguments.
+      APPEND value TO lt_private_setter_args.
+      DATA(ls_private_setter_result) = invoke_callable(
+        callable = <field>-setter this_value = receiver
+        arguments = lt_private_setter_args ).
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    IF <field>-writable = abap_false.
+      RETURN.
+    ENDIF.
+    <field>-value = value.
+    result = abap_true.
+  ENDMETHOD.
+
+  METHOD add_private_accessor.
+    FIELD-SYMBOLS <field> TYPE ty_private_field.
+    READ TABLE mt_private_fields WITH TABLE KEY identity = identity
+      ASSIGNING <field>.
+    IF sy-subrc = 0.
+      IF <field>-accessor = abap_false.
+        RETURN.
+      ENDIF.
+      IF getter-tag <> zcl_qjs_value=>tag_undefined.
+        <field>-getter = getter.
+      ENDIF.
+      IF setter-tag <> zcl_qjs_value=>tag_undefined.
+        <field>-setter = setter.
+      ENDIF.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    DATA ls_accessor TYPE ty_private_field.
+    ls_accessor-identity = identity.
+    ls_accessor-accessor = abap_true.
+    ls_accessor-getter = getter.
+    ls_accessor-setter = setter.
+    INSERT ls_accessor INTO TABLE mt_private_fields.
+    result = abap_true.
   ENDMETHOD.
 
   METHOD own_property_count.
@@ -1091,5 +1248,168 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD iterator_kind.
     result = mv_iterator_kind.
+  ENDMETHOD.
+
+  METHOD initialize_generator.
+    IF function IS NOT BOUND OR closure IS NOT BOUND OR mo_runtime IS NOT BOUND.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Generator requires an active function and runtime'.
+    ENDIF.
+    mo_generator_function = function.
+    mo_generator_closure = closure.
+    ms_generator_this = this_value.
+    mt_generator_arguments = arguments.
+    CREATE OBJECT mo_generator_vm
+      EXPORTING runtime = mo_runtime limits = mo_runtime->get_limits( ).
+    mv_generator_state = 1.
+  ENDMETHOD.
+
+  METHOD generator_next.
+    IF mo_generator_function IS NOT BOUND OR mo_generator_vm IS NOT BOUND.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+    ENDIF.
+    DATA ls_value TYPE zcl_qjs_value=>ty_value.
+    DATA lv_done TYPE abap_bool.
+    IF mv_generator_state = 3.
+      ls_value = zcl_qjs_value=>new_undefined( ).
+      lv_done = abap_true.
+    ELSEIF mv_generator_state = 2.
+      mv_generator_state = 4.
+      TRY.
+          ls_value = mo_generator_vm->execute(
+            function     = mo_generator_function
+            resume       = abap_true
+            resume_value = input ).
+        CATCH zcx_qjs_error INTO DATA(lx_generator_resume).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_resume.
+        CATCH zcx_qjs_throw INTO DATA(lx_generator_resume_throw).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_resume_throw.
+      ENDTRY.
+      IF mo_generator_vm->was_suspended( ) = abap_true.
+        mv_generator_state = 2.
+      ELSE.
+        mv_generator_state = 3.
+        lv_done = abap_true.
+      ENDIF.
+    ELSEIF mv_generator_state = 1.
+      mv_generator_state = 4.
+      TRY.
+          ls_value = mo_generator_vm->execute(
+            function          = mo_generator_function
+            initial_closure   = mo_generator_closure
+            initial_this      = ms_generator_this
+            initial_arguments = mt_generator_arguments ).
+        CATCH zcx_qjs_error INTO DATA(lx_generator_start).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_start.
+        CATCH zcx_qjs_throw INTO DATA(lx_generator_start_throw).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_start_throw.
+      ENDTRY.
+      IF mo_generator_vm->was_suspended( ) = abap_true.
+        mv_generator_state = 2.
+      ELSE.
+        mv_generator_state = 3.
+        lv_done = abap_true.
+      ENDIF.
+    ELSE.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator is already running'.
+    ENDIF.
+    DATA(lo_result) = mo_runtime->create_object( ).
+    lo_result->define_property( name = 'value' value = ls_value ).
+    lo_result->define_property(
+      name = 'done' value = zcl_qjs_value=>new_boolean( lv_done ) ).
+    result = zcl_qjs_value=>new_object( lo_result ).
+  ENDMETHOD.
+
+  METHOD generator_throw.
+    IF mo_generator_function IS NOT BOUND OR mo_generator_vm IS NOT BOUND.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+    ENDIF.
+    IF mv_generator_state = 3 OR mv_generator_state = 1.
+      mv_generator_state = 3.
+      RAISE EXCEPTION TYPE zcx_qjs_throw EXPORTING value = input.
+    ELSEIF mv_generator_state = 2.
+      mv_generator_state = 4.
+      TRY.
+          DATA(ls_value) = mo_generator_vm->execute(
+            function     = mo_generator_function
+            resume       = abap_true
+            resume_kind  = 2
+            resume_value = input ).
+        CATCH zcx_qjs_error INTO DATA(lx_generator_error).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_error.
+        CATCH zcx_qjs_throw INTO DATA(lx_generator_throw).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_throw.
+      ENDTRY.
+      DATA(lv_done) = abap_false.
+      IF mo_generator_vm->was_suspended( ) = abap_true.
+        mv_generator_state = 2.
+      ELSE.
+        mv_generator_state = 3.
+        lv_done = abap_true.
+      ENDIF.
+      DATA(lo_result) = mo_runtime->create_object( ).
+      lo_result->define_property( name = 'value' value = ls_value ).
+      lo_result->define_property(
+        name = 'done' value = zcl_qjs_value=>new_boolean( lv_done ) ).
+      result = zcl_qjs_value=>new_object( lo_result ).
+    ELSE.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator is already running'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD generator_return.
+    IF mo_generator_function IS NOT BOUND OR mo_generator_vm IS NOT BOUND.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+    ENDIF.
+    IF mv_generator_state = 4.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: generator is already running'.
+    ENDIF.
+    DATA(ls_value) = input.
+    DATA(lv_done) = abap_true.
+    IF mv_generator_state = 2.
+      mv_generator_state = 4.
+      TRY.
+          ls_value = mo_generator_vm->execute(
+            function     = mo_generator_function
+            resume       = abap_true
+            resume_kind  = 1
+            resume_value = input ).
+        CATCH zcx_qjs_error INTO DATA(lx_generator_error).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_error.
+        CATCH zcx_qjs_throw INTO DATA(lx_generator_throw).
+          mv_generator_state = 3.
+          RAISE EXCEPTION lx_generator_throw.
+      ENDTRY.
+      IF mo_generator_vm->was_suspended( ) = abap_true.
+        mv_generator_state = 2.
+        lv_done = abap_false.
+      ELSE.
+        mv_generator_state = 3.
+      ENDIF.
+    ELSE.
+      mv_generator_state = 3.
+    ENDIF.
+    DATA(lo_result) = mo_runtime->create_object( ).
+    lo_result->define_property( name = 'value' value = ls_value ).
+    lo_result->define_property(
+      name = 'done' value = zcl_qjs_value=>new_boolean( lv_done ) ).
+    result = zcl_qjs_value=>new_object( lo_result ).
+  ENDMETHOD.
+
+  METHOD is_generator.
+    result = xsdbool( mo_generator_function IS BOUND ).
   ENDMETHOD.
 ENDCLASS.

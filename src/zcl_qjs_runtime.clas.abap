@@ -10,6 +10,12 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
         done TYPE abap_bool,
         value TYPE zcl_qjs_value=>ty_value,
       END OF ty_iterator_result.
+    TYPES:
+      BEGIN OF ty_iterator_resume_result,
+        found TYPE abap_bool,
+        done TYPE abap_bool,
+        value TYPE zcl_qjs_value=>ty_value,
+      END OF ty_iterator_resume_result.
     METHODS constructor
       IMPORTING
         max_steps TYPE int8 DEFAULT 100000
@@ -49,6 +55,12 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS create_array
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
+    METHODS create_generator
+      IMPORTING closure TYPE REF TO zcl_qjs_closure
+        this_value TYPE zcl_qjs_value=>ty_value
+        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
     METHODS invoke_callable
       IMPORTING callable TYPE zcl_qjs_value=>ty_value
         this_value TYPE zcl_qjs_value=>ty_value
@@ -62,6 +74,13 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS iterator_next
       IMPORTING iterator TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE ty_iterator_result
+      RAISING zcx_qjs_error.
+    METHODS iterator_resume
+      IMPORTING iterator TYPE zcl_qjs_value=>ty_value
+        kind TYPE i
+        value TYPE zcl_qjs_value=>ty_value OPTIONAL
+        pass_value TYPE abap_bool DEFAULT abap_true
+      RETURNING VALUE(result) TYPE ty_iterator_resume_result
       RAISING zcx_qjs_error.
     METHODS iterator_close
       IMPORTING iterator TYPE zcl_qjs_value=>ty_value
@@ -84,6 +103,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set_function_prototype
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_function_prototype
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_generator_function_proto
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_generator_function_proto
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_object_prototype
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
@@ -121,12 +144,17 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_string_iterator_proto
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_generator_prototype
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_generator_prototype
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_error_prototype
       IMPORTING name TYPE string prototype TYPE REF TO zcl_qjs_object.
     METHODS get_error_prototype
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS create_function_properties
+      IMPORTING generator TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_error
@@ -178,6 +206,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_empty_shape TYPE REF TO zcl_qjs_shape.
     DATA mo_object_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_function_prototype TYPE REF TO zcl_qjs_object.
+    DATA mo_generator_function_proto TYPE REF TO zcl_qjs_object.
     DATA mo_array_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_string_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_map_prototype TYPE REF TO zcl_qjs_object.
@@ -186,6 +215,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_set_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_array_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_string_iterator_proto TYPE REF TO zcl_qjs_object.
+    DATA mo_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA mt_error_prototypes TYPE ty_error_prototypes.
     DATA mt_resources TYPE STANDARD TABLE OF REF TO zif_qjs_disposable
       WITH DEFAULT KEY.
@@ -315,6 +345,17 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     mv_object_count = mv_object_count + 1.
   ENDMETHOD.
 
+  METHOD create_generator.
+    DATA(lo_prototype) = closure->get_prototype_object( ).
+    IF lo_prototype IS NOT BOUND.
+      lo_prototype = mo_generator_prototype.
+    ENDIF.
+    result = create_object( prototype = lo_prototype ).
+    result->initialize_generator(
+      function = closure->get_function( ) closure = closure
+      this_value = this_value arguments = arguments ).
+  ENDMETHOD.
+
   METHOD invoke_callable.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lo_callable TYPE REF TO zif_qjs_callable.
@@ -411,6 +452,87 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     ENDIF.
     DATA(ls_step) = invoke_callable(
       callable = ls_next_method this_value = iterator ).
+    IF ls_step-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: iterator result is not an object'.
+    ENDIF.
+    CLEAR lo_object.
+    CLEAR lo_properties.
+    TRY.
+        lo_object ?= ls_step-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    DATA ls_done TYPE zcl_qjs_value=>ty_value.
+    IF lo_object IS BOUND.
+      ls_done = lo_object->get( 'done' ).
+      result-value = lo_object->get( 'value' ).
+    ELSE.
+      lo_properties = ls_step-property_ref.
+      IF lo_properties IS NOT BOUND.
+        TRY.
+            lo_properties ?= ls_step-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+      ENDIF.
+      IF lo_properties IS NOT BOUND.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: iterator result is unsupported'.
+      ENDIF.
+      ls_done = lo_properties->get_property( 'done' ).
+      result-value = lo_properties->get_property( 'value' ).
+    ENDIF.
+    result-done = zcl_qjs_value=>to_boolean( ls_done ).
+  ENDMETHOD.
+
+  METHOD iterator_resume.
+    DATA lv_method_name TYPE string.
+    DATA ls_method TYPE zcl_qjs_value=>ty_value.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_properties TYPE REF TO zif_qjs_property_container.
+    DATA lt_arguments TYPE zif_qjs_callable=>ty_arguments.
+    CASE kind.
+      WHEN 0.
+        lv_method_name = 'next'.
+      WHEN 1.
+        lv_method_name = 'return'.
+      WHEN 2.
+        lv_method_name = 'throw'.
+      WHEN OTHERS.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid iterator resume kind'.
+    ENDCASE.
+    IF iterator-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: iterator is not an object'.
+    ENDIF.
+    TRY.
+        lo_object ?= iterator-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_object IS BOUND.
+      ls_method = lo_object->get( lv_method_name ).
+    ELSE.
+      lo_properties = iterator-property_ref.
+      IF lo_properties IS NOT BOUND.
+        TRY.
+            lo_properties ?= iterator-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+      ENDIF.
+      IF lo_properties IS BOUND.
+        ls_method = lo_properties->get_property( lv_method_name ).
+      ENDIF.
+    ENDIF.
+    IF ls_method-tag = zcl_qjs_value=>tag_undefined
+        OR ls_method-tag = zcl_qjs_value=>tag_null.
+      RETURN.
+    ENDIF.
+    result-found = abap_true.
+    IF pass_value = abap_true.
+      APPEND value TO lt_arguments.
+    ENDIF.
+    DATA(ls_step) = invoke_callable(
+      callable = ls_method this_value = iterator arguments = lt_arguments ).
     IF ls_step-tag <> zcl_qjs_value=>tag_object.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'TypeError: iterator result is not an object'.
@@ -652,6 +774,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     result = mo_function_prototype.
   ENDMETHOD.
 
+  METHOD set_generator_function_proto.
+    mo_generator_function_proto = prototype.
+  ENDMETHOD.
+
+  METHOD get_generator_function_proto.
+    result = mo_generator_function_proto.
+  ENDMETHOD.
+
   METHOD set_array_prototype.
     mo_array_prototype = prototype.
   ENDMETHOD.
@@ -716,6 +846,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     result = mo_string_iterator_proto.
   ENDMETHOD.
 
+  METHOD set_generator_prototype.
+    mo_generator_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD get_generator_prototype.
+    result = mo_generator_prototype.
+  ENDMETHOD.
+
   METHOD set_error_prototype.
     DELETE TABLE mt_error_prototypes WITH TABLE KEY name = name.
     INSERT VALUE #( name = name prototype = prototype )
@@ -731,7 +869,11 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD create_function_properties.
-    result = create_object( prototype = mo_function_prototype ).
+    IF generator = abap_true AND mo_generator_function_proto IS BOUND.
+      result = create_object( prototype = mo_generator_function_proto ).
+    ELSE.
+      result = create_object( prototype = mo_function_prototype ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD create_error.
@@ -808,6 +950,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     CLEAR mt_well_known_symbols.
     CLEAR mo_object_prototype.
     CLEAR mo_function_prototype.
+    CLEAR mo_generator_function_proto.
     CLEAR mo_array_prototype.
     CLEAR mo_string_prototype.
     CLEAR mo_map_prototype.
@@ -816,6 +959,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     CLEAR mo_set_iterator_proto.
     CLEAR mo_array_iterator_proto.
     CLEAR mo_string_iterator_proto.
+    CLEAR mo_generator_prototype.
     CLEAR mo_empty_shape.
     mv_object_count = 0.
     mv_disposed = abap_true.

@@ -2,6 +2,7 @@
   { "upstreamName": "push_i32", "abapName": "push_i32", "opcode": 1, "size": 5, "pops": 0, "pushes": 1, "format": "i32" },
   { "upstreamName": "push_const", "abapName": "push_const", "opcode": 2, "size": 5, "pops": 0, "pushes": 1, "format": "const" },
   { "upstreamName": "fclosure", "abapName": "make_closure", "opcode": 3, "size": 5, "pops": 0, "pushes": 1, "format": "const" },
+  { "upstreamName": "private_symbol", "abapName": "private_symbol", "opcode": 5, "size": 5, "pops": 0, "pushes": 1, "format": "atom" },
   { "upstreamName": "undefined", "abapName": "push_undefined", "opcode": 6, "size": 1, "pops": 0, "pushes": 1, "format": "none" },
   { "upstreamName": "null", "abapName": "push_null", "opcode": 7, "size": 1, "pops": 0, "pushes": 1, "format": "none" },
   { "upstreamName": "push_false", "abapName": "push_false", "opcode": 9, "size": 1, "pops": 0, "pushes": 1, "format": "none" },
@@ -26,17 +27,27 @@
   { "upstreamName": "throw", "abapName": "throw", "opcode": 48, "size": 1, "pops": 1, "pushes": 0, "format": "none" },
   { "upstreamName": "get_field", "abapName": "get_field", "opcode": 61, "size": 5, "pops": 1, "pushes": 1, "format": "atom" },
   { "upstreamName": "put_field", "abapName": "put_field", "opcode": 63, "size": 5, "pops": 2, "pushes": 0, "format": "atom" },
+  { "upstreamName": "get_private_field", "abapName": "get_private_field", "opcode": 64, "size": 1, "pops": 2, "pushes": 1, "format": "none" },
+  { "upstreamName": "put_private_field", "abapName": "put_private_field", "opcode": 65, "size": 1, "pops": 3, "pushes": 0, "format": "none" },
+  { "upstreamName": "define_private_field", "abapName": "define_private_field", "opcode": 66, "size": 1, "pops": 3, "pushes": 1, "format": "none" },
   { "upstreamName": "get_array_el", "abapName": "get_element", "opcode": 67, "size": 1, "pops": 2, "pushes": 1, "format": "none" },
   { "upstreamName": "get_field2", "abapName": "get_field_for_call", "opcode": 62, "size": 5, "pops": 1, "pushes": 2, "format": "atom" },
   { "upstreamName": "get_array_el2", "abapName": "get_element_for_call", "opcode": 68, "size": 1, "pops": 2, "pushes": 2, "format": "none" },
   { "upstreamName": "put_array_el", "abapName": "put_element", "opcode": 70, "size": 1, "pops": 3, "pushes": 0, "format": "none" },
+  { "upstreamName": "get_super_value", "abapName": "get_super_value", "opcode": 71, "size": 1, "pops": 3, "pushes": 1, "format": "none" },
+  { "upstreamName": "put_super_value", "abapName": "put_super_value", "opcode": 72, "size": 1, "pops": 4, "pushes": 0, "format": "none" },
+  { "upstreamName": "define_field", "abapName": "define_field", "opcode": 73, "size": 5, "pops": 2, "pushes": 1, "format": "atom" },
   { "upstreamName": "append", "abapName": "append", "opcode": 79, "size": 1, "pops": 3, "pushes": 2, "format": "none" },
   { "upstreamName": "copy_data_properties", "abapName": "copy_data_properties", "opcode": 80, "size": 2, "pops": 3, "pushes": 3, "format": "u8" },
+  { "upstreamName": "define_method", "abapName": "define_method", "opcode": 81, "size": 6, "pops": 2, "pushes": 1, "format": "atom_u8" },
+  { "upstreamName": "define_method_computed", "abapName": "define_method_computed", "opcode": 82, "size": 2, "pops": 3, "pushes": 1, "format": "u8" },
   { "upstreamName": "for_in_start", "abapName": "for_in_start", "opcode": 122, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
   { "upstreamName": "for_of_start", "abapName": "for_of_start", "opcode": 123, "size": 1, "pops": 1, "pushes": 3, "format": "none" },
   { "upstreamName": "for_in_next", "abapName": "for_in_next", "opcode": 125, "size": 1, "pops": 1, "pushes": 3, "format": "none" },
   { "upstreamName": "for_of_next", "abapName": "for_of_next", "opcode": 126, "size": 2, "pops": 3, "pushes": 5, "format": "u8" },
   { "upstreamName": "iterator_close", "abapName": "iterator_close", "opcode": 130, "size": 1, "pops": 3, "pushes": 0, "format": "none" },
+  { "upstreamName": "yield", "abapName": "yield", "opcode": 134, "size": 1, "pops": 1, "pushes": 2, "format": "none" },
+  { "upstreamName": "yield_star", "abapName": "yield_star", "opcode": 135, "size": 1, "pops": 1, "pushes": 2, "format": "none" },
   { "upstreamName": "to_object", "abapName": "to_object", "opcode": 111, "size": 1, "pops": 1, "pushes": 1, "format": "none" },
   { "upstreamName": "if_false", "abapName": "if_false", "opcode": 104, "size": 5, "pops": 1, "pushes": 0, "format": "label" },
   { "upstreamName": "if_true", "abapName": "if_true", "opcode": 105, "size": 5, "pops": 1, "pushes": 0, "format": "label" },
@@ -86,4 +97,5 @@
   ,{ "upstreamName": "and", "abapName": "bitwise_and", "opcode": 171, "size": 1, "pops": 2, "pushes": 1, "format": "none" }
   ,{ "upstreamName": "xor", "abapName": "bitwise_xor", "opcode": 172, "size": 1, "pops": 2, "pushes": 1, "format": "none" }
   ,{ "upstreamName": "or", "abapName": "bitwise_or", "opcode": 173, "size": 1, "pops": 2, "pushes": 1, "format": "none" }
+  ,{ "upstreamName": "private_in", "abapName": "private_in", "opcode": 175, "size": 1, "pops": 2, "pushes": 1, "format": "none" }
 ]

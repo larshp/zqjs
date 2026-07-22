@@ -188,6 +188,9 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_array_keys TYPE i VALUE 193.
     CONSTANTS id_array_values TYPE i VALUE 194.
     CONSTANTS id_string_iterator TYPE i VALUE 195.
+    CONSTANTS id_generator_next TYPE i VALUE 196.
+    CONSTANTS id_generator_throw TYPE i VALUE 197.
+    CONSTANTS id_generator_return TYPE i VALUE 198.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -2912,6 +2915,69 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             name = 'value' value = ls_iterator_entry-value ).
         ENDIF.
         result = zcl_qjs_value=>new_object( lo_iterator_result ).
+      WHEN id_generator_next.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        DATA lo_generator TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_generator ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDTRY.
+        IF lo_generator->is_generator( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_generator_input).
+        IF sy-subrc <> 0.
+          ls_generator_input = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        result = lo_generator->generator_next( ls_generator_input ).
+      WHEN id_generator_throw.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        DATA lo_throw_generator TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_throw_generator ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDTRY.
+        IF lo_throw_generator->is_generator( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_generator_throw_input).
+        IF sy-subrc <> 0.
+          ls_generator_throw_input = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        result = lo_throw_generator->generator_throw( ls_generator_throw_input ).
+      WHEN id_generator_return.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        DATA lo_return_generator TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_return_generator ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDTRY.
+        IF lo_return_generator->is_generator( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: generator receiver is incompatible'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_generator_return_input).
+        IF sy-subrc <> 0.
+          ls_generator_return_input = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        result = lo_return_generator->generator_return( ls_generator_return_input ).
       WHEN id_iterator_self.
         result = this_value.
       WHEN id_boolean.
@@ -2994,6 +3060,21 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               ENDIF.
             ELSEIF is_callable( this_value ) = abap_true.
               lv_object_tag = 'Function'.
+              DATA lo_tag_closure TYPE REF TO zcl_qjs_closure.
+              TRY.
+                  lo_tag_closure ?= this_value-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+              IF lo_tag_closure IS BOUND.
+                DATA(ls_closure_tag_symbol) = mo_runtime->well_known_symbol(
+                  'toStringTag' ).
+                DATA(ls_custom_closure_tag) =
+                  lo_tag_closure->get_symbol_property(
+                    ls_closure_tag_symbol-symbol_id ).
+                IF ls_custom_closure_tag-tag = zcl_qjs_value=>tag_string.
+                  lv_object_tag = ls_custom_closure_tag-string_ref->as_string( ).
+                ENDIF.
+              ENDIF.
             ELSE.
               lv_object_tag = 'Object'.
             ENDIF.
@@ -5410,7 +5491,15 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             lo_object ?= ls_proto_target-object_ref.
             lo_current_proto = lo_object->get_prototype( ).
           CATCH cx_sy_move_cast_error.
-            IF is_callable( ls_proto_target ) = abap_true.
+            DATA lo_proto_closure TYPE REF TO zcl_qjs_closure.
+            TRY.
+                lo_proto_closure ?= ls_proto_target-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_proto_closure IS BOUND.
+              lo_current_proto = lo_proto_closure->get_property_storage(
+                )->get_prototype( ).
+            ELSEIF is_callable( ls_proto_target ) = abap_true.
               lo_current_proto = mo_runtime->get_function_prototype( ).
             ELSE.
               RAISE EXCEPTION TYPE zcx_qjs_error
@@ -5432,6 +5521,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             EXPORTING reason = 'TypeError: Object.setPrototypeOf arguments are invalid'.
         ENDIF.
         DATA lo_set_proto_closure TYPE REF TO zcl_qjs_closure.
+        DATA lo_set_proto_base TYPE REF TO zcl_qjs_closure.
+        CLEAR lo_set_proto_closure.
+        CLEAR lo_set_proto_base.
         TRY.
             lo_object ?= ls_set_proto_target-object_ref.
           CATCH cx_sy_move_cast_error.
@@ -5450,7 +5542,6 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           TRY.
               lo_new_prototype ?= ls_set_proto_value-object_ref.
             CATCH cx_sy_move_cast_error.
-              DATA lo_set_proto_base TYPE REF TO zcl_qjs_closure.
               TRY.
                   lo_set_proto_base ?= ls_set_proto_value-object_ref.
                   lo_new_prototype = lo_set_proto_base->get_property_storage( ).
@@ -5463,6 +5554,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           ENDTRY.
         ENDIF.
         lo_object->set_prototype( lo_new_prototype ).
+        IF lo_set_proto_closure IS BOUND AND lo_set_proto_base IS BOUND.
+          lo_set_proto_closure->set_base_class( lo_set_proto_base ).
+        ENDIF.
         result = ls_set_proto_target.
       WHEN id_object_define_properties.
         READ TABLE arguments INDEX 1 INTO DATA(ls_define_many_target).
@@ -6053,7 +6147,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_set_add OR id_set_has OR id_set_delete OR id_set_clear
           OR id_set_size OR id_set_entries OR id_set_values OR id_set_for_each
           OR id_collection_next OR id_iterator_self OR id_array_entries
-          OR id_array_keys OR id_array_values OR id_string_iterator.
+          OR id_array_keys OR id_array_values OR id_string_iterator
+          OR id_generator_next OR id_generator_throw OR id_generator_return.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.

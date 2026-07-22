@@ -3,6 +3,7 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS push_i32 TYPE i VALUE 1.
   CONSTANTS push_const TYPE i VALUE 2.
   CONSTANTS make_closure TYPE i VALUE 3.
+  CONSTANTS private_symbol TYPE i VALUE 5.
   CONSTANTS push_undefined TYPE i VALUE 6.
   CONSTANTS push_null TYPE i VALUE 7.
   CONSTANTS push_false TYPE i VALUE 9.
@@ -27,17 +28,27 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS throw TYPE i VALUE 48.
   CONSTANTS get_field TYPE i VALUE 61.
   CONSTANTS put_field TYPE i VALUE 63.
+  CONSTANTS get_private_field TYPE i VALUE 64.
+  CONSTANTS put_private_field TYPE i VALUE 65.
+  CONSTANTS define_private_field TYPE i VALUE 66.
   CONSTANTS get_element TYPE i VALUE 67.
   CONSTANTS get_field_for_call TYPE i VALUE 62.
   CONSTANTS get_element_for_call TYPE i VALUE 68.
   CONSTANTS put_element TYPE i VALUE 70.
+  CONSTANTS get_super_value TYPE i VALUE 71.
+  CONSTANTS put_super_value TYPE i VALUE 72.
+  CONSTANTS define_field TYPE i VALUE 73.
   CONSTANTS append TYPE i VALUE 79.
   CONSTANTS copy_data_properties TYPE i VALUE 80.
+  CONSTANTS define_method TYPE i VALUE 81.
+  CONSTANTS define_method_computed TYPE i VALUE 82.
   CONSTANTS for_in_start TYPE i VALUE 122.
   CONSTANTS for_of_start TYPE i VALUE 123.
   CONSTANTS for_in_next TYPE i VALUE 125.
   CONSTANTS for_of_next TYPE i VALUE 126.
   CONSTANTS iterator_close TYPE i VALUE 130.
+  CONSTANTS yield TYPE i VALUE 134.
+  CONSTANTS yield_star TYPE i VALUE 135.
   CONSTANTS to_object TYPE i VALUE 111.
   CONSTANTS if_false TYPE i VALUE 104.
   CONSTANTS if_true TYPE i VALUE 105.
@@ -87,4 +98,5 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS bitwise_and TYPE i VALUE 171.
   CONSTANTS bitwise_xor TYPE i VALUE 172.
   CONSTANTS bitwise_or TYPE i VALUE 173.
+  CONSTANTS private_in TYPE i VALUE 175.
 ENDINTERFACE.

@@ -71,6 +71,8 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_set_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA lo_array_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA lo_string_iterator_proto TYPE REF TO zcl_qjs_object.
+    DATA lo_generator_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_generator_function_proto TYPE REF TO zcl_qjs_object.
     DATA lo_reference TYPE REF TO object.
     DATA lo_object_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_array_intrinsic TYPE REF TO zcl_qjs_native_function.
@@ -299,12 +301,32 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_set_iterator_proto = mo_runtime->create_object( lo_object_prototype ).
     lo_array_iterator_proto = mo_runtime->create_object( lo_object_prototype ).
     lo_string_iterator_proto = mo_runtime->create_object( lo_object_prototype ).
+    lo_generator_prototype = mo_runtime->create_object( lo_object_prototype ).
+    lo_generator_function_proto = mo_runtime->create_object( lo_function_prototype ).
     mo_runtime->set_map_prototype( lo_map_prototype ).
     mo_runtime->set_set_prototype( lo_set_prototype ).
     mo_runtime->set_map_iterator_proto( lo_map_iterator_proto ).
     mo_runtime->set_set_iterator_proto( lo_set_iterator_proto ).
     mo_runtime->set_array_iterator_proto( lo_array_iterator_proto ).
     mo_runtime->set_string_iterator_proto( lo_string_iterator_proto ).
+    mo_runtime->set_generator_prototype( lo_generator_prototype ).
+    mo_runtime->set_generator_function_proto( lo_generator_function_proto ).
+    lo_generator_function_proto->define_property(
+      name = 'prototype' value = zcl_qjs_value=>new_object( lo_generator_prototype )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_generator_prototype->define_property(
+      name = lv_constructor_property
+      value = zcl_qjs_value=>new_object( lo_generator_function_proto )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    DATA(ls_to_string_tag) = mo_runtime->well_known_symbol( 'toStringTag' ).
+    lo_generator_function_proto->define_symbol_property(
+      identity = ls_to_string_tag-symbol_id
+      value = zcl_qjs_value=>new_string( 'GeneratorFunction' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_generator_prototype->define_symbol_property(
+      identity = ls_to_string_tag-symbol_id
+      value = zcl_qjs_value=>new_string( 'Generator' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_map
       runtime                            = mo_runtime.
@@ -432,6 +454,15 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     install_collection_method(
       prototype = lo_string_iterator_proto name = 'next'
       id = zcl_qjs_native_function=>id_collection_next length = 0 ).
+    install_collection_method(
+      prototype = lo_generator_prototype name = 'next'
+      id = zcl_qjs_native_function=>id_generator_next length = 1 ).
+    install_collection_method(
+      prototype = lo_generator_prototype name = 'throw'
+      id = zcl_qjs_native_function=>id_generator_throw length = 1 ).
+    install_collection_method(
+      prototype = lo_generator_prototype name = 'return'
+      id = zcl_qjs_native_function=>id_generator_return length = 1 ).
     DATA(ls_iterator_symbol) = mo_runtime->well_known_symbol( 'iterator' ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_iterator_self runtime = mo_runtime.
@@ -453,6 +484,9 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_string_iterator_proto->define_symbol_property(
+      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    lo_generator_prototype->define_symbol_property(
       identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     DATA(ls_map_entries) = lo_map_prototype->get_own_property( 'entries' ).

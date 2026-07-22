@@ -71,16 +71,28 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>get_field. result = 'get_field'.
       WHEN zif_qjs_opcodes=>get_field_for_call. result = 'get_field_for_call'.
       WHEN zif_qjs_opcodes=>put_field. result = 'put_field'.
+      WHEN zif_qjs_opcodes=>get_private_field. result = 'get_private_field'.
+      WHEN zif_qjs_opcodes=>put_private_field. result = 'put_private_field'.
+      WHEN zif_qjs_opcodes=>define_private_field. result = 'define_private_field'.
       WHEN zif_qjs_opcodes=>get_element. result = 'get_element'.
       WHEN zif_qjs_opcodes=>get_element_for_call. result = 'get_element_for_call'.
       WHEN zif_qjs_opcodes=>put_element. result = 'put_element'.
+      WHEN zif_qjs_opcodes=>get_super_value. result = 'get_super_value'.
+      WHEN zif_qjs_opcodes=>put_super_value. result = 'put_super_value'.
+      WHEN zif_qjs_opcodes=>define_field. result = 'define_field'.
       WHEN zif_qjs_opcodes=>copy_data_properties.
         result = 'copy_data_properties'.
+      WHEN zif_qjs_opcodes=>define_method.
+        result = 'define_method'.
+      WHEN zif_qjs_opcodes=>define_method_computed.
+        result = 'define_method_computed'.
       WHEN zif_qjs_opcodes=>for_in_start. result = 'for_in_start'.
       WHEN zif_qjs_opcodes=>for_of_start. result = 'for_of_start'.
       WHEN zif_qjs_opcodes=>for_in_next. result = 'for_in_next'.
       WHEN zif_qjs_opcodes=>for_of_next. result = 'for_of_next'.
       WHEN zif_qjs_opcodes=>iterator_close. result = 'iterator_close'.
+      WHEN zif_qjs_opcodes=>yield. result = 'yield'.
+      WHEN zif_qjs_opcodes=>yield_star. result = 'yield_star'.
       WHEN zif_qjs_opcodes=>to_object. result = 'to_object'.
       WHEN zif_qjs_opcodes=>throw. result = 'throw'.
       WHEN zif_qjs_opcodes=>catch. result = 'catch'.
@@ -88,6 +100,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>gosub. result = 'gosub'.
       WHEN zif_qjs_opcodes=>ret. result = 'ret'.
       WHEN zif_qjs_opcodes=>make_closure. result = 'make_closure'.
+      WHEN zif_qjs_opcodes=>private_symbol. result = 'private_symbol'.
       WHEN zif_qjs_opcodes=>get_capture. result = 'get_capture'.
       WHEN zif_qjs_opcodes=>put_capture. result = 'put_capture'.
       WHEN zif_qjs_opcodes=>set_capture. result = 'set_capture'.
@@ -113,6 +126,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
       WHEN zif_qjs_opcodes=>not_equal. result = 'not_equal'.
       WHEN zif_qjs_opcodes=>instance_of. result = 'instance_of'.
       WHEN zif_qjs_opcodes=>in_operator. result = 'in_operator'.
+      WHEN zif_qjs_opcodes=>private_in. result = 'private_in'.
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING
@@ -153,6 +167,9 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
           OR ls_instruction-opcode = zif_qjs_opcodes=>get_field
           OR ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call
           OR ls_instruction-opcode = zif_qjs_opcodes=>put_field
+          OR ls_instruction-opcode = zif_qjs_opcodes=>define_method
+          OR ls_instruction-opcode = zif_qjs_opcodes=>define_method_computed
+          OR ls_instruction-opcode = zif_qjs_opcodes=>define_field
           OR ls_instruction-opcode = zif_qjs_opcodes=>get_capture
           OR ls_instruction-opcode = zif_qjs_opcodes=>put_capture
           OR ls_instruction-opcode = zif_qjs_opcodes=>set_capture

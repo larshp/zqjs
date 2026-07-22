@@ -28,6 +28,7 @@ ENDCLASS.
 CLASS zcl_qjs_for_in_iterator IMPLEMENTATION.
   METHOD constructor.
     DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lt_names TYPE zcl_qjs_shape=>ty_names.
     DATA lt_seen TYPE ty_seen_names.
     DATA ls_entry TYPE ty_entry.
@@ -53,7 +54,12 @@ CLASS zcl_qjs_for_in_iterator IMPLEMENTATION.
     TRY.
         lo_object ?= source-object_ref.
       CATCH cx_sy_move_cast_error.
-        RETURN.
+        TRY.
+            lo_closure ?= source-object_ref.
+            lo_object = lo_closure->get_property_storage( ).
+          CATCH cx_sy_move_cast_error.
+            RETURN.
+        ENDTRY.
     ENDTRY.
 
     WHILE lo_object IS BOUND.

@@ -8,6 +8,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING
         opcode  TYPE i
         operand TYPE i DEFAULT 0
+        operand2 TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
 
     METHODS to_function
@@ -28,6 +29,9 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS patch
       IMPORTING instruction TYPE i target TYPE i
       RAISING zcx_qjs_error.
+    METHODS patch_second
+      IMPORTING instruction TYPE i target TYPE i
+      RAISING zcx_qjs_error.
     METHODS replace
       IMPORTING instruction TYPE i opcode TYPE i operand TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
@@ -39,7 +43,10 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING parameter_count TYPE i function_length TYPE i DEFAULT -1
         has_self TYPE abap_bool DEFAULT abap_false
         has_this TYPE abap_bool DEFAULT abap_false name TYPE string OPTIONAL
-        has_arguments TYPE abap_bool DEFAULT abap_false.
+        has_arguments TYPE abap_bool DEFAULT abap_false
+        constructible TYPE abap_bool DEFAULT abap_true
+        class_constructor TYPE abap_bool DEFAULT abap_false
+        generator TYPE abap_bool DEFAULT abap_false.
     METHODS intern_atom
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE i.
@@ -58,6 +65,9 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_has_self TYPE abap_bool.
     DATA mv_has_this TYPE abap_bool.
     DATA mv_has_arguments TYPE abap_bool.
+    DATA mv_constructible TYPE abap_bool VALUE abap_true.
+    DATA mv_class_constructor TYPE abap_bool.
+    DATA mv_generator TYPE abap_bool.
     DATA mt_atoms TYPE zcl_qjs_function=>ty_atoms.
     DATA mt_captures TYPE zcl_qjs_function=>ty_captures.
     DATA mt_local_specs TYPE zcl_qjs_function=>ty_local_specs.
@@ -76,6 +86,7 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
     DATA ls_instruction TYPE zcl_qjs_function=>ty_instruction.
     ls_instruction-opcode = opcode.
     ls_instruction-operand = operand.
+    ls_instruction-operand2 = operand2.
     APPEND ls_instruction TO mt_code.
     mo_limits->check_bytecode_length( lines( mt_code ) ).
   ENDMETHOD.
@@ -91,6 +102,9 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
         has_self        = mv_has_self
         has_this        = mv_has_this
         has_arguments   = mv_has_arguments
+        constructible   = mv_constructible
+        class_constructor = mv_class_constructor
+        generator         = mv_generator
         atoms           = mt_atoms
         captures        = mt_captures
         local_specs     = mt_local_specs.
@@ -125,6 +139,16 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
     <instruction>-operand = target.
   ENDMETHOD.
 
+  METHOD patch_second.
+    READ TABLE mt_code INDEX instruction INTO DATA(ls_instruction).
+    IF sy-subrc <> 0.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Invalid bytecode patch index'.
+    ENDIF.
+    ls_instruction-operand2 = target.
+    MODIFY mt_code FROM ls_instruction INDEX instruction.
+  ENDMETHOD.
+
   METHOD replace.
     FIELD-SYMBOLS <instruction> TYPE zcl_qjs_function=>ty_instruction.
     READ TABLE mt_code INDEX instruction ASSIGNING <instruction>.
@@ -152,6 +176,9 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
     mv_has_self = has_self.
     mv_has_this = has_this.
     mv_has_arguments = has_arguments.
+    mv_constructible = constructible.
+    mv_class_constructor = class_constructor.
+    mv_generator = generator.
   ENDMETHOD.
 
   METHOD intern_atom.

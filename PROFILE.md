@@ -47,20 +47,21 @@ silently treated as conforming.
 | All 13 `Reflect` methods, method metadata, receiver-aware access, symbol keys, prototype operations, and extensibility; Object `isExtensible` and `preventExtensions` | verified by ABAP Unit and selected test262 cases | unverified |
 | `Map` and `Set` ordered SameValueZero storage, constructors over arbitrary iterables, core prototype methods, live iterators, `forEach`, size accessors, well-known iterator aliases, and built-in tags | verified by ABAP Unit and selected test262 cases | unverified |
 | Binary `in`; `for..in` over ordinary objects, prototype chains, strings, `null`, and `undefined`; ordered keys, non-enumerable shadow suppression, deletion checks, and fresh lexical cells | verified by ABAP Unit and selected test262 cases | unverified |
-| General synchronous iterator protocol; Array/String/Map/Set iterators; `for..of`; fresh lexical cells; iterator closing for explicit `break`, `return`, and `throw`; astral string code-point iteration | verified by ABAP Unit and selected test262 cases; automatic closing for every indirectly thrown runtime exception remains partial | unverified |
+| General synchronous iterator protocol; Array/String/Map/Set iterators; `for..of`; fresh lexical cells; iterator closing for explicit `break`, `return`, and `throw` plus indirect runtime exceptions; astral string code-point iteration | verified by ABAP Unit and selected test262 cases, including nested loops, catch-body completions, generator closing, and throwing destructuring defaults | unverified |
 | Computed string/Symbol object-literal keys; default and rest parameters; default/rest-aware function `length`; array/call/constructor/object spread; object rest; nested array/object destructuring with defaults, elisions, computed keys, rest, and member targets in declarations, assignments, parameters, loop heads, and catch bindings; untagged templates with cooked substitutions; tagged templates with frozen cooked/raw arrays, per-site caching, ordered substitutions, and member receiver semantics | verified by ABAP Unit and selected test262 cases | unverified |
-| Class declarations with default/explicit constructors, instance/static methods, prototype and static inheritance, `instanceof`, and `super(...)` constructor calls | verified by ABAP Unit and selected test262 cases; class expressions, fields/private elements, accessors, computed names, strict class-call rejection, and `super` property access remain outside the enabled slice | unverified |
+| Class declarations and anonymous/named class expressions with default/explicit constructors; rejection of class invocation without `new`; non-constructible public/private instance/static methods, including generators; public/private getter/setter accessors; computed public string/Symbol names; writable/non-enumerable/configurable public method descriptors; prototype and static inheritance; `instanceof`; `super(...)`; receiver-aware instance/static `super` operations; ordered public/private static/instance fields; hidden brand-checked private storage; private-name early errors; `#name in object`; base/derived initialization ordering; default-derived argument forwarding; and ordered static initialization blocks | verified by ABAP Unit and selected test262 cases; async methods and direct-eval-specific private-name behavior remain governed by their separately unsupported feature groups | unverified |
+| Generator declarations/expressions and class/object generator methods; lazy explicit-frame suspension; `yield` and delegated `yield*`; sent values and final returns; function-specific iterator prototypes; `.next()`, `.return()`, and `.throw()` including intrinsic descriptors, receiver validation, non-constructibility, re-entrant execution rejection, method `this`, iterator result objects, nested `try`/`catch`/`finally`, yielding cleanup, and delegated iterator completion forwarding | verified by focused ABAP Unit and 60 selected GeneratorPrototype/language test262 cases plus delegated-yield cases; broader syntax and conformance edges remain partial | unverified |
 
 Unverified capabilities are release blockers only for the feature groups that require
 them; they do not block development of the arithmetic vertical slice.
 
-Six hundred eighty-eight pinned test262 cases are selected for the transpiled ABAP engine across
+Seven hundred sixty pinned test262 cases are selected for the transpiled ABAP engine across
 Symbol, Function, Array, String, Object, Reflect, Map, Set, and Error methods, Number statics, Math, numeric and URI global functions, JSON, addition,
-bitwise-and, compound assignment, conditional and `in` expressions, array/call/object spread, rest parameters, declaration destructuring, untagged and tagged template literals, `for..in`, `for..of`, iterators, left-shift, logical-and, and postfix increment. The runner installs its base assertion
+bitwise-and, compound assignment, conditional and `in` expressions, array/call/object spread, rest parameters, declaration destructuring, untagged and tagged template literals, `for..in`, `for..of`, iterators, generators, left-shift, logical-and, and postfix increment. The runner installs its base assertion
 harness, parses front matter, loads
 requested harness includes, executes positive and parse/runtime-negative tests, filters
 unsupported features/flags, and reports pass, fail, unsupported, and infrastructure
-skip separately. The current set reports six hundred eighty-five passes, one explicit `onlyStrict`
+skip separately. The current set reports seven hundred fifty-seven passes, one explicit `onlyStrict`
 unsupported case, one `f16round` vector deferred because it requires `Float16Array`, and one
 String-iterator vector deferred because exact standalone lone-surrogate preservation is outside
 the current host profile.
@@ -70,5 +71,5 @@ anonymous/named function-expression, IIFE,
 closure, exception, conditional-expression, lexical-binding, ordinary-object, array, prototype, constructor,
 `for..in`, `for..of`, synchronous-iterator, binary `in`, bitwise, and embedding slices. Constructors accept both parenthesized
 argument lists and the standard no-argument `new Constructor` form. This is not yet a claim of general ECMAScript or test262
-conformance. Regular expressions, the remaining class surface, generators, promises, modules, exact `dtoa`,
+conformance. Regular expressions, residual generator edges, promises, modules, exact `dtoa`,
 and the broader built-in library remain outside the enabled profile.

@@ -19,6 +19,11 @@ expected and observed results, impact, workaround, and real-ABAP verification st
 Keep uncertain findings marked `suspected` until a minimal reproduction and cross-host
 comparison establish ownership.
 
+Do not add ordinary zqjs engine bugs, parser gaps, or JavaScript conformance failures
+unless a minimal reproduction identifies the transpiler/runtime/open-abap layer as the
+suspected source. Keep those findings in focused ABAP Unit tests, `PLAN.md`, or
+`PROFILE.md` instead.
+
 ## OA-001 — fixed character literal comparison in class parser
 
 - Status: suspected; workaround active; minimal standalone reproduction pending.
@@ -37,6 +42,27 @@ comparison establish ownership.
 - Real ABAP: not yet compared. A representative SAP_BASIS 7.54+ run is required to
   determine whether this is transpiler-specific or an incorrect expectation about the
   source-level comparison.
+
+## OA-002 — inline declaration in CATCH is block-scoped after transpilation
+
+- Status: suspected; workaround active; minimal source-level reproduction retained by
+  the originating class test.
+- Components: abaplint CLI 2.120.4, transpiler/runtime 2.13.42, open-abap-core
+  `f30a24120b6677e6cbf92210b59db9589c8be32f`.
+- Originating test or reproducer: ABAP Unit method `ltcl_qjs=>class_syntax`, while
+  `zcl_qjs_native_function=>zif_qjs_callable~call` handled
+  `Object.setPrototypeOf(Derived, Base)`. A `DATA lo_set_proto_base ...` declaration
+  inside `CATCH cx_sy_move_cast_error` was read after the surrounding `TRY...ENDTRY`.
+- Expected: ABAP method-local declarations remain available after the control-flow
+  block containing their declaration.
+- Observed: the transpiled Node run raised JavaScript `ReferenceError:
+  lo_set_proto_base is not defined` at the later read.
+- Workaround: declare `lo_set_proto_base` before the `TRY` and clear it explicitly.
+- Impact: inline or local declarations first introduced inside nested ABAP control-flow
+  blocks must not be consumed later without a focused transpiled test; prefer an
+  upfront declaration when the value escapes the block.
+- Real ABAP: not yet compared on the target SAP_BASIS 7.54+ system.
+- Upstream issue: not filed.
 
 ## Entry template
 

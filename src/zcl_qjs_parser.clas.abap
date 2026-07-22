@@ -34,6 +34,8 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_loop,
       continue_target TYPE i,
       has_iterator TYPE abap_bool,
+      exception_handler TYPE abap_bool,
+      iterator_local TYPE i,
       break_jumps TYPE ty_jump_indices,
       continue_jumps TYPE ty_jump_indices,
     END OF ty_loop.
@@ -56,8 +58,23 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       local_index TYPE i,
       constructor TYPE abap_bool,
       static TYPE abap_bool,
+      accessor_kind TYPE i,
+      computed TYPE abap_bool,
+      key_local_index TYPE i,
+      field TYPE abap_bool,
+      static_block TYPE abap_bool,
+      private TYPE abap_bool,
+      generator TYPE abap_bool,
+      initializer TYPE REF TO zcl_qjs_function,
     END OF ty_class_method.
     TYPES ty_class_methods TYPE STANDARD TABLE OF ty_class_method WITH DEFAULT KEY.
+    TYPES: BEGIN OF ty_private_declaration,
+      name TYPE string,
+      static TYPE abap_bool,
+      kind TYPE i,
+    END OF ty_private_declaration.
+    TYPES ty_private_declarations TYPE HASHED TABLE OF ty_private_declaration
+      WITH UNIQUE KEY name.
     DATA mo_lexer TYPE REF TO zcl_qjs_lexer.
     DATA mo_emitter TYPE REF TO zcl_qjs_emitter.
     DATA ms_token TYPE zcl_qjs_lexer=>ty_token.
@@ -73,7 +90,16 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mt_hoists TYPE ty_hoists.
     DATA ms_super_binding TYPE ty_local.
     DATA mv_has_super TYPE abap_bool.
+    DATA mv_super_static TYPE abap_bool.
+    DATA mv_super_object_method TYPE abap_bool.
+    DATA mv_super_call_allowed TYPE abap_bool.
     DATA mv_factor_method_call TYPE abap_bool.
+    DATA mv_factor_super_call TYPE abap_bool.
+    DATA mv_parsing_class_method TYPE abap_bool.
+    DATA mv_parsing_class_constructor TYPE abap_bool.
+    DATA mv_parsing_generator_method TYPE abap_bool.
+    DATA mv_in_generator TYPE abap_bool.
+    DATA mo_last_function TYPE REF TO zcl_qjs_function.
 
     METHODS advance
       RAISING
@@ -83,6 +109,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         zcx_qjs_error.
     METHODS parse_assignment RAISING zcx_qjs_error.
+    METHODS parse_yield RAISING zcx_qjs_error.
     METHODS is_pattern_assignment
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
@@ -184,6 +211,16 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS parse_function_declaration RAISING zcx_qjs_error.
     METHODS parse_function_expression RAISING zcx_qjs_error.
     METHODS parse_class_declaration RAISING zcx_qjs_error.
+    METHODS parse_class_expression RAISING zcx_qjs_error.
+    METHODS parse_class
+      IMPORTING declaration TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS parse_class_field_initializer
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_function
+      RAISING zcx_qjs_error.
+    METHODS parse_class_static_block
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_function
+      RAISING zcx_qjs_error.
     METHODS parse_return RAISING zcx_qjs_error.
     METHODS parse_throw RAISING zcx_qjs_error.
     METHODS parse_try RAISING zcx_qjs_error.
@@ -209,7 +246,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING for_throw TYPE abap_bool DEFAULT abap_false
         for_loop_jump TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
-    METHODS emit_iterator_closes RAISING zcx_qjs_error.
+    METHODS emit_iterator_closes
+      IMPORTING for_throw TYPE abap_bool DEFAULT abap_false
+      RAISING zcx_qjs_error.
     METHODS declare_lexical
       IMPORTING name TYPE string constant TYPE abap_bool
       RAISING zcx_qjs_error.
@@ -310,13 +349,36 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD emit_iterator_closes.
     DATA lv_index TYPE i.
+    DATA lv_finally_index TYPE i.
+    DATA lv_catch_loop_depth TYPE i.
     DATA ls_loop TYPE ty_loop.
+    DATA ls_finally TYPE ty_finally.
+    IF for_throw = abap_true.
+      lv_finally_index = lines( mt_finally ).
+      WHILE lv_finally_index > 0.
+        READ TABLE mt_finally INDEX lv_finally_index INTO ls_finally.
+        IF ls_finally-suppress_throw = abap_true.
+          lv_catch_loop_depth = ls_finally-loop_depth.
+          EXIT.
+        ENDIF.
+        lv_finally_index = lv_finally_index - 1.
+      ENDWHILE.
+    ENDIF.
     lv_index = lines( mt_loops ).
-    WHILE lv_index > 0.
+    WHILE lv_index > lv_catch_loop_depth.
       READ TABLE mt_loops INDEX lv_index INTO ls_loop.
-      IF ls_loop-has_iterator = abap_true.
-        mo_emitter->emit( zif_qjs_opcodes=>swap ).
-        mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+      IF ls_loop-has_iterator = abap_true
+          AND NOT ( for_throw = abap_true
+            AND ls_loop-exception_handler = abap_true ).
+        IF ls_loop-exception_handler = abap_true.
+          mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
+          mo_emitter->emit(  opcode = zif_qjs_opcodes=>get_local
+                            operand = ls_loop-iterator_local ).
+          mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+        ELSE.
+          mo_emitter->emit( zif_qjs_opcodes=>swap ).
+          mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+        ENDIF.
       ENDIF.
       lv_index = lv_index - 1.
     ENDWHILE.
@@ -575,6 +637,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         lv_expect_declaration_name = abap_true.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_function.
         ls_name = lo_scanner->next( ).
+        IF ls_name-kind = zcl_qjs_lexer=>token_star.
+          ls_name = lo_scanner->next( ).
+        ENDIF.
         IF ls_name-kind = zcl_qjs_lexer=>token_identifier.
           declare_name( ls_name-text ).
           reserve_function( ls_name-text ).
@@ -786,7 +851,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     parse_expression( ).
     emit_finally_calls( for_throw = abap_true ).
-    emit_iterator_closes( ).
+    emit_iterator_closes( for_throw = abap_true ).
     mo_emitter->emit( zif_qjs_opcodes=>throw ).
     mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
     IF ms_token-kind = zcl_qjs_lexer=>token_semicolon.
@@ -805,6 +870,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_has_catch TYPE abap_bool.
     DATA lv_has_finally TYPE abap_bool.
     DATA lv_finally_index TYPE i.
+    DATA lv_catch_guard_instruction TYPE i.
     DATA lv_call TYPE i.
     DATA lv_jump TYPE i.
     DATA ls_finally TYPE ty_finally.
@@ -894,7 +960,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         mo_emitter->emit(
           opcode = zif_qjs_opcodes=>put_local operand = ls_catch_local-index ).
       ENDIF.
+      lv_catch_guard_instruction = mo_emitter->position( ).
+      mo_emitter->emit( opcode = zif_qjs_opcodes=>catch operand = 0 ).
       parse_block( ).
+      mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
       IF lv_pattern_catch = abap_true.
         DELETE mt_scopes INDEX lv_catch_scope_index.
       ELSE.
@@ -933,6 +1002,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDLOOP.
     DELETE mt_finally INDEX lv_finally_index.
     IF lv_has_finally = abap_true.
+      mo_emitter->patch_second(
+        instruction = lv_catch_instruction target = mo_emitter->position( ) ).
+      IF lv_catch_guard_instruction > 0.
+        mo_emitter->patch_second(
+          instruction = lv_catch_guard_instruction
+          target      = mo_emitter->position( ) ).
+      ENDIF.
       IF ms_token-kind <> zcl_qjs_lexer=>token_lbrace.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Expected finally block'.
@@ -969,8 +1045,14 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lo_function TYPE REF TO zcl_qjs_function.
     DATA ls_function_value TYPE zcl_qjs_value=>ty_value.
     DATA ls_parent_binding TYPE ty_local.
+    DATA lv_generator TYPE abap_bool.
+    DATA lv_outer_in_generator TYPE abap_bool.
 
     advance( ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_star.
+      lv_generator = abap_true.
+      advance( ).
+    ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected function name'.
@@ -998,6 +1080,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lt_outer_hoists = mt_hoists.
     lt_outer_loops = mt_loops.
     lv_outer_in_function = mv_in_function.
+    lv_outer_in_generator = mv_in_generator.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     mt_parent_locals = mt_locals.
     LOOP AT mt_scopes INTO lt_visible_scope.
@@ -1013,6 +1096,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CLEAR mt_hoists.
     APPEND lt_root_scope TO mt_scopes.
     mv_in_function = abap_true.
+    mv_in_generator = lv_generator.
 
     ls_local-name = lv_name.
     ls_local-index = mo_emitter->allocate_local( ).
@@ -1138,7 +1222,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mo_emitter->set_signature(
       parameter_count = lv_parameter_count function_length = lv_function_length
       has_self = abap_true has_this = abap_true
-      has_arguments = abap_true name = lv_name ).
+      has_arguments = abap_true name = lv_name generator = lv_generator
+      constructible = xsdbool( lv_generator = abap_false ) ).
     WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
       IF ms_token-kind = zcl_qjs_lexer=>token_eof.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1150,6 +1235,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
     mo_emitter->emit( zif_qjs_opcodes=>return_undefined ).
     lo_function = mo_emitter->to_function( ).
+    mo_last_function = lo_function.
 
     mo_emitter = lo_outer_emitter.
     mt_locals = lt_outer_locals.
@@ -1159,6 +1245,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
     mv_in_function = lv_outer_in_function.
+    mv_in_generator = lv_outer_in_generator.
     ls_function_value = zcl_qjs_value=>new_object( lo_function ).
     READ TABLE mt_hoists WITH TABLE KEY name = lv_name INTO ls_hoist.
     IF sy-subrc = 0.
@@ -1199,8 +1286,22 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_default_jump TYPE i.
     DATA lo_function TYPE REF TO zcl_qjs_function.
     DATA ls_parent_binding TYPE ty_local.
+    DATA lv_class_method TYPE abap_bool.
+    DATA lv_class_constructor TYPE abap_bool.
+    DATA lv_generator TYPE abap_bool.
+    DATA lv_outer_in_generator TYPE abap_bool.
 
+    lv_class_method = mv_parsing_class_method.
+    lv_class_constructor = mv_parsing_class_constructor.
+    lv_generator = mv_parsing_generator_method.
+    CLEAR mv_parsing_class_method.
+    CLEAR mv_parsing_class_constructor.
+    CLEAR mv_parsing_generator_method.
     advance( ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_star.
+      lv_generator = abap_true.
+      advance( ).
+    ENDIF.
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
       lv_name = ms_token-text.
       advance( ).
@@ -1219,6 +1320,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lt_outer_hoists = mt_hoists.
     lt_outer_loops = mt_loops.
     lv_outer_in_function = mv_in_function.
+    lv_outer_in_generator = mv_in_generator.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     mt_parent_locals = mt_locals.
     LOOP AT mt_scopes INTO lt_visible_scope.
@@ -1234,6 +1336,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CLEAR mt_hoists.
     APPEND lt_root_scope TO mt_scopes.
     mv_in_function = abap_true.
+    mv_in_generator = lv_generator.
 
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
@@ -1361,7 +1464,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mo_emitter->set_signature(
       parameter_count = lv_parameter_count function_length = lv_function_length
       has_self = abap_true has_this = abap_true
-      has_arguments = abap_true name = lv_name ).
+      has_arguments = abap_true name = lv_name
+      constructible = xsdbool(
+        lv_generator = abap_false
+          AND ( lv_class_method = abap_false OR lv_class_constructor = abap_true ) )
+      class_constructor = lv_class_constructor generator = lv_generator ).
     WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
       IF ms_token-kind = zcl_qjs_lexer=>token_eof.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1382,13 +1489,204 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
     mv_in_function = lv_outer_in_function.
+    mv_in_generator = lv_outer_in_generator.
+    mo_last_function = lo_function.
     mo_emitter->emit_closure( zcl_qjs_value=>new_object( lo_function ) ).
   ENDMETHOD.
 
   METHOD parse_class_declaration.
+    parse_class( abap_true ).
+  ENDMETHOD.
+
+  METHOD parse_class_field_initializer.
+    DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lt_outer_locals TYPE ty_locals.
+    DATA lt_outer_parent_locals TYPE ty_locals.
+    DATA lt_outer_loops TYPE ty_loops.
+    DATA lt_outer_finally TYPE ty_finally_stack.
+    DATA lt_outer_scopes TYPE ty_scopes.
+    DATA lt_outer_hoists TYPE ty_hoists.
+    DATA lt_root_scope TYPE ty_locals.
+    DATA lt_visible_scope TYPE ty_locals.
+    DATA ls_visible_binding TYPE ty_local.
+    DATA ls_parent_binding TYPE ty_local.
+    DATA ls_local TYPE ty_local.
+    DATA lv_outer_in_function TYPE abap_bool.
+
+    lo_outer_emitter = mo_emitter.
+    lt_outer_locals = mt_locals.
+    lt_outer_parent_locals = mt_parent_locals.
+    lt_outer_loops = mt_loops.
+    lt_outer_finally = mt_finally.
+    lt_outer_scopes = mt_scopes.
+    lt_outer_hoists = mt_hoists.
+    lv_outer_in_function = mv_in_function.
+
+    CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
+    mt_parent_locals = mt_locals.
+    LOOP AT mt_scopes INTO lt_visible_scope.
+      LOOP AT lt_visible_scope INTO ls_visible_binding.
+        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
+        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
+      ENDLOOP.
+    ENDLOOP.
+    CLEAR mt_locals.
+    CLEAR mt_loops.
+    CLEAR mt_finally.
+    CLEAR mt_scopes.
+    CLEAR mt_hoists.
+    APPEND lt_root_scope TO mt_scopes.
+    mv_in_function = abap_true.
+
+    ls_local-name = 'this'.
+    ls_local-index = mo_emitter->allocate_local( ).
+    ls_local-kind = zcl_qjs_function=>capture_local.
+    INSERT ls_local INTO TABLE mt_locals.
+    LOOP AT mt_parent_locals INTO ls_parent_binding.
+      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
+        TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        CLEAR ls_local.
+        ls_local-name = ls_parent_binding-name.
+        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_parent
+            source_index = ls_parent_binding-index ).
+        ELSE.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_local
+            source_index = ls_parent_binding-index ).
+        ENDIF.
+        ls_local-kind = zcl_qjs_function=>capture_parent.
+        INSERT ls_local INTO TABLE mt_locals.
+      ENDIF.
+    ENDLOOP.
+    mo_emitter->set_signature(
+      parameter_count = 0 function_length = 0 has_this = abap_true
+      constructible = abap_false ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_assign.
+      advance( ).
+      parse_assignment( ).
+    ELSE.
+      mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+    ENDIF.
+    mo_emitter->emit( zif_qjs_opcodes=>return ).
+    result = mo_emitter->to_function( ).
+
+    mo_emitter = lo_outer_emitter.
+    mt_locals = lt_outer_locals.
+    mt_parent_locals = lt_outer_parent_locals.
+    mt_loops = lt_outer_loops.
+    mt_finally = lt_outer_finally.
+    mt_scopes = lt_outer_scopes.
+    mt_hoists = lt_outer_hoists.
+    mv_in_function = lv_outer_in_function.
+  ENDMETHOD.
+
+  METHOD parse_class_static_block.
+    DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lt_outer_locals TYPE ty_locals.
+    DATA lt_outer_parent_locals TYPE ty_locals.
+    DATA lt_outer_loops TYPE ty_loops.
+    DATA lt_outer_finally TYPE ty_finally_stack.
+    DATA lt_outer_scopes TYPE ty_scopes.
+    DATA lt_outer_hoists TYPE ty_hoists.
+    DATA lt_root_scope TYPE ty_locals.
+    DATA lt_visible_scope TYPE ty_locals.
+    DATA ls_visible_binding TYPE ty_local.
+    DATA ls_parent_binding TYPE ty_local.
+    DATA ls_local TYPE ty_local.
+    DATA lv_outer_in_function TYPE abap_bool.
+
+    lo_outer_emitter = mo_emitter.
+    lt_outer_locals = mt_locals.
+    lt_outer_parent_locals = mt_parent_locals.
+    lt_outer_loops = mt_loops.
+    lt_outer_finally = mt_finally.
+    lt_outer_scopes = mt_scopes.
+    lt_outer_hoists = mt_hoists.
+    lv_outer_in_function = mv_in_function.
+
+    CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
+    mt_parent_locals = mt_locals.
+    LOOP AT mt_scopes INTO lt_visible_scope.
+      LOOP AT lt_visible_scope INTO ls_visible_binding.
+        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
+        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
+      ENDLOOP.
+    ENDLOOP.
+    CLEAR mt_locals.
+    CLEAR mt_loops.
+    CLEAR mt_finally.
+    CLEAR mt_scopes.
+    CLEAR mt_hoists.
+    APPEND lt_root_scope TO mt_scopes.
+    mv_in_function = abap_true.
+
+    ls_local-name = 'this'.
+    ls_local-index = mo_emitter->allocate_local( ).
+    ls_local-kind = zcl_qjs_function=>capture_local.
+    INSERT ls_local INTO TABLE mt_locals.
+    LOOP AT mt_parent_locals INTO ls_parent_binding.
+      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
+        TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        CLEAR ls_local.
+        ls_local-name = ls_parent_binding-name.
+        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_parent
+            source_index = ls_parent_binding-index ).
+        ELSE.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_local
+            source_index = ls_parent_binding-index ).
+        ENDIF.
+        ls_local-kind = zcl_qjs_function=>capture_parent.
+        INSERT ls_local INTO TABLE mt_locals.
+      ENDIF.
+    ENDLOOP.
+    mo_emitter->set_signature(
+      parameter_count = 0 function_length = 0 has_this = abap_true
+      constructible = abap_false ).
+    IF ms_token-kind <> zcl_qjs_lexer=>token_lbrace.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Expected static initialization block'.
+    ENDIF.
+    predeclare_scope(
+      start_offset = mo_lexer->get_offset( ) stop_at_brace = abap_true ).
+    advance( ).
+    WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
+      IF ms_token-kind = zcl_qjs_lexer=>token_eof.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Expected closing static block brace'.
+      ENDIF.
+      parse_statement( ).
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
+    ENDWHILE.
+    advance( ).
+    mo_emitter->emit( zif_qjs_opcodes=>return_undefined ).
+    result = mo_emitter->to_function( ).
+
+    mo_emitter = lo_outer_emitter.
+    mt_locals = lt_outer_locals.
+    mt_parent_locals = lt_outer_parent_locals.
+    mt_loops = lt_outer_loops.
+    mt_finally = lt_outer_finally.
+    mt_scopes = lt_outer_scopes.
+    mt_hoists = lt_outer_hoists.
+    mv_in_function = lv_outer_in_function.
+  ENDMETHOD.
+
+  METHOD parse_class_expression.
+    parse_class( abap_false ).
+  ENDMETHOD.
+
+  METHOD parse_class.
     DATA lt_methods TYPE ty_class_methods.
     DATA ls_method TYPE ty_class_method.
     DATA ls_binding TYPE ty_local.
+    DATA lt_class_scope TYPE ty_locals.
     DATA lv_class_name TYPE string.
     DATA lv_method_name TYPE string.
     DATA lv_constructor_index TYPE i VALUE -1.
@@ -1396,16 +1694,47 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA ls_base_binding TYPE ty_local.
     DATA ls_old_super_binding TYPE ty_local.
     DATA lv_old_has_super TYPE abap_bool.
+    DATA lv_old_super_static TYPE abap_bool.
+    DATA lv_old_super_call_allowed TYPE abap_bool.
     DATA lv_has_base TYPE abap_bool.
+    DATA lv_has_class_binding TYPE abap_bool.
+    DATA lv_has_class_scope TYPE abap_bool.
+    DATA lo_class_scanner TYPE REF TO zcl_qjs_lexer.
+    DATA ls_class_lookahead TYPE zcl_qjs_lexer=>ty_token.
+    DATA lo_constructor_function TYPE REF TO zcl_qjs_function.
+    DATA lv_default_constructor TYPE abap_bool.
+    DATA lt_private_names TYPE ty_global_names.
+    DATA lt_private_scope TYPE ty_locals.
+    DATA ls_private_token TYPE zcl_qjs_lexer=>ty_token.
+    DATA lv_private_depth TYPE i.
+    DATA lv_private_binding_name TYPE string.
+    DATA lv_has_private_scope TYPE abap_bool.
+    DATA lt_private_declarations TYPE ty_private_declarations.
+    DATA ls_private_declaration TYPE ty_private_declaration.
+    DATA lv_private_kind TYPE i.
+    DATA lv_private_mode TYPE i.
 
     advance( ).
-    IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
+    IF declaration = abap_true
+        AND ms_token-kind <> zcl_qjs_lexer=>token_identifier.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected class name'.
     ENDIF.
-    lv_class_name = ms_token-text.
-    ls_binding = find_binding( lv_class_name ).
-    advance( ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
+      lv_class_name = ms_token-text.
+      IF declaration = abap_true.
+        ls_binding = find_binding( lv_class_name ).
+      ELSE.
+        APPEND lt_class_scope TO mt_scopes.
+        lv_has_class_scope = abap_true.
+        declare_lexical( name = lv_class_name constant = abap_true ).
+        ls_binding = find_binding( lv_class_name ).
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>reset_lexical operand = ls_binding-index ).
+      ENDIF.
+      lv_has_class_binding = abap_true.
+      advance( ).
+    ENDIF.
     IF ms_token-kind = zcl_qjs_lexer=>token_extends.
       advance( ).
       IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
@@ -1422,8 +1751,47 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     ls_old_super_binding = ms_super_binding.
     lv_old_has_super = mv_has_super.
+    lv_old_super_static = mv_super_static.
+    lv_old_super_call_allowed = mv_super_call_allowed.
     ms_super_binding = ls_base_binding.
     mv_has_super = lv_has_base.
+    CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+    lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
+    WHILE abap_true = abap_true.
+      ls_private_token = lo_class_scanner->next( ).
+      IF ls_private_token-kind = zcl_qjs_lexer=>token_lbrace.
+        lv_private_depth = lv_private_depth + 1.
+      ELSEIF ls_private_token-kind = zcl_qjs_lexer=>token_rbrace.
+        IF lv_private_depth = 0.
+          EXIT.
+        ENDIF.
+        lv_private_depth = lv_private_depth - 1.
+      ELSEIF ls_private_token-kind = zcl_qjs_lexer=>token_private_identifier
+          AND lv_private_depth = 0.
+        READ TABLE lt_private_names WITH KEY table_line = ls_private_token-text
+          TRANSPORTING NO FIELDS.
+        IF sy-subrc <> 0.
+          APPEND ls_private_token-text TO lt_private_names.
+        ENDIF.
+      ELSEIF ls_private_token-kind = zcl_qjs_lexer=>token_eof.
+        EXIT.
+      ENDIF.
+    ENDWHILE.
+    IF lines( lt_private_names ) > 0.
+      APPEND lt_private_scope TO mt_scopes.
+      lv_has_private_scope = abap_true.
+      LOOP AT lt_private_names INTO DATA(lv_private_name).
+        lv_private_binding_name = '#' && lv_private_name.
+        declare_lexical( name = lv_private_binding_name constant = abap_true ).
+        DATA(ls_private_binding) = find_binding( lv_private_binding_name ).
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>private_symbol
+          operand = mo_emitter->intern_atom( lv_private_name ) ).
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>initialize_lexical
+          operand = ls_private_binding-index ).
+      ENDLOOP.
+    ENDIF.
     advance( ).
     WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
       IF ms_token-kind = zcl_qjs_lexer=>token_semicolon.
@@ -1433,28 +1801,120 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       CLEAR ls_method.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ms_token-text = 'static'.
-        ls_method-static = abap_true.
+        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
+        ls_class_lookahead = lo_class_scanner->next( ).
+        IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_assign
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_semicolon
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_rbrace.
+          ls_method-static = abap_true.
+          advance( ).
+        ENDIF.
+      ENDIF.
+      IF ls_method-static = abap_true
+          AND ms_token-kind = zcl_qjs_lexer=>token_lbrace.
+        ls_method-static_block = abap_true.
+        mv_super_static = abap_true.
+        mv_super_call_allowed = abap_false.
+        ls_method-initializer = parse_class_static_block( ).
+        APPEND ls_method TO lt_methods.
+        CONTINUE.
+      ENDIF.
+      IF ms_token-kind = zcl_qjs_lexer=>token_star.
+        ls_method-generator = abap_true.
         advance( ).
       ENDIF.
-      IF is_identifier_name( ms_token-kind ) = abap_false
-          AND ms_token-kind <> zcl_qjs_lexer=>token_string
-          AND ms_token-kind <> zcl_qjs_lexer=>token_number.
-        RAISE EXCEPTION TYPE zcx_qjs_error
-          EXPORTING reason = 'Expected class method name'.
+      IF ms_token-kind = zcl_qjs_lexer=>token_identifier
+          AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
+        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
+        ls_class_lookahead = lo_class_scanner->next( ).
+        IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen.
+          IF ms_token-text = 'get'.
+            ls_method-accessor_kind = 1.
+          ELSE.
+            ls_method-accessor_kind = 2.
+          ENDIF.
+          advance( ).
+        ENDIF.
       ENDIF.
-      lv_method_name = ms_token-text.
-      IF ms_token-kind = zcl_qjs_lexer=>token_number.
-        lv_method_name = zcl_qjs_value=>to_string(
-          zcl_qjs_number=>parse_literal( ms_token-text ) ).
+      IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
+        ls_method-computed = abap_true.
+        advance( ).
+        parse_expression( ).
+        IF ms_token-kind <> zcl_qjs_lexer=>token_rbracket.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Expected closing computed class method bracket'.
+        ENDIF.
+        ls_method-key_local_index = mo_emitter->allocate_local( ).
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>put_local
+          operand = ls_method-key_local_index ).
+        CLEAR lv_method_name.
+      ELSE.
+        IF ms_token-kind = zcl_qjs_lexer=>token_private_identifier.
+          ls_method-private = abap_true.
+          lv_method_name = ms_token-text.
+        ELSEIF is_identifier_name( ms_token-kind ) = abap_false
+            AND ms_token-kind <> zcl_qjs_lexer=>token_string
+            AND ms_token-kind <> zcl_qjs_lexer=>token_number.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Expected class method name'.
+        ELSE.
+          lv_method_name = ms_token-text.
+          IF ms_token-kind = zcl_qjs_lexer=>token_number.
+            lv_method_name = zcl_qjs_value=>to_string(
+              zcl_qjs_number=>parse_literal( ms_token-text ) ).
+          ENDIF.
+        ENDIF.
       ENDIF.
       ls_method-name = lv_method_name.
+      IF ls_method-accessor_kind = 0.
+        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
+        ls_class_lookahead = lo_class_scanner->next( ).
+        IF ls_class_lookahead-kind = zcl_qjs_lexer=>token_assign
+            OR ls_class_lookahead-kind = zcl_qjs_lexer=>token_semicolon
+            OR ls_class_lookahead-kind = zcl_qjs_lexer=>token_rbrace
+            OR ls_class_lookahead-line_terminator_before = abap_true
+            OR ( ls_method-private = abap_true
+              AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen ).
+          IF ls_method-computed = abap_false AND ls_method-private = abap_false
+              AND ( lv_method_name = `constructor`
+                OR ( ls_method-static = abap_true
+                  AND lv_method_name = `prototype` ) ).
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Invalid class field name'.
+          ENDIF.
+          ls_method-field = abap_true.
+          advance( ).
+          mv_super_static = ls_method-static.
+          mv_super_call_allowed = abap_false.
+          ls_method-initializer = parse_class_field_initializer( ).
+          APPEND ls_method TO lt_methods.
+          IF ms_token-kind = zcl_qjs_lexer=>token_semicolon.
+            advance( ).
+          ENDIF.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
       lv_is_constructor = abap_false.
-      IF lv_method_name = `constructor`.
+      IF lv_method_name = `constructor` AND ls_method-accessor_kind = 0.
+        IF ls_method-generator = abap_true.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Class constructor cannot be a generator'.
+        ENDIF.
         IF ls_method-static = abap_false.
           lv_is_constructor = abap_true.
         ENDIF.
       ENDIF.
       ls_method-constructor = lv_is_constructor.
+      mv_parsing_class_method = abap_true.
+      mv_parsing_class_constructor = lv_is_constructor.
+      mv_parsing_generator_method = ls_method-generator.
+      mv_super_static = ls_method-static.
+      mv_super_call_allowed = lv_is_constructor.
       ms_token-kind = zcl_qjs_lexer=>token_function.
       parse_function_expression( ).
       ls_method-local_index = mo_emitter->allocate_local( ).
@@ -1466,29 +1926,89 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             EXPORTING reason = 'Duplicate class constructor'.
         ENDIF.
         lv_constructor_index = ls_method-local_index.
+        lo_constructor_function = mo_last_function.
       ENDIF.
       APPEND ls_method TO lt_methods.
     ENDWHILE.
+
+    LOOP AT lt_methods INTO ls_method WHERE private = abap_true.
+      IF ls_method-name = `constructor`.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid private name: #constructor'.
+      ENDIF.
+      IF ls_method-field = abap_true.
+        lv_private_kind = 1.
+      ELSEIF ls_method-accessor_kind = 1.
+        lv_private_kind = 2.
+      ELSEIF ls_method-accessor_kind = 2.
+        lv_private_kind = 3.
+      ELSE.
+        lv_private_kind = 4.
+      ENDIF.
+      READ TABLE lt_private_declarations
+        WITH TABLE KEY name = ls_method-name INTO ls_private_declaration.
+      IF sy-subrc = 0.
+        IF ls_private_declaration-static <> ls_method-static
+            OR NOT ( ( ls_private_declaration-kind = 2 AND lv_private_kind = 3 )
+              OR ( ls_private_declaration-kind = 3 AND lv_private_kind = 2 ) ).
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Duplicate private class element: #'
+              && ls_method-name.
+        ENDIF.
+        ls_private_declaration-kind = 5.
+        DELETE TABLE lt_private_declarations
+          WITH TABLE KEY name = ls_method-name.
+        INSERT ls_private_declaration INTO TABLE lt_private_declarations.
+      ELSE.
+        CLEAR ls_private_declaration.
+        ls_private_declaration-name = ls_method-name.
+        ls_private_declaration-static = ls_method-static.
+        ls_private_declaration-kind = lv_private_kind.
+        INSERT ls_private_declaration INTO TABLE lt_private_declarations.
+      ENDIF.
+    ENDLOOP.
+    LOOP AT lt_private_names INTO lv_private_name.
+      READ TABLE lt_private_declarations WITH TABLE KEY name = lv_private_name
+        TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Undeclared private name: #' && lv_private_name.
+      ENDIF.
+    ENDLOOP.
     advance( ).
     ms_super_binding = ls_old_super_binding.
     mv_has_super = lv_old_has_super.
+    mv_super_static = lv_old_super_static.
+    mv_super_call_allowed = lv_old_super_call_allowed.
 
     IF lv_constructor_index < 0.
+      lv_default_constructor = abap_true.
       DATA(lo_default_emitter) = NEW zcl_qjs_emitter( limits = mo_limits ).
       lo_default_emitter->set_signature(
-        parameter_count = 0 function_length = 0 name = lv_class_name ).
+        parameter_count = 0 function_length = 0 name = lv_class_name
+        class_constructor = abap_true ).
       lo_default_emitter->emit( zif_qjs_opcodes=>return_undefined ).
-      mo_emitter->emit_closure( zcl_qjs_value=>new_object(
-        lo_default_emitter->to_function( ) ) ).
+      lo_constructor_function = lo_default_emitter->to_function( ).
+      mo_emitter->emit_closure(
+        zcl_qjs_value=>new_object( lo_constructor_function ) ).
       lv_constructor_index = mo_emitter->allocate_local( ).
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>put_local operand = lv_constructor_index ).
     ENDIF.
 
+    lo_constructor_function->set_class_field_metadata(
+      derived         = lv_has_base
+      default_derived = xsdbool(
+        lv_default_constructor = abap_true AND lv_has_base = abap_true ) ).
+
     mo_emitter->emit(
       opcode = zif_qjs_opcodes=>get_local operand = lv_constructor_index ).
-    mo_emitter->emit(
-      opcode = zif_qjs_opcodes=>initialize_lexical operand = ls_binding-index ).
+    IF lv_has_class_binding = abap_true.
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>initialize_lexical operand = ls_binding-index ).
+    ELSE.
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
+    ENDIF.
     IF lv_has_base = abap_true.
       DATA(ls_object_binding) = find_binding( 'Object' ).
       DATA(lv_set_prototype_atom) = mo_emitter->intern_atom( 'setPrototypeOf' ).
@@ -1496,7 +2016,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mo_emitter->emit(
         opcode  = zif_qjs_opcodes=>get_field_for_call
         operand = lv_set_prototype_atom ).
-      emit_binding_get( ls_binding ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_constructor_index ).
       emit_binding_get( ls_base_binding ).
       mo_emitter->emit( opcode = zif_qjs_opcodes=>call_method operand = 2 ).
       mo_emitter->emit( zif_qjs_opcodes=>drop ).
@@ -1504,7 +2025,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mo_emitter->emit(
         opcode  = zif_qjs_opcodes=>get_field_for_call
         operand = lv_set_prototype_atom ).
-      emit_binding_get( ls_binding ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_constructor_index ).
       mo_emitter->emit(
         opcode  = zif_qjs_opcodes=>get_field
         operand = mo_emitter->intern_atom( 'prototype' ) ).
@@ -1516,19 +2038,116 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mo_emitter->emit( zif_qjs_opcodes=>drop ).
     ENDIF.
     LOOP AT lt_methods INTO ls_method WHERE constructor = abap_false.
-      emit_binding_get( ls_binding ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_constructor_index ).
+      IF ls_method-static_block = abap_true.
+        mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+        mo_emitter->emit_closure(
+          zcl_qjs_value=>new_object( ls_method-initializer ) ).
+        mo_emitter->emit( opcode = zif_qjs_opcodes=>call_method operand = 0 ).
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+        CONTINUE.
+      ENDIF.
+      IF ls_method-field = abap_true.
+        IF ls_method-static = abap_false.
+          IF ls_method-private = abap_true.
+            emit_binding_get( find_binding( '#' && ls_method-name ) ).
+          ELSEIF ls_method-computed = abap_true.
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>get_local
+              operand = ls_method-key_local_index ).
+          ELSE.
+            mo_emitter->emit_constant(
+              zcl_qjs_value=>new_string( ls_method-name ) ).
+          ENDIF.
+          mo_emitter->emit_closure(
+            zcl_qjs_value=>new_object( ls_method-initializer ) ).
+          mo_emitter->emit(
+            opcode   = zif_qjs_opcodes=>define_field
+            operand2 = COND i(
+              WHEN ls_method-private = abap_true THEN 3 ELSE 1 ) ).
+        ELSE.
+          mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+          mo_emitter->emit_closure(
+            zcl_qjs_value=>new_object( ls_method-initializer ) ).
+          mo_emitter->emit( opcode = zif_qjs_opcodes=>call_method operand = 0 ).
+          IF ls_method-private = abap_true.
+            emit_binding_get( find_binding( '#' && ls_method-name ) ).
+            mo_emitter->emit( zif_qjs_opcodes=>swap ).
+            mo_emitter->emit( zif_qjs_opcodes=>define_private_field ).
+          ELSEIF ls_method-computed = abap_true.
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>get_local
+              operand = ls_method-key_local_index ).
+            mo_emitter->emit( zif_qjs_opcodes=>swap ).
+            mo_emitter->emit(
+              opcode = zif_qjs_opcodes=>define_field operand2 = 2 ).
+          ELSE.
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>define_field
+              operand = mo_emitter->intern_atom( ls_method-name ) ).
+          ENDIF.
+        ENDIF.
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+        CONTINUE.
+      ENDIF.
+      IF ls_method-private = abap_true.
+        emit_binding_get( find_binding( '#' && ls_method-name ) ).
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>get_local operand = ls_method-local_index ).
+        IF ls_method-accessor_kind = 1.
+          lv_private_mode = COND i(
+            WHEN ls_method-static = abap_true THEN 8 ELSE 6 ).
+        ELSEIF ls_method-accessor_kind = 2.
+          lv_private_mode = COND i(
+            WHEN ls_method-static = abap_true THEN 9 ELSE 7 ).
+        ELSE.
+          lv_private_mode = COND i(
+            WHEN ls_method-static = abap_true THEN 5 ELSE 4 ).
+        ENDIF.
+        mo_emitter->emit(
+          opcode   = zif_qjs_opcodes=>define_field
+          operand2 = lv_private_mode ).
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+        CONTINUE.
+      ENDIF.
       IF ls_method-static = abap_false.
         mo_emitter->emit(
           opcode  = zif_qjs_opcodes=>get_field
           operand = mo_emitter->intern_atom( 'prototype' ) ).
       ENDIF.
+      IF ls_method-computed = abap_true.
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>get_local
+          operand = ls_method-key_local_index ).
+      ENDIF.
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>get_local operand = ls_method-local_index ).
-      mo_emitter->emit(
-        opcode  = zif_qjs_opcodes=>put_field
-        operand = mo_emitter->intern_atom( ls_method-name ) ).
+      IF ls_method-computed = abap_true.
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>define_method_computed
+          operand = ls_method-accessor_kind ).
+      ELSE.
+        mo_emitter->emit(
+          opcode   = zif_qjs_opcodes=>define_method
+          operand  = mo_emitter->intern_atom( ls_method-name )
+          operand2 = ls_method-accessor_kind ).
+      ENDIF.
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
     ENDLOOP.
-    mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+    IF declaration = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+    ELSE.
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_constructor_index ).
+    ENDIF.
+    IF lv_has_private_scope = abap_true.
+      DELETE mt_scopes INDEX lines( mt_scopes ).
+    ENDIF.
+    IF lv_has_class_scope = abap_true.
+      DELETE mt_scopes INDEX lines( mt_scopes ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD find_binding.
@@ -1993,7 +2612,16 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     READ TABLE mt_loops INDEX lv_loop_index ASSIGNING <loop>.
     emit_finally_calls( for_loop_jump = abap_true ).
+    IF <loop>-exception_handler = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+      mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
+    ENDIF.
     IF is_continue = abap_false AND <loop>-has_iterator = abap_true.
+      IF <loop>-exception_handler = abap_true.
+        mo_emitter->emit(  opcode = zif_qjs_opcodes=>get_local
+                          operand = <loop>-iterator_local ).
+      ENDIF.
       mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
     ENDIF.
     lv_jump = mo_emitter->position( ).
@@ -2171,6 +2799,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_next_target TYPE i.
     DATA lv_done_jump TYPE i.
     DATA lv_break_target TYPE i.
+    DATA lv_iterator_local TYPE i.
+    DATA lv_value_local TYPE i.
+    DATA lv_catch_instruction TYPE i.
+    DATA lv_normal_jump TYPE i.
     DATA lv_lexical TYPE abap_bool.
     lv_start_offset = ms_token-offset.
     lv_end_offset = pattern_end_offset( lv_start_offset ).
@@ -2214,17 +2846,32 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_body_offset = mo_lexer->get_offset( ).
     IF is_for_of = abap_true.
       mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+      lv_iterator_local = mo_emitter->allocate_local( ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>put_local operand = lv_iterator_local ).
+      lv_value_local = mo_emitter->allocate_local( ).
     ELSE.
       mo_emitter->emit( zif_qjs_opcodes=>for_in_start ).
     ENDIF.
     lv_next_target = mo_emitter->position( ).
     IF is_for_of = abap_true.
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
       mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
     ELSE.
       mo_emitter->emit( zif_qjs_opcodes=>for_in_next ).
     ENDIF.
     lv_done_jump = mo_emitter->position( ).
     mo_emitter->emit( zif_qjs_opcodes=>if_true ).
+    IF is_for_of = abap_true.
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>put_local operand = lv_value_local ).
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
+      lv_catch_instruction = mo_emitter->position( ).
+      mo_emitter->emit( zif_qjs_opcodes=>catch ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_value_local ).
+    ENDIF.
     IF lv_lexical = abap_true.
       LOOP AT lt_pattern_scope INTO ls_pattern_binding.
         mo_emitter->emit(
@@ -2241,8 +2888,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     ls_loop-continue_target = lv_next_target.
     ls_loop-has_iterator = is_for_of.
+    ls_loop-exception_handler = is_for_of.
+    ls_loop-iterator_local = lv_iterator_local.
     APPEND ls_loop TO mt_loops.
     parse_statement( ).
+    IF is_for_of = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
+    ENDIF.
     mo_emitter->emit( zif_qjs_opcodes=>drop ).
     mo_emitter->emit( opcode = zif_qjs_opcodes=>goto operand = lv_next_target ).
     mo_emitter->patch(
@@ -2252,6 +2904,16 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mo_emitter->emit( zif_qjs_opcodes=>drop ).
       lv_break_target = mo_emitter->position( ).
       finish_loop( lv_break_target ).
+      lv_normal_jump = mo_emitter->position( ).
+      mo_emitter->emit( zif_qjs_opcodes=>goto ).
+      mo_emitter->patch(
+        instruction = lv_catch_instruction target = mo_emitter->position( ) ).
+      mo_emitter->emit(
+        opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+      mo_emitter->emit( zif_qjs_opcodes=>throw ).
+      mo_emitter->patch(
+        instruction = lv_normal_jump target = mo_emitter->position( ) ).
     ELSE.
       lv_break_target = mo_emitter->position( ).
       finish_loop( lv_break_target ).
@@ -2364,6 +3026,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_done_jump TYPE i.
     DATA lv_next_target TYPE i.
     DATA lv_break_target TYPE i.
+    DATA lv_iterator_local TYPE i.
+    DATA lv_value_local TYPE i.
+    DATA lv_catch_instruction TYPE i.
+    DATA lv_normal_jump TYPE i.
     DATA lv_scope_index TYPE i.
     DATA lv_name TYPE string.
 
@@ -2416,10 +3082,23 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
 
     mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+    lv_iterator_local = mo_emitter->allocate_local( ).
+    mo_emitter->emit(
+      opcode = zif_qjs_opcodes=>put_local operand = lv_iterator_local ).
+    lv_value_local = mo_emitter->allocate_local( ).
     lv_next_target = mo_emitter->position( ).
+    mo_emitter->emit(
+      opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
     mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
     lv_done_jump = mo_emitter->position( ).
     mo_emitter->emit( zif_qjs_opcodes=>if_true ).
+    mo_emitter->emit(
+      opcode = zif_qjs_opcodes=>put_local operand = lv_value_local ).
+    mo_emitter->emit( zif_qjs_opcodes=>drop ).
+    lv_catch_instruction = mo_emitter->position( ).
+    mo_emitter->emit( zif_qjs_opcodes=>catch ).
+    mo_emitter->emit(
+      opcode = zif_qjs_opcodes=>get_local operand = lv_value_local ).
     IF lv_lexical = abap_true.
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>reset_lexical operand = ls_binding-index ).
@@ -2431,8 +3110,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     ls_loop-continue_target = lv_next_target.
     ls_loop-has_iterator = abap_true.
+    ls_loop-exception_handler = abap_true.
+    ls_loop-iterator_local = lv_iterator_local.
     APPEND ls_loop TO mt_loops.
     parse_statement( ).
+    mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
     mo_emitter->emit( zif_qjs_opcodes=>drop ).
     mo_emitter->emit( opcode = zif_qjs_opcodes=>goto operand = lv_next_target ).
 
@@ -2442,6 +3124,16 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mo_emitter->emit( zif_qjs_opcodes=>drop ).
     lv_break_target = mo_emitter->position( ).
     finish_loop( lv_break_target ).
+    lv_normal_jump = mo_emitter->position( ).
+    mo_emitter->emit( zif_qjs_opcodes=>goto ).
+    mo_emitter->patch(
+      instruction = lv_catch_instruction target = mo_emitter->position( ) ).
+    mo_emitter->emit(
+      opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
+    mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+    mo_emitter->emit( zif_qjs_opcodes=>throw ).
+    mo_emitter->patch(
+      instruction = lv_normal_jump target = mo_emitter->position( ) ).
     mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
     IF lv_scope_index > 0.
       DELETE mt_scopes INDEX lv_scope_index.
@@ -2520,11 +3212,39 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD parse_assignment.
+    IF ms_token-kind = zcl_qjs_lexer=>token_yield.
+      parse_yield( ).
+      RETURN.
+    ENDIF.
     IF is_pattern_assignment( ) = abap_true.
       parse_pattern_assignment( ).
       RETURN.
     ENDIF.
     parse_conditional( ).
+  ENDMETHOD.
+
+  METHOD parse_yield.
+    IF mv_in_generator = abap_false.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Yield expression outside generator'.
+    ENDIF.
+    advance( ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_star
+        AND ms_token-line_terminator_before = abap_false.
+      advance( ).
+      parse_assignment( ).
+      mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+      mo_emitter->emit( zif_qjs_opcodes=>yield_star ).
+      RETURN.
+    ENDIF.
+    IF ms_token-line_terminator_before = abap_true
+        OR ms_token-kind = zcl_qjs_lexer=>token_semicolon
+        OR ms_token-kind = zcl_qjs_lexer=>token_rbrace.
+      mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+    ELSE.
+      parse_assignment( ).
+    ENDIF.
+    mo_emitter->emit( zif_qjs_opcodes=>yield ).
   ENDMETHOD.
 
   METHOD is_pattern_assignment.
@@ -2766,6 +3486,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_comparison.
     DATA lv_kind TYPE i.
+    DATA lv_private_left TYPE abap_bool.
+    lv_private_left = xsdbool(
+      ms_token-kind = zcl_qjs_lexer=>token_private_identifier ).
     parse_shift( ).
     WHILE ( ms_token-kind >= zcl_qjs_lexer=>token_lt
         AND ms_token-kind <= zcl_qjs_lexer=>token_gte )
@@ -2782,8 +3505,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         WHEN zcl_qjs_lexer=>token_instanceof.
           mo_emitter->emit( zif_qjs_opcodes=>instance_of ).
         WHEN zcl_qjs_lexer=>token_in.
-          mo_emitter->emit( zif_qjs_opcodes=>in_operator ).
+          IF lv_private_left = abap_true.
+            mo_emitter->emit( zif_qjs_opcodes=>private_in ).
+          ELSE.
+            mo_emitter->emit( zif_qjs_opcodes=>in_operator ).
+          ENDIF.
       ENDCASE.
+      lv_private_left = abap_false.
     ENDWHILE.
   ENDMETHOD.
 
@@ -2950,9 +3678,12 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_argument_count TYPE i.
     DATA lv_atom TYPE i.
     DATA lv_method_call TYPE abap_bool.
+    DATA lv_super_call TYPE abap_bool.
     parse_factor( ).
     lv_method_call = mv_factor_method_call.
+    lv_super_call = mv_factor_super_call.
     CLEAR mv_factor_method_call.
+    CLEAR mv_factor_super_call.
     WHILE ms_token-kind = zcl_qjs_lexer=>token_lparen
         OR ms_token-kind = zcl_qjs_lexer=>token_dot
         OR ms_token-kind = zcl_qjs_lexer=>token_lbracket
@@ -2996,8 +3727,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         advance( ).
         IF lv_method_call = abap_true.
           mo_emitter->emit(
-            opcode = zif_qjs_opcodes=>call_method operand = lv_argument_count ).
+            opcode = zif_qjs_opcodes=>call_method operand = lv_argument_count
+            operand2 = COND i( WHEN lv_super_call = abap_true THEN 1 ELSE 0 ) ).
           lv_method_call = abap_false.
+          lv_super_call = abap_false.
         ELSE.
           mo_emitter->emit(
             opcode = zif_qjs_opcodes=>call operand = lv_argument_count ).
@@ -3008,6 +3741,53 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         lv_method_call = abap_false.
       ELSEIF ms_token-kind = zcl_qjs_lexer=>token_dot.
         advance( ).
+        IF ms_token-kind = zcl_qjs_lexer=>token_private_identifier.
+          DATA(ls_private_member_binding) = find_binding( '#' && ms_token-text ).
+          advance( ).
+          IF ms_token-kind = zcl_qjs_lexer=>token_lparen.
+            mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+            emit_binding_get( ls_private_member_binding ).
+            mo_emitter->emit( zif_qjs_opcodes=>get_private_field ).
+            lv_method_call = abap_true.
+            CONTINUE.
+          ENDIF.
+          emit_binding_get( ls_private_member_binding ).
+          IF ms_token-kind = zcl_qjs_lexer=>token_assign.
+            advance( ).
+            parse_assignment( ).
+            mo_emitter->emit( zif_qjs_opcodes=>insert_three ).
+            mo_emitter->emit( zif_qjs_opcodes=>swap ).
+            mo_emitter->emit( zif_qjs_opcodes=>put_private_field ).
+          ELSEIF is_compound_assignment( ms_token-kind ) = abap_true.
+            DATA(lv_private_compound) = ms_token-kind.
+            mo_emitter->emit( zif_qjs_opcodes=>duplicate_two ).
+            mo_emitter->emit( zif_qjs_opcodes=>get_private_field ).
+            advance( ).
+            parse_assignment( ).
+            emit_compound_operator( lv_private_compound ).
+            mo_emitter->emit( zif_qjs_opcodes=>insert_three ).
+            mo_emitter->emit( zif_qjs_opcodes=>swap ).
+            mo_emitter->emit( zif_qjs_opcodes=>put_private_field ).
+          ELSEIF ( ms_token-kind = zcl_qjs_lexer=>token_increment
+                OR ms_token-kind = zcl_qjs_lexer=>token_decrement )
+              AND ms_token-line_terminator_before = abap_false.
+            DATA(lv_private_update) = zif_qjs_opcodes=>increment.
+            IF ms_token-kind = zcl_qjs_lexer=>token_decrement.
+              lv_private_update = zif_qjs_opcodes=>decrement.
+            ENDIF.
+            advance( ).
+            mo_emitter->emit( zif_qjs_opcodes=>duplicate_two ).
+            mo_emitter->emit( zif_qjs_opcodes=>get_private_field ).
+            mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+            mo_emitter->emit( lv_private_update ).
+            mo_emitter->emit( zif_qjs_opcodes=>permute_four ).
+            mo_emitter->emit( zif_qjs_opcodes=>swap ).
+            mo_emitter->emit( zif_qjs_opcodes=>put_private_field ).
+          ELSE.
+            mo_emitter->emit( zif_qjs_opcodes=>get_private_field ).
+          ENDIF.
+          CONTINUE.
+        ENDIF.
         IF is_identifier_name( ms_token-kind ) = abap_false.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'Expected property name after dot'.
@@ -3295,8 +4075,18 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             emit_binding_put( ls_binding ).
           ENDIF.
         ENDIF.
+      WHEN zcl_qjs_lexer=>token_private_identifier.
+        DATA(ls_private_in_binding) = find_binding( '#' && ms_token-text ).
+        advance( ).
+        IF ms_token-kind <> zcl_qjs_lexer=>token_in.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Private name must be used with in'.
+        ENDIF.
+        emit_binding_get( ls_private_in_binding ).
       WHEN zcl_qjs_lexer=>token_function.
         parse_function_expression( ).
+      WHEN zcl_qjs_lexer=>token_class.
+        parse_class_expression( ).
       WHEN zcl_qjs_lexer=>token_this.
         advance( ).
         IF mv_in_function = abap_true.
@@ -3319,13 +4109,83 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         DATA(ls_super_this) = find_binding( 'this' ).
         DATA(ls_super_target) = find_binding( ms_super_binding-name ).
         emit_binding_get( ls_super_this ).
-        emit_binding_get( ls_super_target ).
-        advance( ).
-        IF ms_token-kind <> zcl_qjs_lexer=>token_lparen.
-          RAISE EXCEPTION TYPE zcx_qjs_error
-            EXPORTING reason = 'Only super constructor calls are implemented'.
+        DATA(lv_super_this_local) = mo_emitter->allocate_local( ).
+        mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>put_local operand = lv_super_this_local ).
+        IF mv_super_object_method = abap_true.
+          DATA(ls_super_object_binding) = find_binding( 'Object' ).
+          emit_binding_get( ls_super_object_binding ).
+          mo_emitter->emit(
+            opcode  = zif_qjs_opcodes=>get_field_for_call
+            operand = mo_emitter->intern_atom( 'getPrototypeOf' ) ).
+          emit_binding_get( ls_super_target ).
+          mo_emitter->emit(
+            opcode = zif_qjs_opcodes=>call_method operand = 1 ).
+        ELSE.
+          emit_binding_get( ls_super_target ).
         ENDIF.
-        mv_factor_method_call = abap_true.
+        advance( ).
+        IF ms_token-kind = zcl_qjs_lexer=>token_lparen.
+          IF mv_super_call_allowed = abap_false.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'super() is only valid in a derived constructor'.
+          ENDIF.
+          mv_factor_method_call = abap_true.
+          mv_factor_super_call = abap_true.
+        ELSEIF ms_token-kind = zcl_qjs_lexer=>token_dot
+            OR ms_token-kind = zcl_qjs_lexer=>token_lbracket.
+          IF mv_super_static = abap_false
+              AND mv_super_object_method = abap_false.
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>get_field
+              operand = mo_emitter->intern_atom( 'prototype' ) ).
+          ENDIF.
+          IF ms_token-kind = zcl_qjs_lexer=>token_dot.
+            advance( ).
+            IF is_identifier_name( ms_token-kind ) = abap_false.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'Expected property name after super dot'.
+            ENDIF.
+            mo_emitter->emit_constant(
+              zcl_qjs_value=>new_string( ms_token-text ) ).
+            advance( ).
+          ELSE.
+            advance( ).
+            parse_expression( ).
+            IF ms_token-kind <> zcl_qjs_lexer=>token_rbracket.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'Expected closing super property bracket'.
+            ENDIF.
+            advance( ).
+          ENDIF.
+          IF ms_token-kind = zcl_qjs_lexer=>token_assign.
+            advance( ).
+            parse_assignment( ).
+            DATA(lv_super_value_local) = mo_emitter->allocate_local( ).
+            mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>put_local
+              operand = lv_super_value_local ).
+            mo_emitter->emit( zif_qjs_opcodes=>put_super_value ).
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>get_local
+              operand = lv_super_value_local ).
+          ELSE.
+            mo_emitter->emit( zif_qjs_opcodes=>get_super_value ).
+            IF ms_token-kind = zcl_qjs_lexer=>token_lparen
+                OR ms_token-kind = zcl_qjs_lexer=>token_template_head
+                OR ms_token-kind = zcl_qjs_lexer=>token_template_tail.
+              mo_emitter->emit(
+                opcode = zif_qjs_opcodes=>get_local operand = lv_super_this_local ).
+              mo_emitter->emit( zif_qjs_opcodes=>swap ).
+              mv_factor_method_call = abap_true.
+            ENDIF.
+          ENDIF.
+        ELSE.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Invalid super expression'.
+        ENDIF.
       WHEN zcl_qjs_lexer=>token_minus.
         advance( ).
         parse_postfix( ).
@@ -3449,9 +4309,73 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
       WHEN zcl_qjs_lexer=>token_lbrace.
         mo_emitter->emit( zif_qjs_opcodes=>new_object ).
+        DATA ls_object_home_binding TYPE ty_local.
+        ls_object_home_binding-index = mo_emitter->allocate_local( ).
+        ls_object_home_binding-kind = zcl_qjs_function=>capture_local.
+        ls_object_home_binding-name = `[[object-home-`
+          && CONV string( ls_object_home_binding-index ) && `]]`.
+        INSERT ls_object_home_binding INTO TABLE mt_locals.
+        mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>put_local
+          operand = ls_object_home_binding-index ).
         advance( ).
         WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
-          IF ms_token-kind = zcl_qjs_lexer=>token_ellipsis.
+          IF ms_token-kind = zcl_qjs_lexer=>token_star.
+            DATA lv_object_generator_computed TYPE abap_bool.
+            DATA lv_object_generator_name TYPE string.
+            advance( ).
+            IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
+              lv_object_generator_computed = abap_true.
+              advance( ).
+              parse_expression( ).
+              IF ms_token-kind <> zcl_qjs_lexer=>token_rbracket.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason =
+                    'Expected closing computed generator-method bracket'.
+              ENDIF.
+            ELSE.
+              IF is_identifier_name( ms_token-kind ) = abap_false
+                  AND ms_token-kind <> zcl_qjs_lexer=>token_string
+                  AND ms_token-kind <> zcl_qjs_lexer=>token_number.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'Expected object generator method name'.
+              ENDIF.
+              lv_object_generator_name = ms_token-text.
+              IF ms_token-kind = zcl_qjs_lexer=>token_number.
+                lv_object_generator_name = zcl_qjs_value=>to_string(
+                  zcl_qjs_number=>parse_literal( ms_token-text ) ).
+              ENDIF.
+            ENDIF.
+            DATA(ls_old_object_generator_super) = ms_super_binding.
+            DATA(lv_old_object_generator_has_super) = mv_has_super.
+            DATA(lv_old_object_generator_super_static) = mv_super_static.
+            DATA(lv_old_object_generator_super_method) = mv_super_object_method.
+            DATA(lv_old_object_generator_super_call) = mv_super_call_allowed.
+            ms_super_binding = ls_object_home_binding.
+            mv_has_super = abap_true.
+            mv_super_static = abap_true.
+            mv_super_object_method = abap_true.
+            mv_super_call_allowed = abap_false.
+            mv_parsing_class_method = abap_true.
+            mv_parsing_generator_method = abap_true.
+            ms_token-kind = zcl_qjs_lexer=>token_function.
+            parse_function_expression( ).
+            ms_super_binding = ls_old_object_generator_super.
+            mv_has_super = lv_old_object_generator_has_super.
+            mv_super_static = lv_old_object_generator_super_static.
+            mv_super_object_method = lv_old_object_generator_super_method.
+            mv_super_call_allowed = lv_old_object_generator_super_call.
+            IF lv_object_generator_computed = abap_true.
+              mo_emitter->emit(
+                opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
+            ELSE.
+              mo_emitter->emit(
+                opcode   = zif_qjs_opcodes=>define_method
+                operand  = mo_emitter->intern_atom( lv_object_generator_name )
+                operand2 = 10 ).
+            ENDIF.
+          ELSEIF ms_token-kind = zcl_qjs_lexer=>token_ellipsis.
             advance( ).
             parse_assignment( ).
             mo_emitter->emit( zif_qjs_opcodes=>push_null ).
@@ -3488,16 +4412,44 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 zcl_qjs_number=>parse_literal( ms_token-text ) ).
             ENDIF.
             DATA(lv_object_atom) = mo_emitter->intern_atom( lv_object_name ).
-            advance( ).
-            IF ms_token-kind <> zcl_qjs_lexer=>token_colon.
-              RAISE EXCEPTION TYPE zcx_qjs_error
-                EXPORTING reason = 'Expected colon after object property name'.
+            DATA(lo_object_method_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            lo_object_method_scanner->set_offset( mo_lexer->get_offset( ) ).
+            DATA(ls_object_method_lookahead) = lo_object_method_scanner->next( ).
+            IF ls_object_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.
+              DATA(ls_old_object_method_super) = ms_super_binding.
+              DATA(lv_old_object_method_has_super) = mv_has_super.
+              DATA(lv_old_object_method_super_static) = mv_super_static.
+              DATA(lv_old_object_method_super_method) = mv_super_object_method.
+              DATA(lv_old_object_method_super_call) = mv_super_call_allowed.
+              ms_super_binding = ls_object_home_binding.
+              mv_has_super = abap_true.
+              mv_super_static = abap_true.
+              mv_super_object_method = abap_true.
+              mv_super_call_allowed = abap_false.
+              mv_parsing_class_method = abap_true.
+              ms_token-kind = zcl_qjs_lexer=>token_function.
+              parse_function_expression( ).
+              ms_super_binding = ls_old_object_method_super.
+              mv_has_super = lv_old_object_method_has_super.
+              mv_super_static = lv_old_object_method_super_static.
+              mv_super_object_method = lv_old_object_method_super_method.
+              mv_super_call_allowed = lv_old_object_method_super_call.
+              mo_emitter->emit(
+                opcode   = zif_qjs_opcodes=>define_method
+                operand  = lv_object_atom
+                operand2 = 10 ).
+            ELSE.
+              advance( ).
+              IF ms_token-kind <> zcl_qjs_lexer=>token_colon.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'Expected colon after object property name'.
+              ENDIF.
+              advance( ).
+              mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+              parse_assignment( ).
+              mo_emitter->emit(
+                opcode = zif_qjs_opcodes=>put_field operand = lv_object_atom ).
             ENDIF.
-            advance( ).
-            mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
-            parse_assignment( ).
-            mo_emitter->emit(
-              opcode = zif_qjs_opcodes=>put_field operand = lv_object_atom ).
           ENDIF.
           IF ms_token-kind = zcl_qjs_lexer=>token_comma.
             advance( ).
@@ -3507,6 +4459,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ENDWHILE.
         advance( ).
+        DELETE TABLE mt_locals WITH TABLE KEY name = ls_object_home_binding-name.
       WHEN zcl_qjs_lexer=>token_new.
         advance( ).
         IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
@@ -3515,28 +4468,25 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         DATA(lv_constructor_name) = ms_token-text.
         DATA lv_constructor_binding TYPE ty_local.
-        IF lv_constructor_name <> 'Test262Error'.
-          lv_constructor_binding = find_binding( lv_constructor_name ).
-          IF lv_constructor_binding-kind = zcl_qjs_function=>capture_parent.
-            mo_emitter->emit(
-              opcode  = zif_qjs_opcodes=>get_capture
-              operand = lv_constructor_binding-index ).
-          ELSEIF lv_constructor_binding-lexical = abap_true.
-            mo_emitter->emit(
-              opcode  = zif_qjs_opcodes=>get_lexical
-              operand = lv_constructor_binding-index ).
-          ELSE.
-            mo_emitter->emit(
-              opcode  = zif_qjs_opcodes=>get_local
-              operand = lv_constructor_binding-index ).
-          ENDIF.
+        lv_constructor_binding = find_binding( lv_constructor_name ).
+        IF lv_constructor_binding-kind = zcl_qjs_function=>capture_parent.
+          mo_emitter->emit(
+            opcode  = zif_qjs_opcodes=>get_capture
+            operand = lv_constructor_binding-index ).
+        ELSEIF lv_constructor_binding-lexical = abap_true.
+          mo_emitter->emit(
+            opcode  = zif_qjs_opcodes=>get_lexical
+            operand = lv_constructor_binding-index ).
+        ELSE.
+          mo_emitter->emit(
+            opcode  = zif_qjs_opcodes=>get_local
+            operand = lv_constructor_binding-index ).
         ENDIF.
         advance( ).
         DATA(lv_constructor_arguments) = 0.
         IF ms_token-kind = zcl_qjs_lexer=>token_lparen.
           DATA(lv_constructor_spread) = call_has_spread( ).
-          IF lv_constructor_spread = abap_true
-              AND lv_constructor_name <> 'Test262Error'.
+          IF lv_constructor_spread = abap_true.
             mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
             advance( ).
             parse_spread_arguments( ).
@@ -3551,12 +4501,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             RETURN.
           ENDIF.
           advance( ).
-          IF lv_constructor_name = 'Test262Error'
-              AND ms_token-kind <> zcl_qjs_lexer=>token_rparen.
-            parse_assignment( ).
-            mo_emitter->emit( zif_qjs_opcodes=>drop ).
-          ELSEIF lv_constructor_name <> 'Test262Error'
-              AND ms_token-kind <> zcl_qjs_lexer=>token_rparen.
+          IF ms_token-kind <> zcl_qjs_lexer=>token_rparen.
             WHILE abap_true = abap_true.
               parse_assignment( ).
               lv_constructor_arguments = lv_constructor_arguments + 1.
@@ -3573,13 +4518,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
           advance( ).
         ENDIF.
-        IF lv_constructor_name = 'Test262Error'.
-          mo_emitter->emit( zif_qjs_opcodes=>new_object ).
-        ELSE.
-          mo_emitter->emit(
-            opcode  = zif_qjs_opcodes=>call_constructor
-            operand = lv_constructor_arguments ).
-        ENDIF.
+        mo_emitter->emit(
+          opcode  = zif_qjs_opcodes=>call_constructor
+          operand = lv_constructor_arguments ).
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING

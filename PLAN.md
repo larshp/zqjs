@@ -277,14 +277,14 @@ changing the representation after the VM exists would be expensive, so measure e
 Each phase is independently testable and delivers standalone value. Check items off as
 completed.
 
-**Implementation status (2026-07-21):** `[x]` means the item is implemented and
+**Implementation status (2026-07-22):** `[x]` means the item is implemented and
 verified in the current transpiled-Node lane. Incomplete items remain `[ ]` and may
 carry a **Partial** note. Verification on a representative real ABAP stack is still
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 87 opcodes; abaplint covers 64 files with no findings; all
-current ABAP Unit suites pass; and the pinned test262 slice reports 685 pass, 3
+QuickJS table contains 99 opcodes; abaplint covers 64 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 806 pass, 3
 reasoned unsupported, and 0 fail.
 
 ### Phase 0 — Scope, reproducibility & host proof
@@ -469,18 +469,72 @@ reasoned unsupported, and 0 fail.
       implemented and verified. Untagged templates support cooked substitutions;
       tagged templates add cooked/raw frozen arrays, per-site caching, ordered
       substitution arguments, and member-call receiver semantics.
-- [ ] Classes (fields, private fields, static elements, inheritance, `super`).
-      **Partial:** lexical class declarations, default and explicit constructors,
+- [x] Classes (fields, private fields, static elements, inheritance, `super`).
+      Lexical class declarations, default and explicit constructors,
       instance/static methods, prototype and static inheritance, `instanceof`, and
-      `super(...)` constructor calls are implemented and verified. Class expressions,
-      fields/private elements, accessors, computed names, strict class-call rejection,
-      and `super` property access remain.
-- [ ] Synchronous iterators and `for..of`.
-      **Partial:** Array, String, Map, Set, and user-defined iterables; fresh lexical
-      cells; explicit `break`/`return`/`throw` iterator closing; and astral string
-      code-point iteration are implemented and verified. Automatic IteratorClose for
-      every indirectly thrown runtime exception remains a conformance gap.
+      `super(...)` constructor calls are implemented and verified. Instance and static
+      methods are defined with writable, non-enumerable, configurable descriptors via
+      the QuickJS-aligned `define_method` opcode. Anonymous/named class expressions,
+      getter/setter accessors, non-constructible method closures, and computed
+      string/Symbol method and accessor names are also implemented and verified via
+      `define_method_computed`. Class constructors reject direct, member, and
+      `Function.prototype.call` invocation without `new`, while `super(...)` remains an
+      explicitly marked constructor path. Receiver-aware instance/static `super`
+      property reads, writes, method calls, accessors, and computed Symbol keys are
+      implemented through `get_super_value`/`put_super_value`. Literal-name public static
+      fields now run lexical, receiver-aware initializer closures in source order and use
+      QuickJS-aligned `define_field` descriptors; redeclaration, omitted initializers, the
+      `static` field name, class self-reference, and callable-object enumeration are covered
+      by ABAP Unit and pinned test262 cases. Literal-name public instance fields are likewise
+      materialized per instance with standard descriptors: base fields run before the base
+      constructor body, derived fields run immediately after `super()`, default derived
+      constructors forward arguments across multiple inheritance levels, initializer throws
+      propagate, and forbidden literal field names are rejected. Computed public fields
+      evaluate string/Symbol keys once at class definition and preserve static/instance
+      initializer ordering. Static initialization blocks execute in source order with
+      isolated lexical scope, class `this`, and static `super` property access. Private
+      instance and static fields use fresh per-class private-name identities and hidden
+      brand-checked storage; reads, direct/compound writes, postfix updates,
+      initialization ordering, semicolon-free field termination, per-class identity,
+      brand rejection, and reflection invisibility are covered by ABAP Unit and pinned
+      test262 cases. Private instance/static methods and getter/setter accessors preserve
+      receivers, reject invalid brands and writes, support legal accessor pairing, and
+      remain invisible to reflection. Undeclared names, duplicate declarations,
+      `#constructor`, and static/instance collisions are early errors. The exact
+      QuickJS `private_in` opcode implements field/method/accessor brand presence checks.
+- [x] Synchronous iterators and `for..of`: Array, String, Map, Set, and user-defined
+      iterables; fresh lexical cells; astral string code-point iteration; and
+      IteratorClose for explicit `break`/`return`/`throw` and indirect runtime
+      exceptions are implemented and verified. Focused ABAP Unit coverage includes
+      inner catches, nested loops, and throwing destructuring defaults; the selected
+      test262 slice includes generator closing, abrupt completion from catch bodies,
+      and `var`/`let` destructuring-initializer failures.
 - [ ] Generators by suspending the existing explicit frames.
+      **Partial:** generator declarations and expressions, lazy invocation, explicit
+      VM-frame suspension/resumption, `yield`/sent values/final returns, repeated
+      completion, closure cells across suspension, and iterator self-identity are
+      implemented. The exact QuickJS `yield` opcode and focused ABAP Unit coverage are
+      in place. Generator instances use function-specific prototypes backed by shared
+      `Generator`/`GeneratorFunction` intrinsic prototypes; generator methods work in
+      classes (including static, computed, and private forms) and object literals.
+      `.throw()` supports catch recovery, uncaught propagation through `finally`,
+      yielding from catch/finally bodies, and correct never-started/completed state
+      transitions. `.return(value)` supports suspended, never-started, and completed
+      generators; it runs nested pending `finally` blocks, can suspend on a `yield` in
+      `finally`, and honors a `return` or `throw` that overrides the injected completion.
+      Focused ABAP Unit coverage exercises these abrupt-completion paths. Concise object
+      methods now capture a home object for `super` lookup, including generator methods,
+      and use the standard enumerable object-method descriptor. The 60-case
+      GeneratorPrototype/language test262 expansion passes in full, covering intrinsic
+      descriptors, receiver validation, re-entrant execution rejection, method `this`,
+      iterator result objects, and nested abrupt completions. Focused ABAP Unit coverage
+      independently exercises these intrinsic contracts and non-constructibility.
+      Delegated `yield*`
+      forwards sent values and `.return()`/`.throw()` completions, including yielding
+      cleanup, missing-throw IteratorClose, and line-terminator grammar; six additional
+      test262 cases pass. Explicit throws now close only iterators exited before their
+      nearest local catch. Remaining generator work is broader conformance expansion and
+      residual edge cases discovered by it.
 - [ ] Promises + bounded microtask/job queue; async functions/`await`; then async
       generators if included in the profile.
 - [ ] ES modules: parse/link/evaluate, host resolver/loader, import/export, and dynamic
@@ -549,13 +603,17 @@ reasoned unsupported, and 0 fail.
 - **Recurring implementation gate:** every meaningful parser, VM, runtime, object-model,
   or built-in slice adds or extends focused ABAP Unit methods in the corresponding
   `*.testclasses.abap` source before its broader test262 cases are counted. Do not defer
-  ABAP coverage until a phase is otherwise complete; run the focused unit suite during
+  ABAP coverage until a phase is otherwise complete. Add focused ABAP Unit tests at
+  regular checkpoints within long-running features—especially after new syntax,
+  control-flow, or object-model behavior—then run the focused unit suite during
   development and the full `npm test` gate at each feature milestone.
 - **Transpiler/open-abap anomaly log:** record every suspected toolchain divergence,
   host-semantic leak, unsupported construct, or required workaround in
   `ANORMALIES.md` when it is encountered. Each entry includes pinned versions, a minimal
   reproducer or originating test, expected and observed behavior, workaround, impact,
-  and whether a real-ABAP comparison confirms or clears the anomaly.
+  and whether a real-ABAP comparison confirms or clears the anomaly. Engine defects and
+  JavaScript conformance gaps stay in their implementation tests/profile rather than
+  being mislabeled as toolchain anomalies.
 - **Cross-host contract:** the host adapter has one shared suite for special Numbers,
   UTF-16/codepages, case mapping, regex, time zones, weak references/GC, and exceptions.
   A Node pass cannot waive a real-ABAP failure.

@@ -68,7 +68,27 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
       result = me.
       RETURN.
     ENDIF.
-    lv_key = name && `|` && accessor && writable && enumerable && configurable.
+    lv_key = name && `|`.
+    IF accessor = abap_true.
+      lv_key = lv_key && `1|`.
+    ELSE.
+      lv_key = lv_key && `0|`.
+    ENDIF.
+    IF writable = abap_true.
+      lv_key = lv_key && `1|`.
+    ELSE.
+      lv_key = lv_key && `0|`.
+    ENDIF.
+    IF enumerable = abap_true.
+      lv_key = lv_key && `1|`.
+    ELSE.
+      lv_key = lv_key && `0|`.
+    ENDIF.
+    IF configurable = abap_true.
+      lv_key = lv_key && `1`.
+    ELSE.
+      lv_key = lv_key && `0`.
+    ENDIF.
     READ TABLE mt_transitions WITH TABLE KEY key = lv_key INTO ls_transition.
     IF sy-subrc = 0.
       result = ls_transition-shape.

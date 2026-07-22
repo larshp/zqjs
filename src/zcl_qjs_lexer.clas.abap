@@ -84,6 +84,8 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS token_class TYPE i VALUE 81.
     CONSTANTS token_extends TYPE i VALUE 82.
     CONSTANTS token_super TYPE i VALUE 83.
+    CONSTANTS token_private_identifier TYPE i VALUE 84.
+    CONSTANTS token_yield TYPE i VALUE 85.
 
     TYPES:
       BEGIN OF ty_token,
@@ -458,6 +460,25 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
         result-kind = token_colon.
       WHEN '?'.
         result-kind = token_question.
+      WHEN '#'.
+        mv_offset = mv_offset + 1.
+        IF mv_offset >= strlen( mv_source )
+            OR NOT mv_source+mv_offset(1)
+              CO 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$'.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Invalid private identifier'.
+        ENDIF.
+        WHILE mv_offset < strlen( mv_source ).
+          lv_char = mv_source+mv_offset(1).
+          IF NOT lv_char
+              CO 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$0123456789'.
+            EXIT.
+          ENDIF.
+          result-text = result-text && lv_char.
+          mv_offset = mv_offset + 1.
+        ENDWHILE.
+        result-kind = token_private_identifier.
+        RETURN.
       WHEN '`'.
         mv_offset = mv_offset + 1.
         result = scan_template_part( first = abap_true ).
@@ -630,6 +651,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             WHEN 'continue'. result-kind = token_continue.
             WHEN 'function'. result-kind = token_function.
             WHEN 'return'. result-kind = token_return.
+            WHEN 'yield'. result-kind = token_yield.
             WHEN 'new'. result-kind = token_new.
             WHEN 'throw'. result-kind = token_throw.
             WHEN 'try'. result-kind = token_try.
