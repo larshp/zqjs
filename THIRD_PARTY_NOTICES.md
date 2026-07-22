@@ -29,3 +29,12 @@ QuickJS is licensed under the MIT License:
 
 The pinned QuickJS release and commit are recorded in `upstream-lock.json`.
 
+## zmjs abaplint benchmark fixture
+
+`fixtures/zmjs-abaplint.js` is copied from the zmjs project at Git blob
+`81bd3b4c1aa2c56d44be1c9ffe4929a398da7d56`.
+
+Copyright (c) 2026 oisee
+
+The fixture is licensed under the MIT License. The permission and warranty
+terms are the same MIT terms reproduced above.

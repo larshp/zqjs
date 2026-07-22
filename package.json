@@ -22,7 +22,8 @@
     "lint": "npm run prepare:open-abap && abaplint",
     "transpile": "npm run prepare:open-abap && npm run clean && abap_transpile",
     "unit": "npm run transpile && node --expose-gc output/index.mjs",
-    "test": "npm run verify:profile && npm run verify:opcodes && npm run verify:oracle && npm run lint && npm run unit && npm run test262:selftest && npm run test262:run"
+    "test:zmjs-abaplint": "node scripts/zmjs-abaplint.test.mjs",
+    "test": "npm run verify:profile && npm run verify:opcodes && npm run verify:oracle && npm run lint && npm run unit && npm run test:zmjs-abaplint && npm run test262:selftest && npm run test262:run"
   },
   "devDependencies": {
     "@abaplint/cli": "2.120.4",
