@@ -23,6 +23,7 @@
     "check_syntax": true,
     "global_class": true,
     "align_parameters": true,
+    "redundant_conversion": true,
     "uncaught_exception": true,
     "implement_methods": true,
     "local_testclass_consistency": true,

@@ -4268,7 +4268,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             value = lo_object->get( lv_to_spliced_source_name ) ).
           lv_to_spliced_target = lv_to_spliced_target + 1.
         ENDWHILE.
-        DATA(lv_to_spliced_argument_index) = CONV i( 3 ).
+        DATA(lv_to_spliced_argument_index) = 3.
         WHILE lv_to_spliced_argument_index <= lv_to_spliced_arg_count.
           READ TABLE arguments INDEX lv_to_spliced_argument_index
             INTO DATA(ls_to_spliced_insert_value).

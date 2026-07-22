@@ -546,6 +546,16 @@ reasoned unsupported, and 0 fail.
 - **Unit tests:** `CL_ABAP_UNIT_ASSERT` per class. Node/transpiler runs are frequent and
   fast; host-sensitive tests run on a real ABAP stack on a schedule and are mandatory
   release gates.
+- **Recurring implementation gate:** every meaningful parser, VM, runtime, object-model,
+  or built-in slice adds or extends focused ABAP Unit methods in the corresponding
+  `*.testclasses.abap` source before its broader test262 cases are counted. Do not defer
+  ABAP coverage until a phase is otherwise complete; run the focused unit suite during
+  development and the full `npm test` gate at each feature milestone.
+- **Transpiler/open-abap anomaly log:** record every suspected toolchain divergence,
+  host-semantic leak, unsupported construct, or required workaround in
+  `ANORMALIES.md` when it is encountered. Each entry includes pinned versions, a minimal
+  reproducer or originating test, expected and observed behavior, workaround, impact,
+  and whether a real-ABAP comparison confirms or clears the anomaly.
 - **Cross-host contract:** the host adapter has one shared suite for special Numbers,
   UTF-16/codepages, case mapping, regex, time zones, weak references/GC, and exceptions.
   A Node pass cannot waive a real-ABAP failure.
