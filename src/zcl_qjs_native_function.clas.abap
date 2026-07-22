@@ -227,6 +227,9 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_async_generator_await_reject TYPE i VALUE 232.
     CONSTANTS id_async_generator_result_fulfill TYPE i VALUE 233.
     CONSTANTS id_async_generator_result_reject TYPE i VALUE 234.
+    CONSTANTS id_async_from_sync_throw TYPE i VALUE 235.
+    CONSTANTS id_async_generator_delegate_fulfill TYPE i VALUE 236.
+    CONSTANTS id_async_generator_delegate_reject TYPE i VALUE 237.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -2353,15 +2356,48 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           value    = ls_async_value
           rejected = xsdbool( mv_id = id_async_resume_reject ) ).
         result = zcl_qjs_value=>new_undefined( ).
-      WHEN id_async_from_sync_next.
-        DATA(ls_sync_step) = mo_runtime->iterator_next( ms_bound_target ).
+      WHEN id_async_from_sync_next OR id_async_from_sync_return
+          OR id_async_from_sync_throw.
+        DATA(lv_sync_resume_kind) = COND i(
+          WHEN mv_id = id_async_from_sync_return THEN 1
+          WHEN mv_id = id_async_from_sync_throw THEN 2
+          ELSE 0 ).
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF lv_sync_resume_kind = 0.
+          DATA lt_sync_arguments TYPE zif_qjs_callable=>ty_arguments.
+          APPEND ls_argument TO lt_sync_arguments.
+          DATA(ls_sync_raw_step) = mo_runtime->invoke_callable(
+            callable = ms_bound_this this_value = ms_bound_target
+            arguments = lt_sync_arguments ).
+          DATA(ls_sync_step_result) = mo_runtime->iterator_result(
+            ls_sync_raw_step ).
+          DATA(ls_sync_resume) = VALUE zcl_qjs_runtime=>ty_iterator_resume_result(
+            found = abap_true done = ls_sync_step_result-done
+            value = ls_sync_step_result-value ).
+        ELSE.
+          ls_sync_resume = mo_runtime->iterator_resume(
+            iterator = ms_bound_target kind = lv_sync_resume_kind
+            value = ls_argument pass_value = abap_true ).
+        ENDIF.
+        IF ls_sync_resume-found = abap_false.
+          IF lv_sync_resume_kind = 2.
+            mo_runtime->iterator_close( ms_bound_target ).
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'TypeError: iterator has no throw method'.
+          ENDIF.
+          ls_sync_resume-found = abap_true.
+          ls_sync_resume-done = abap_true.
+          ls_sync_resume-value = ls_argument.
+        ENDIF.
         DATA(lo_sync_value_promise) = mo_runtime->create_promise( ).
         lo_sync_value_promise->promise_settle(
-          value = ls_sync_step-value rejected = abap_false ).
+          value = ls_sync_resume-value rejected = abap_false ).
         DATA(lo_sync_result_promise) = mo_runtime->create_promise( ).
         DATA(lo_sync_result_handler) = NEW zcl_qjs_native_function(
           id = id_async_from_sync_result runtime = mo_runtime
-          bound_target = zcl_qjs_value=>new_boolean( ls_sync_step-done ) ).
+          bound_target = zcl_qjs_value=>new_boolean( ls_sync_resume-done ) ).
         DATA lo_sync_result_handler_ref TYPE REF TO object.
         lo_sync_result_handler_ref = lo_sync_result_handler.
         lo_sync_value_promise->promise_add_reaction(
@@ -2379,21 +2415,6 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           name = 'done' value = zcl_qjs_value=>new_boolean(
             ms_bound_target-bool_value ) ).
         result = zcl_qjs_value=>new_object( lo_async_sync_result ).
-      WHEN id_async_from_sync_return.
-        mo_runtime->iterator_close( ms_bound_target ).
-        DATA(lo_async_sync_return_result) = mo_runtime->create_object( ).
-        IF ls_argument-tag = 0.
-          ls_argument = zcl_qjs_value=>new_undefined( ).
-        ENDIF.
-        lo_async_sync_return_result->define_property(
-          name = 'value' value = ls_argument ).
-        lo_async_sync_return_result->define_property(
-          name = 'done' value = zcl_qjs_value=>new_boolean( abap_true ) ).
-        DATA(lo_async_sync_return_promise) = mo_runtime->create_promise( ).
-        lo_async_sync_return_promise->promise_settle(
-          value    = zcl_qjs_value=>new_object( lo_async_sync_return_result )
-          rejected = abap_false ).
-        result = zcl_qjs_value=>new_object( lo_async_sync_return_promise ).
       WHEN id_async_generator_next OR id_async_generator_throw
           OR id_async_generator_return.
         DATA lo_async_generator_object TYPE REF TO zcl_qjs_object.
@@ -2416,7 +2437,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             ELSE 0 )
           input = ls_argument ).
       WHEN id_async_generator_await_fulfill OR id_async_generator_await_reject
-          OR id_async_generator_result_fulfill OR id_async_generator_result_reject.
+          OR id_async_generator_result_fulfill OR id_async_generator_result_reject
+          OR id_async_generator_delegate_fulfill
+          OR id_async_generator_delegate_reject.
         DATA lo_async_generator TYPE REF TO zcl_qjs_async_generator.
         TRY.
             lo_async_generator ?= ms_bound_target-object_ref.
@@ -2429,7 +2452,12 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF ls_argument-tag = 0.
           ls_argument = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        IF mv_id = id_async_generator_await_fulfill
+        IF mv_id = id_async_generator_delegate_fulfill
+            OR mv_id = id_async_generator_delegate_reject.
+          lo_async_generator->resume_delegate(
+            value = ls_argument rejected = xsdbool(
+              mv_id = id_async_generator_delegate_reject ) ).
+        ELSEIF mv_id = id_async_generator_await_fulfill
             OR mv_id = id_async_generator_await_reject.
           lo_async_generator->resume_await(
             value = ls_argument rejected = xsdbool(
@@ -7146,11 +7174,14 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_promise_any_reject OR id_promise_capability_executor
           OR id_async_resume_fulfill OR id_async_resume_reject
           OR id_async_from_sync_next OR id_async_from_sync_result
-          OR id_async_from_sync_return OR id_async_generator_next
+          OR id_async_from_sync_return OR id_async_from_sync_throw
+          OR id_async_generator_next
           OR id_async_generator_throw OR id_async_generator_return
           OR id_async_generator_await_fulfill OR id_async_generator_await_reject
           OR id_async_generator_result_fulfill
-          OR id_async_generator_result_reject.
+          OR id_async_generator_result_reject
+          OR id_async_generator_delegate_fulfill
+          OR id_async_generator_delegate_reject.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.

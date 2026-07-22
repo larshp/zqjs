@@ -98,8 +98,10 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
         result = 'iterator_get_value_done'.
       WHEN zif_qjs_opcodes=>iterator_close. result = 'iterator_close'.
       WHEN zif_qjs_opcodes=>iterator_call. result = 'iterator_call'.
+      WHEN zif_qjs_opcodes=>initial_yield. result = 'initial_yield'.
       WHEN zif_qjs_opcodes=>yield. result = 'yield'.
       WHEN zif_qjs_opcodes=>yield_star. result = 'yield_star'.
+      WHEN zif_qjs_opcodes=>async_yield_star. result = 'async_yield_star'.
       WHEN zif_qjs_opcodes=>await. result = 'await'.
       WHEN zif_qjs_opcodes=>to_object. result = 'to_object'.
       WHEN zif_qjs_opcodes=>throw. result = 'throw'.

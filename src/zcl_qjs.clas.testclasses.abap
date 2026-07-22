@@ -516,14 +516,35 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' asyncGeneratorConstructThrows;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
 
-    TRY.
-        lo_context->eval( 'async function* delegate() { yield* []; }' ).
-        cl_abap_unit_assert=>fail( 'Expected async yield* rejection' ).
-      CATCH zcx_qjs_error INTO DATA(lx_async_yield_star).
-        cl_abap_unit_assert=>assert_equals(
-          act = lx_async_yield_star->reason
-          exp = 'Async generator yield* is not supported' ).
-    ENDTRY.
+    ls_result = lo_context->eval(
+      'var asyncParamLog = ""; async function* asyncParams('
+      && 'value = (asyncParamLog += "param", 6)) {'
+      && ' asyncParamLog += ":body"; yield value; }'
+      && ' var asyncParamIterator = asyncParams();'
+      && ' asyncParamLog === "param";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    lo_context->eval( 'asyncParamIterator.next();' ).
+    ls_result = lo_context->eval( 'asyncParamLog;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'param:body' ).
+
+    ls_result = lo_context->eval(
+      'var asyncDelegateResults = "";'
+      && ' async function* delegate() { return yield* [7, 8]; }'
+      && ' var delegatedIterator = delegate();'
+      && ' delegatedIterator.next().then(function(step) {'
+      && ' asyncDelegateResults += step.value + ":" + step.done + ";"; });'
+      && ' delegatedIterator.next(4).then(function(step) {'
+      && ' asyncDelegateResults += step.value + ":" + step.done + ";"; });'
+      && ' delegatedIterator.next(5).then(function(step) {'
+      && ' asyncDelegateResults += step.value + ":" + step.done; });'
+      && ' asyncDelegateResults;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'asyncDelegateResults;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result )
+      exp = '7:false;8:false;undefined:true' ).
 
     ls_result = lo_context->eval(
       'var asyncMethodTotal = 0; class AsyncMethods {'

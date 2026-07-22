@@ -64,15 +64,15 @@
   "conformance": {
     "test262": {
       "selectionFile": "test262-smoke.json",
-      "selected": 962,
+      "selected": 980,
       "expected": {
-        "pass": 959,
+        "pass": 977,
         "fail": 0,
         "unsupported": 3,
         "infrastructureSkip": 0
       }
     },
-    "quickjsOpcodes": 105,
+    "quickjsOpcodes": 107,
     "normalizedOracleCases": 1
   }
 }

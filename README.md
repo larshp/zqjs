@@ -18,7 +18,7 @@ The current implementation contains a growing embedded-language profile:
   closures;
 - ordinary and async arrow functions with concise/block bodies, default/rest parameters,
   non-constructibility, and lexical `this`/`arguments` capture;
-- 105 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
+- 107 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
   disassembler, and an iterative VM with explicit frames;
 - shape-backed ordinary objects, data and accessor property descriptors,
   prototypes, constructors, `this`, `instanceof`, object/array literals,
@@ -55,7 +55,8 @@ The current implementation contains a growing embedded-language profile:
   `for await..of` over asynchronous and synchronous iterables with awaited closure;
 - async generator declarations, expressions, and class/object methods with lazy
   execution, FIFO `.next()`/`.throw()`/`.return()` requests, awaited yields and returns,
-  rejection injection, and the asynchronous-iterator prototype chain;
+  rejection injection, call-time parameter initialization, the asynchronous-iterator
+  prototype chain, and delegated `yield*` over async or synchronous iterators;
 - ABAP Unit tests executed through the abaplint transpiler on Node.
 
 For example, this source is tokenized, compiled, and interpreted rather than delegated to
@@ -79,7 +80,7 @@ npm test
 `npm test` verifies the pinned QuickJS opcode metadata and normalized compiler-oracle
 fixture, validates the machine-readable compatibility profile against the lockfiles and
 published conformance denominator, runs abaplint, transpiles the ABAP, executes the ABAP Unit suite with
-`node --expose-gc`, self-tests the test262 metadata parser, and then runs 962 pinned
+`node --expose-gc`, self-tests the test262 metadata parser, and then runs 980 pinned
 test262 language and built-in cases through the transpiled zqjs engine. Positive and negative
 tests, feature exclusions, harness includes, persistent-context `$DONE` async tests, and
 pass/fail/unsupported/infrastructure skip outcomes are handled explicitly. Set

@@ -52,8 +52,10 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS iterator_get_value_done TYPE i VALUE 129.
   CONSTANTS iterator_close TYPE i VALUE 130.
   CONSTANTS iterator_call TYPE i VALUE 132.
+  CONSTANTS initial_yield TYPE i VALUE 133.
   CONSTANTS yield TYPE i VALUE 134.
   CONSTANTS yield_star TYPE i VALUE 135.
+  CONSTANTS async_yield_star TYPE i VALUE 136.
   CONSTANTS await TYPE i VALUE 137.
   CONSTANTS to_object TYPE i VALUE 111.
   CONSTANTS if_false TYPE i VALUE 104.

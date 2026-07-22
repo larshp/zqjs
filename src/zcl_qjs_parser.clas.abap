@@ -868,6 +868,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD parse_return.
+    DATA lv_has_value TYPE abap_bool.
     IF mv_in_function = abap_false.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Return statement outside a function'.
@@ -879,6 +880,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
     ELSE.
       parse_expression( ).
+      lv_has_value = abap_true.
+    ENDIF.
+    IF lv_has_value = abap_true
+        AND mv_in_generator = abap_true AND mv_in_async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>await ).
     ENDIF.
     emit_finally_calls( ).
     emit_iterator_closes( ).
@@ -1247,6 +1253,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
     ENDWHILE.
     advance( ).
+    IF lv_generator = abap_true AND lv_async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>initial_yield ).
+    ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_lbrace.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected function body'.
@@ -1497,6 +1506,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
     ENDWHILE.
     advance( ).
+    IF lv_generator = abap_true AND lv_async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>initial_yield ).
+    ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_lbrace.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected function expression body'.
@@ -3632,14 +3644,15 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
     IF ms_token-kind = zcl_qjs_lexer=>token_star
         AND ms_token-line_terminator_before = abap_false.
-      IF mv_in_async = abap_true.
-        RAISE EXCEPTION TYPE zcx_qjs_error
-          EXPORTING reason = 'Async generator yield* is not supported'.
-      ENDIF.
       advance( ).
       parse_assignment( ).
-      mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
-      mo_emitter->emit( zif_qjs_opcodes=>yield_star ).
+      IF mv_in_async = abap_true.
+        mo_emitter->emit( zif_qjs_opcodes=>for_await_of_start ).
+        mo_emitter->emit( zif_qjs_opcodes=>async_yield_star ).
+      ELSE.
+        mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+        mo_emitter->emit( zif_qjs_opcodes=>yield_star ).
+      ENDIF.
       RETURN.
     ENDIF.
     IF ms_token-line_terminator_before = abap_true
@@ -4946,6 +4959,111 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 operand  = mo_emitter->intern_atom( lv_object_generator_name )
                 operand2 = 10 ).
             ENDIF.
+          ELSEIF ms_token-kind = zcl_qjs_lexer=>token_identifier
+              AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
+            DATA(lo_object_accessor_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            lo_object_accessor_scanner->set_offset( mo_lexer->get_offset( ) ).
+            DATA(ls_object_accessor_lookahead) = lo_object_accessor_scanner->next( ).
+            IF ls_object_accessor_lookahead-kind = zcl_qjs_lexer=>token_lparen.
+              DATA(lv_plain_accessor_name) = ms_token-text.
+              DATA(lv_plain_accessor_atom) = mo_emitter->intern_atom(
+                lv_plain_accessor_name ).
+              DATA(ls_old_plain_accessor_super) = ms_super_binding.
+              DATA(lv_old_plain_accessor_has_super) = mv_has_super.
+              DATA(lv_old_plain_accessor_static) = mv_super_static.
+              DATA(lv_old_plain_accessor_method) = mv_super_object_method.
+              DATA(lv_old_plain_accessor_call) = mv_super_call_allowed.
+              ms_super_binding = ls_object_home_binding.
+              mv_has_super = abap_true.
+              mv_super_static = abap_true.
+              mv_super_object_method = abap_true.
+              mv_super_call_allowed = abap_false.
+              mv_parsing_class_method = abap_true.
+              ms_token-kind = zcl_qjs_lexer=>token_function.
+              parse_function_expression( ).
+              ms_super_binding = ls_old_plain_accessor_super.
+              mv_has_super = lv_old_plain_accessor_has_super.
+              mv_super_static = lv_old_plain_accessor_static.
+              mv_super_object_method = lv_old_plain_accessor_method.
+              mv_super_call_allowed = lv_old_plain_accessor_call.
+              mo_emitter->emit(
+                opcode = zif_qjs_opcodes=>define_method
+                operand = lv_plain_accessor_atom operand2 = 10 ).
+            ELSEIF ls_object_accessor_lookahead-kind = zcl_qjs_lexer=>token_colon
+                OR ls_object_accessor_lookahead-kind = zcl_qjs_lexer=>token_comma
+                OR ls_object_accessor_lookahead-kind = zcl_qjs_lexer=>token_rbrace.
+              DATA(lv_accessor_property_name) = ms_token-text.
+              DATA(lv_accessor_property_atom) = mo_emitter->intern_atom(
+                lv_accessor_property_name ).
+              advance( ).
+              mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+              IF ms_token-kind = zcl_qjs_lexer=>token_colon.
+                advance( ).
+                parse_assignment( ).
+              ELSE.
+                emit_binding_get( find_binding( lv_accessor_property_name ) ).
+              ENDIF.
+              mo_emitter->emit(
+                opcode  = zif_qjs_opcodes=>put_field
+                operand = lv_accessor_property_atom ).
+            ELSE.
+              DATA(lv_object_accessor_kind) = COND i(
+                WHEN ms_token-text = 'get' THEN 1 ELSE 2 ).
+              advance( ).
+              DATA lv_object_accessor_computed TYPE abap_bool.
+              DATA lv_object_accessor_name TYPE string.
+              IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
+                lv_object_accessor_computed = abap_true.
+                mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+                advance( ).
+                parse_expression( ).
+                IF ms_token-kind <> zcl_qjs_lexer=>token_rbracket.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason =
+                      'Expected closing computed accessor bracket'.
+                ENDIF.
+              ELSE.
+                IF is_identifier_name( ms_token-kind ) = abap_false
+                    AND ms_token-kind <> zcl_qjs_lexer=>token_string
+                    AND ms_token-kind <> zcl_qjs_lexer=>token_number.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason = 'Expected object accessor name'.
+                ENDIF.
+                lv_object_accessor_name = ms_token-text.
+                IF ms_token-kind = zcl_qjs_lexer=>token_number.
+                  lv_object_accessor_name = zcl_qjs_value=>to_string(
+                    zcl_qjs_number=>parse_literal( ms_token-text ) ).
+                ENDIF.
+              ENDIF.
+              DATA(ls_old_object_accessor_super) = ms_super_binding.
+              DATA(lv_old_object_accessor_has_super) = mv_has_super.
+              DATA(lv_old_object_accessor_static) = mv_super_static.
+              DATA(lv_old_object_accessor_method) = mv_super_object_method.
+              DATA(lv_old_object_accessor_call) = mv_super_call_allowed.
+              ms_super_binding = ls_object_home_binding.
+              mv_has_super = abap_true.
+              mv_super_static = abap_true.
+              mv_super_object_method = abap_true.
+              mv_super_call_allowed = abap_false.
+              mv_parsing_class_method = abap_true.
+              ms_token-kind = zcl_qjs_lexer=>token_function.
+              parse_function_expression( ).
+              ms_super_binding = ls_old_object_accessor_super.
+              mv_has_super = lv_old_object_accessor_has_super.
+              mv_super_static = lv_old_object_accessor_static.
+              mv_super_object_method = lv_old_object_accessor_method.
+              mv_super_call_allowed = lv_old_object_accessor_call.
+              IF lv_object_accessor_computed = abap_true.
+                mo_emitter->emit(
+                  opcode  = zif_qjs_opcodes=>define_method_computed
+                  operand = lv_object_accessor_kind + 10 ).
+              ELSE.
+                mo_emitter->emit(
+                  opcode   = zif_qjs_opcodes=>define_method
+                  operand  = mo_emitter->intern_atom( lv_object_accessor_name )
+                  operand2 = lv_object_accessor_kind + 10 ).
+              ENDIF.
+            ENDIF.
           ELSEIF ms_token-kind = zcl_qjs_lexer=>token_ellipsis.
             advance( ).
             parse_assignment( ).
@@ -4962,14 +5080,40 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               RAISE EXCEPTION TYPE zcx_qjs_error
                 EXPORTING reason = 'Expected closing computed-key bracket'.
             ENDIF.
-            advance( ).
-            IF ms_token-kind <> zcl_qjs_lexer=>token_colon.
-              RAISE EXCEPTION TYPE zcx_qjs_error
-                EXPORTING reason = 'Expected colon after computed property key'.
+            DATA(lo_computed_method_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            lo_computed_method_scanner->set_offset( mo_lexer->get_offset( ) ).
+            DATA(ls_computed_method_lookahead) = lo_computed_method_scanner->next( ).
+            IF ls_computed_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.
+              DATA(ls_old_computed_method_super) = ms_super_binding.
+              DATA(lv_old_computed_method_has_super) = mv_has_super.
+              DATA(lv_old_computed_method_static) = mv_super_static.
+              DATA(lv_old_computed_method_flag) = mv_super_object_method.
+              DATA(lv_old_computed_method_call) = mv_super_call_allowed.
+              ms_super_binding = ls_object_home_binding.
+              mv_has_super = abap_true.
+              mv_super_static = abap_true.
+              mv_super_object_method = abap_true.
+              mv_super_call_allowed = abap_false.
+              mv_parsing_class_method = abap_true.
+              ms_token-kind = zcl_qjs_lexer=>token_function.
+              parse_function_expression( ).
+              ms_super_binding = ls_old_computed_method_super.
+              mv_has_super = lv_old_computed_method_has_super.
+              mv_super_static = lv_old_computed_method_static.
+              mv_super_object_method = lv_old_computed_method_flag.
+              mv_super_call_allowed = lv_old_computed_method_call.
+              mo_emitter->emit(
+                opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
+            ELSE.
+              advance( ).
+              IF ms_token-kind <> zcl_qjs_lexer=>token_colon.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'Expected colon after computed property key'.
+              ENDIF.
+              advance( ).
+              parse_assignment( ).
+              mo_emitter->emit( zif_qjs_opcodes=>put_element ).
             ENDIF.
-            advance( ).
-            parse_assignment( ).
-            mo_emitter->emit( zif_qjs_opcodes=>put_element ).
           ELSE.
             IF is_identifier_name( ms_token-kind ) = abap_false
                 AND ms_token-kind <> zcl_qjs_lexer=>token_string

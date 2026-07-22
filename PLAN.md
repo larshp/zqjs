@@ -283,8 +283,8 @@ carry a **Partial** note. Verification on a representative real ABAP stack is st
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 105 opcodes; abaplint covers 70 files with no findings; all
-current ABAP Unit suites pass; and the pinned test262 slice reports 959 pass, 3
+QuickJS table contains 107 opcodes; abaplint covers 70 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 977 pass, 3
 reasoned unsupported, and 0 fail.
 
 ### Phase 0 — Scope, reproducibility & host proof
@@ -566,9 +566,11 @@ reasoned unsupported, and 0 fail.
       awaited iterator closure for abrupt exits. Async generator declarations,
       expressions, and class/object methods now provide lazy frames, FIFO
       `.next()`/`.throw()`/`.return()` requests, awaited yields/returns, rejection
-      injection, and asynchronous-iterator prototypes. Async-generator `yield*`,
-      parameter-initializer object-creation ordering, exact implicit-return job timing,
-      and broader behavioral test262 coverage remain.
+      injection, and asynchronous-iterator prototypes. Parameter initialization runs at
+      call time before iterator prototype selection, direct and expression returns keep
+      their distinct job ordering, and delegated `yield*` forwards next/return/throw
+      across asynchronous and async-from-sync iterators. Broader async-generator syntax,
+      intrinsic, and behavioral test262 coverage remains.
 - [ ] ES modules: parse/link/evaluate, host resolver/loader, import/export, and dynamic
       `import()`. Add module test262 harness support here.
 - [ ] Direct `eval` and `Function` construction only if the Phase 0 profile includes

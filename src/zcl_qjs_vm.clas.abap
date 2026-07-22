@@ -25,6 +25,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
         zcx_qjs_error.
     METHODS was_suspended RETURNING VALUE(result) TYPE abap_bool.
     METHODS was_await_suspended RETURNING VALUE(result) TYPE abap_bool.
+    METHODS was_async_yield_star_suspended RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_complete RETURNING VALUE(result) TYPE abap_bool.
 
   PRIVATE SECTION.
@@ -65,6 +66,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_generator_complete TYPE abap_bool.
     DATA mv_generator_delegating TYPE abap_bool.
     DATA mv_await_suspended TYPE abap_bool.
+    DATA mv_async_yield_star TYPE abap_bool.
 
     METHODS pop
       CHANGING
@@ -183,6 +185,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       CLEAR mt_saved_frames.
       CLEAR mv_generator_suspended.
       CLEAR mv_await_suspended.
+      CLEAR mv_async_yield_star.
       IF mv_generator_delegating = abap_true.
         APPEND resume_value TO lt_stack.
         APPEND zcl_qjs_value=>new_int( resume_kind ) TO lt_stack.
@@ -683,8 +686,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_method_key = pop( CHANGING stack = lt_stack ).
             lv_method_kind = ls_instruction-operand.
           ENDIF.
-          IF lv_method_kind = 10.
-            lv_method_kind = 0.
+          IF lv_method_kind >= 10.
+            lv_method_kind = lv_method_kind - 10.
             lv_method_enumerable = abap_true.
           ENDIF.
           ls_left = pop( CHANGING stack = lt_stack ).
@@ -743,12 +746,12 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             IF ls_method_key-tag = zcl_qjs_value=>tag_symbol.
               lo_object->define_symbol_accessor(
                 identity = ls_method_key-symbol_id getter = ls_method_getter
-                setter = ls_method_setter enumerable = abap_false
+                setter = ls_method_setter enumerable = lv_method_enumerable
                 configurable = abap_true ).
             ELSE.
               lo_object->define_accessor(
                 name = lv_atom getter = ls_method_getter setter = ls_method_setter
-                enumerable = abap_false configurable = abap_true ).
+                enumerable = lv_method_enumerable configurable = abap_true ).
             ENDIF.
           ENDIF.
           APPEND ls_left TO lt_stack.
@@ -2176,11 +2179,24 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             APPEND ls_iterator_resume-value TO lt_stack.
             mo_limits->check_operand_stack( lines( lt_stack ) ).
           ENDIF.
+        WHEN zif_qjs_opcodes=>initial_yield.
+          result = zcl_qjs_value=>new_undefined( ).
+          mt_saved_stack = lt_stack.
+          mt_saved_frames = lt_frames.
+          mv_generator_suspended = abap_true.
+          RETURN.
         WHEN zif_qjs_opcodes=>yield.
           result = pop( CHANGING stack = lt_stack ).
           mt_saved_stack = lt_stack.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
+          RETURN.
+        WHEN zif_qjs_opcodes=>async_yield_star.
+          result = pop( CHANGING stack = lt_stack ).
+          mt_saved_stack = lt_stack.
+          mt_saved_frames = lt_frames.
+          mv_generator_suspended = abap_true.
+          mv_async_yield_star = abap_true.
           RETURN.
         WHEN zif_qjs_opcodes=>await.
           result = pop( CHANGING stack = lt_stack ).
@@ -2297,6 +2313,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
 
   METHOD was_await_suspended.
     result = mv_await_suspended.
+  ENDMETHOD.
+  METHOD was_async_yield_star_suspended.
+    result = mv_async_yield_star.
   ENDMETHOD.
 
   METHOD is_complete.
