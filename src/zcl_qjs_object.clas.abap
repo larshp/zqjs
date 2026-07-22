@@ -6,6 +6,9 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS iterator_keys TYPE i VALUE 1.
     CONSTANTS iterator_values TYPE i VALUE 2.
     CONSTANTS iterator_entries TYPE i VALUE 3.
+    CONSTANTS promise_pending TYPE i VALUE 1.
+    CONSTANTS promise_fulfilled TYPE i VALUE 2.
+    CONSTANTS promise_rejected TYPE i VALUE 3.
     METHODS constructor IMPORTING prototype TYPE REF TO zcl_qjs_object OPTIONAL
       is_array TYPE abap_bool DEFAULT abap_false
       shape TYPE REF TO zcl_qjs_shape OPTIONAL
@@ -62,6 +65,12 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
         writable TYPE abap_bool DEFAULT abap_true
         enumerable TYPE abap_bool DEFAULT abap_true
+        configurable TYPE abap_bool DEFAULT abap_true
+      RAISING zcx_qjs_error.
+    METHODS define_cell_property
+      IMPORTING name TYPE string cell TYPE REF TO zcl_qjs_cell
+        writable TYPE abap_bool DEFAULT abap_true
+        enumerable TYPE abap_bool DEFAULT abap_false
         configurable TYPE abap_bool DEFAULT abap_true
       RAISING zcx_qjs_error.
     METHODS define_accessor
@@ -196,12 +205,27 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS is_generator RETURNING VALUE(result) TYPE abap_bool.
+    METHODS initialize_promise.
+    METHODS is_promise RETURNING VALUE(result) TYPE abap_bool.
+    METHODS promise_state RETURNING VALUE(result) TYPE i.
+    METHODS promise_result RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
+    METHODS promise_settle
+      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS promise_add_reaction
+      IMPORTING on_fulfilled TYPE zcl_qjs_value=>ty_value
+        on_rejected TYPE zcl_qjs_value=>ty_value
+        next_promise TYPE REF TO zcl_qjs_object OPTIONAL
+        next_resolve TYPE zcl_qjs_value=>ty_value OPTIONAL
+        next_reject TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RAISING zcx_qjs_error.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_property,
       name TYPE string,
       value TYPE zcl_qjs_value=>ty_value,
       getter TYPE zcl_qjs_value=>ty_value,
       setter TYPE zcl_qjs_value=>ty_value,
+      cell TYPE REF TO zcl_qjs_cell,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_symbol_property,
@@ -249,6 +273,20 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA ms_generator_this TYPE zcl_qjs_value=>ty_value.
     DATA mt_generator_arguments TYPE zif_qjs_callable=>ty_arguments.
     DATA mv_generator_state TYPE i.
+    TYPES: BEGIN OF ty_promise_reaction,
+      on_fulfilled TYPE zcl_qjs_value=>ty_value,
+      on_rejected TYPE zcl_qjs_value=>ty_value,
+      next_promise TYPE REF TO zcl_qjs_object,
+      next_resolve TYPE zcl_qjs_value=>ty_value,
+      next_reject TYPE zcl_qjs_value=>ty_value,
+    END OF ty_promise_reaction.
+    TYPES ty_promise_reactions TYPE STANDARD TABLE OF ty_promise_reaction
+      WITH DEFAULT KEY.
+    DATA mv_promise_state TYPE i.
+    DATA ms_promise_result TYPE zcl_qjs_value=>ty_value.
+    DATA mt_promise_reactions TYPE ty_promise_reactions.
+    DATA mv_promise_handled TYPE abap_bool.
+    DATA mv_promise_rejection_notified TYPE abap_bool.
     DATA mv_length TYPE int8.
     DATA mv_length_writable TYPE abap_bool VALUE abap_true.
     DATA mo_shape TYPE REF TO zcl_qjs_shape.
@@ -345,7 +383,11 @@ CLASS zcl_qjs_object IMPLEMENTATION.
             callable = ls_property-getter this_value = receiver ).
         ENDIF.
       ELSE.
-        result = ls_property-value.
+        IF ls_property-cell IS BOUND.
+          result = ls_property-cell->get( ).
+        ELSE.
+          result = ls_property-value.
+        ENDIF.
       ENDIF.
     ELSEIF mo_prototype IS BOUND.
       result = mo_prototype->get_with_receiver( name = name receiver = receiver ).
@@ -538,7 +580,11 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       ELSEIF ls_descriptor-writable = abap_false.
         raise_error( name = 'TypeError' message = 'property is not writable' ).
       ELSEIF receiver-object_ref = me.
-        ls_existing-value = value.
+        IF ls_existing-cell IS BOUND.
+          ls_existing-cell->set( value ).
+        ELSE.
+          ls_existing-value = value.
+        ENDIF.
         DELETE TABLE mt_properties WITH TABLE KEY name = name.
         INSERT ls_existing INTO TABLE mt_properties.
         RETURN.
@@ -584,7 +630,11 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       ELSEIF ls_descriptor-writable = abap_false.
         RETURN.
       ELSEIF receiver-object_ref = me.
-        ls_existing-value = value.
+        IF ls_existing-cell IS BOUND.
+          ls_existing-cell->set( value ).
+        ELSE.
+          ls_existing-value = value.
+        ENDIF.
         DELETE TABLE mt_properties WITH TABLE KEY name = name.
         INSERT ls_existing INTO TABLE mt_properties.
         result = abap_true.
@@ -647,7 +697,30 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       configurable = configurable accessor = abap_false ).
     DATA ls_property TYPE ty_property.
     ls_property-name = name.
-    ls_property-value = value.
+    READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_cell_property).
+    IF sy-subrc = 0 AND ls_cell_property-cell IS BOUND
+        AND ls_descriptor-accessor = abap_false.
+      ls_cell_property-cell->set( value ).
+      ls_property-cell = ls_cell_property-cell.
+    ELSE.
+      ls_property-value = value.
+    ENDIF.
+    DELETE TABLE mt_properties WITH TABLE KEY name = name.
+    INSERT ls_property INTO TABLE mt_properties.
+  ENDMETHOD.
+
+  METHOD define_cell_property.
+    IF cell IS NOT BOUND.
+      raise_error( name = 'TypeError' message = 'global property cell is not bound' ).
+    ENDIF.
+    DATA(ls_descriptor) = mo_shape->lookup( name ).
+    IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
+      raise_error( name = 'TypeError' message = 'object is not extensible' ).
+    ENDIF.
+    mo_shape = mo_shape->transition(
+      name = name writable = writable enumerable = enumerable
+      configurable = configurable accessor = abap_false ).
+    DATA(ls_property) = VALUE ty_property( name = name cell = cell ).
     DELETE TABLE mt_properties WITH TABLE KEY name = name.
     INSERT ls_property INTO TABLE mt_properties.
   ENDMETHOD.
@@ -956,7 +1029,11 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     ENDIF.
     result-found = abap_true.
     result-accessor = ls_descriptor-accessor.
-    result-value = ls_property-value.
+    IF ls_property-cell IS BOUND.
+      result-value = ls_property-cell->get( ).
+    ELSE.
+      result-value = ls_property-value.
+    ENDIF.
     result-getter = ls_property-getter.
     result-setter = ls_property-setter.
     result-writable = ls_descriptor-writable.
@@ -1411,5 +1488,150 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD is_generator.
     result = xsdbool( mo_generator_function IS BOUND ).
+  ENDMETHOD.
+
+  METHOD initialize_promise.
+    mv_promise_state = promise_pending.
+    ms_promise_result = zcl_qjs_value=>new_undefined( ).
+    CLEAR mt_promise_reactions.
+    CLEAR mv_promise_handled.
+    CLEAR mv_promise_rejection_notified.
+  ENDMETHOD.
+
+  METHOD is_promise.
+    result = xsdbool( mv_promise_state <> 0 ).
+  ENDMETHOD.
+
+  METHOD promise_state.
+    result = mv_promise_state.
+  ENDMETHOD.
+
+  METHOD promise_result.
+    result = ms_promise_result.
+  ENDMETHOD.
+
+  METHOD promise_settle.
+    IF mv_promise_state <> promise_pending.
+      RETURN.
+    ENDIF.
+    IF value-tag = zcl_qjs_value=>tag_object AND value-object_ref = me.
+      mv_promise_state = promise_rejected.
+      IF mo_runtime IS BOUND.
+        ms_promise_result = mo_runtime->create_error(
+          name = 'TypeError' message = 'A promise cannot resolve to itself' ).
+      ELSE.
+        ms_promise_result = zcl_qjs_value=>new_string(
+          'TypeError: A promise cannot resolve to itself' ).
+      ENDIF.
+    ELSEIF rejected = abap_false AND value-tag = zcl_qjs_value=>tag_object.
+      DATA lo_adopted_promise TYPE REF TO zcl_qjs_object.
+      TRY.
+          lo_adopted_promise ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_adopted_promise IS BOUND
+          AND lo_adopted_promise->is_promise( ) = abap_true.
+        DATA(ls_undefined_handler) = zcl_qjs_value=>new_undefined( ).
+        lo_adopted_promise->promise_add_reaction(
+          on_fulfilled = ls_undefined_handler on_rejected = ls_undefined_handler
+          next_promise = me ).
+        RETURN.
+      ENDIF.
+      DATA ls_then_method TYPE zcl_qjs_value=>ty_value.
+      DATA lv_then_failed TYPE abap_bool.
+      TRY.
+          IF lo_adopted_promise IS BOUND.
+            ls_then_method = lo_adopted_promise->get( 'then' ).
+          ELSE.
+            DATA lo_then_properties TYPE REF TO zif_qjs_property_container.
+            lo_then_properties = value-property_ref.
+            IF lo_then_properties IS NOT BOUND.
+              TRY.
+                  lo_then_properties ?= value-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+            ENDIF.
+            IF lo_then_properties IS BOUND.
+              ls_then_method = lo_then_properties->get_property( 'then' ).
+            ELSE.
+              ls_then_method = zcl_qjs_value=>new_undefined( ).
+            ENDIF.
+          ENDIF.
+        CATCH zcx_qjs_throw INTO DATA(lx_then_get_throw).
+          ms_promise_result = lx_then_get_throw->value.
+          mv_promise_state = promise_rejected.
+          lv_then_failed = abap_true.
+        CATCH zcx_qjs_error INTO DATA(lx_then_get_error).
+          IF mo_runtime IS BOUND.
+            ms_promise_result = mo_runtime->create_error_from_reason(
+              lx_then_get_error->reason ).
+          ELSE.
+            ms_promise_result = zcl_qjs_value=>new_string(
+              lx_then_get_error->reason ).
+          ENDIF.
+          mv_promise_state = promise_rejected.
+          lv_then_failed = abap_true.
+      ENDTRY.
+      IF lv_then_failed = abap_false AND mo_runtime IS BOUND
+          AND mo_runtime->is_callable_value( ls_then_method ) = abap_true.
+        mo_runtime->enqueue_thenable_job(
+          promise = me thenable = value then_method = ls_then_method ).
+        RETURN.
+      ELSEIF lv_then_failed = abap_false.
+        ms_promise_result = value.
+        mv_promise_state = promise_fulfilled.
+      ENDIF.
+    ELSE.
+      ms_promise_result = value.
+      IF rejected = abap_true.
+        mv_promise_state = promise_rejected.
+      ELSE.
+        mv_promise_state = promise_fulfilled.
+      ENDIF.
+    ENDIF.
+    IF mo_runtime IS BOUND.
+      LOOP AT mt_promise_reactions INTO DATA(ls_reaction).
+        mo_runtime->enqueue_promise_job(
+          settled_promise = me
+          on_fulfilled    = ls_reaction-on_fulfilled
+          on_rejected     = ls_reaction-on_rejected
+          next_promise    = ls_reaction-next_promise
+          next_resolve    = ls_reaction-next_resolve
+          next_reject     = ls_reaction-next_reject ).
+      ENDLOOP.
+      IF mv_promise_state = promise_rejected
+          AND mv_promise_handled = abap_false.
+        mv_promise_rejection_notified = abap_true.
+        mo_runtime->track_promise_rejection(
+          promise = me reason = ms_promise_result handled = abap_false ).
+      ENDIF.
+    ENDIF.
+    CLEAR mt_promise_reactions.
+  ENDMETHOD.
+
+  METHOD promise_add_reaction.
+    IF mv_promise_state = 0.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise method receiver is not a Promise'.
+    ENDIF.
+    IF mv_promise_state = promise_rejected
+        AND mv_promise_handled = abap_false
+        AND mv_promise_rejection_notified = abap_true
+        AND mo_runtime IS BOUND.
+      mo_runtime->track_promise_rejection(
+        promise = me reason = ms_promise_result handled = abap_true ).
+    ENDIF.
+    mv_promise_handled = abap_true.
+    IF mv_promise_state = promise_pending.
+      APPEND VALUE ty_promise_reaction(
+        on_fulfilled = on_fulfilled on_rejected = on_rejected
+        next_promise = next_promise next_resolve = next_resolve
+        next_reject = next_reject ) TO mt_promise_reactions.
+    ELSEIF mo_runtime IS BOUND.
+      mo_runtime->enqueue_promise_job(
+        settled_promise = me on_fulfilled = on_fulfilled
+        on_rejected = on_rejected next_promise = next_promise
+        next_resolve = next_resolve next_reject = next_reject ).
+    ENDIF.
   ENDMETHOD.
 ENDCLASS.

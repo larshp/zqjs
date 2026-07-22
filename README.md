@@ -16,7 +16,9 @@ The current implementation contains a growing embedded-language profile:
   C-style `for`, `break`, and `continue`;
 - hoisted named functions, parameters, calls, returns, recursion, and mutable lexical
   closures;
-- 97 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
+- ordinary and async arrow functions with concise/block bodies, default/rest parameters,
+  non-constructibility, and lexical `this`/`arguments` capture;
+- 100 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
   disassembler, and an iterative VM with explicit frames;
 - shape-backed ordinary objects, data and accessor property descriptors,
   prototypes, constructors, `this`, `instanceof`, object/array literals,
@@ -32,12 +34,24 @@ The current implementation contains a growing embedded-language profile:
   extraction, concatenation, repeat, case-conversion, and trim methods;
 - initial intrinsics for `Object`, `Array`, `Number`, `String`, `Boolean`, `Math`,
   `JSON`, `isNaN`, `NaN`, and `Infinity`, including `Object` reflection methods,
-  strict JSON parsing/stringification, the core `Error` constructors, and
-  `Array.isArray`;
+  strict JSON parsing/stringification, the core `Error` constructors including
+  `EvalError` and standard `options.cause` properties, and `Array.isArray`;
 - persistent contexts, direct calls, host-callable and host-constructable interfaces,
   catchable host-error translation, runtime disposal, resource budgets, and
-  cooperative cancellation, including runtime-owned disposable host resources;
+  cooperative cancellation, including runtime-owned disposable host resources and a
+  Promise rejection-tracking callback for embedding hosts;
+- a `globalThis` object whose data properties share storage with script and host global
+  bindings, with top-level script `this` and lexical-global separation;
 - public `zcl_qjs=>eval( )` facade and explicit runtime/context embedding API;
+- an initial bounded Promise job queue with `Promise` construction, `resolve`, `reject`,
+  `then`, generic `catch`/`finally`, ordered checkpoint draining, promise adoption, and
+  deferred foreign-thenable assimilation, plus iterable `Promise.all`, `allSettled`,
+  `any`, and `race`, constructor-sensitive capability creation, custom species chaining,
+  native Promise subclass construction, host rejection tracking, and `AggregateError`
+  rejection for `Promise.any`;
+- initial async function declarations, expressions, class methods, and object methods
+  with immediate body execution, Promise-backed completion, `await`
+  suspension/resumption, rejection injection, and ordered continuation jobs;
 - ABAP Unit tests executed through the abaplint transpiler on Node.
 
 For example, this source is tokenized, compiled, and interpreted rather than delegated to
@@ -59,11 +73,14 @@ npm test
 ```
 
 `npm test` verifies the pinned QuickJS opcode metadata and normalized compiler-oracle
-fixture, runs abaplint, transpiles the ABAP, executes the ABAP Unit suite with
-`node --expose-gc`, self-tests the test262 metadata parser, and then runs 809 pinned
-  test262 language and built-in cases through the transpiled zqjs engine. Positive and negative
-tests, feature exclusions, harness includes, and pass/fail/unsupported/infrastructure
-skip outcomes are handled explicitly.
+fixture, validates the machine-readable compatibility profile against the lockfiles and
+published conformance denominator, runs abaplint, transpiles the ABAP, executes the ABAP Unit suite with
+`node --expose-gc`, self-tests the test262 metadata parser, and then runs 941 pinned
+test262 language and built-in cases through the transpiled zqjs engine. Positive and negative
+tests, feature exclusions, harness includes, persistent-context `$DONE` async tests, and
+pass/fail/unsupported/infrastructure skip outcomes are handled explicitly. Set
+`TEST262_FILTER` to a path substring for a focused development run.
 
-See [PROFILE.md](PROFILE.md) for the active compatibility profile and [PLAN.md](PLAN.md)
-for the remaining implementation phases.
+See [compatibility-profile.json](compatibility-profile.json) for the enforced profile,
+[PROFILE.md](PROFILE.md) for its human-readable detail, and [PLAN.md](PLAN.md) for the
+remaining implementation phases.

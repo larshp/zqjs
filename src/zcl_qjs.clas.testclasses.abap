@@ -101,6 +101,41 @@ CLASS lcl_host_resource IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.
 
+CLASS lcl_promise_rejection DEFINITION FINAL.
+  PUBLIC SECTION.
+    INTERFACES zif_qjs_promise_rejection.
+    DATA rejected_count TYPE i READ-ONLY.
+    DATA handled_count TYPE i READ-ONLY.
+    DATA rejected_promise TYPE REF TO zcl_qjs_object READ-ONLY.
+    DATA handled_promise TYPE REF TO zcl_qjs_object READ-ONLY.
+    DATA rejected_reason TYPE zcl_qjs_value=>ty_value READ-ONLY.
+    DATA handled_reason TYPE zcl_qjs_value=>ty_value READ-ONLY.
+    METHODS reset.
+ENDCLASS.
+
+CLASS lcl_promise_rejection IMPLEMENTATION.
+  METHOD zif_qjs_promise_rejection~track.
+    IF handled = abap_true.
+      handled_count = handled_count + 1.
+      handled_promise = promise.
+      handled_reason = reason.
+    ELSE.
+      rejected_count = rejected_count + 1.
+      rejected_promise = promise.
+      rejected_reason = reason.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD reset.
+    CLEAR rejected_count.
+    CLEAR handled_count.
+    CLEAR rejected_promise.
+    CLEAR handled_promise.
+    CLEAR rejected_reason.
+    CLEAR handled_reason.
+  ENDMETHOD.
+ENDCLASS.
+
 CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
   DURATION SHORT
   RISK LEVEL HARMLESS.
@@ -139,6 +174,11 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
     METHODS class_syntax FOR TESTING RAISING cx_root.
     METHODS generator_syntax FOR TESTING RAISING cx_root.
     METHODS generator_intrinsics FOR TESTING RAISING cx_root.
+    METHODS promise_intrinsics FOR TESTING RAISING cx_root.
+    METHODS promise_rejection_tracking FOR TESTING RAISING cx_root.
+    METHODS global_object FOR TESTING RAISING cx_root.
+    METHODS async_functions FOR TESTING RAISING cx_root.
+    METHODS arrow_functions FOR TESTING RAISING cx_root.
     METHODS string_operators FOR TESTING RAISING cx_root.
     METHODS string_prototype_methods FOR TESTING RAISING cx_root.
     METHODS reflect_intrinsic FOR TESTING RAISING cx_root.
@@ -188,6 +228,731 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
 ENDCLASS.
 
 CLASS ltcl_qjs IMPLEMENTATION.
+  METHOD arrow_functions.
+    DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
+    DATA lo_context TYPE REF TO zcl_qjs_context.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    CREATE OBJECT lo_runtime.
+    CREATE OBJECT lo_context EXPORTING runtime = lo_runtime.
+
+    ls_result = lo_context->eval(
+      'var sumArrow = (first, second = 2, ...rest)'
+      && ' => first + second + rest[0];'
+      && ' var nestedArrow = value => other => value + other;'
+      && ' var objectArrow = value => ({ value: value });'
+      && ' sumArrow(1, undefined, 3) === 6 && sumArrow.length === 1'
+      && ' && nestedArrow(4)(5) === 9 && objectArrow(7).value === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'function ArrowOwner(value) { this.value = value;'
+      && ' this.read = () => this.value;'
+      && ' this.first = () => arguments[0]; }'
+      && ' var arrowOwner = new ArrowOwner(12); var detachedRead = arrowOwner.read;'
+      && ' detachedRead.call({ value: 1 }) === 12'
+      && ' && arrowOwner.first.call(null) === 12; ' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var topArrow = () => this; var arrowConstructThrows = false;'
+      && ' try { new topArrow(); } catch (error) {'
+      && ' arrowConstructThrows = error instanceof TypeError; }'
+      && ' topArrow() === globalThis && arrowConstructThrows;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var asyncArrowValue = 0; var asyncArrow = async value => await value + 1;'
+      && ' var asyncPair = async (left, right) => {'
+      && ' return (await left) + right; };'
+      && ' asyncArrow(Promise.resolve(8)).then(value => {'
+      && ' asyncArrowValue += value; });'
+      && ' asyncPair(Promise.resolve(3), 4).then(value => {'
+      && ' asyncArrowValue += value; }); asyncArrowValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'asyncArrowValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 16 ).
+
+    ls_result = lo_context->eval(
+      'function asyncArrowFactory(value) {'
+      && ' return async delta => this.base + value + await delta; }'
+      && ' var asyncArrowReceiver = { base: 5, make: asyncArrowFactory };'
+      && ' var lexicalAsyncArrow = asyncArrowReceiver.make(6);'
+      && ' var lexicalAsyncValue = 0; lexicalAsyncArrow.call('
+      && '{ base: 100 }, 7).then(result => { lexicalAsyncValue = result; });'
+      && ' lexicalAsyncValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'lexicalAsyncValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 18 ).
+  ENDMETHOD.
+
+  METHOD async_functions.
+    DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
+    DATA lo_context TYPE REF TO zcl_qjs_context.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    CREATE OBJECT lo_runtime.
+    CREATE OBJECT lo_context EXPORTING runtime = lo_runtime.
+
+    ls_result = lo_context->eval(
+      'var asyncOrder = ""; var asyncValue = 0;'
+      && ' async function addLater(value) {'
+      && ' asyncOrder += "start"; var awaited = await Promise.resolve(value);'
+      && ' asyncOrder += ":resume"; return awaited + 1; }'
+      && ' var asyncPromise = addLater(4);'
+      && ' asyncPromise.then(function(value) { asyncValue = value; });'
+      && ' asyncPromise instanceof Promise && asyncOrder === "start"'
+      && ' && asyncValue === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval(
+      'asyncOrder === "start:resume" && asyncValue === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var immediateValue = 0; async function immediate() { return 7; }'
+      && ' var immediatePromise = immediate();'
+      && ' immediatePromise.then(function(value) { immediateValue = value; });'
+      && ' immediateValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'immediateValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 7 ).
+
+    ls_result = lo_context->eval(
+      'var recovered = ""; async function recover() {'
+      && ' try { await Promise.reject("reason"); return "missed"; }'
+      && ' catch (error) { return error + ":caught"; } }'
+      && ' recover().then(function(value) { recovered = value; }); recovered;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'recovered;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'reason:caught' ).
+
+    ls_result = lo_context->eval(
+      'var expressionValue = 0; var offset = 3;'
+      && ' var asyncExpression = async function named(value) {'
+      && ' return await value + offset; };'
+      && ' asyncExpression(Promise.resolve(9)).then(function(value) {'
+      && ' expressionValue = value; }); expressionValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval(
+      'var asyncConstructThrows = false; try { new asyncExpression(1); }'
+      && ' catch (error) { asyncConstructThrows = error instanceof TypeError; }'
+      && ' expressionValue === 12 && asyncConstructThrows;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var assimilated = 0; async function returnsPromise() {'
+      && ' return Promise.resolve(15); } returnsPromise().then(function(value) {'
+      && ' assimilated = value; }); assimilated;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'assimilated;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 15 ).
+
+    ls_result = lo_context->eval(
+      'var hoistedValue = 0; var hoistedPromise = hoistedAsync();'
+      && ' async function hoistedAsync() { return 2; }'
+      && ' hoistedPromise.then(function(value) { hoistedValue = value; });'
+      && ' hoistedValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'hoistedValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 2 ).
+
+    ls_result = lo_context->eval(
+      'var thrownValue = 0; async function throwsImmediately() { throw 19; }'
+      && ' var thrownPromise = throwsImmediately();'
+      && ' thrownPromise.catch(function(value) { thrownValue = value; });'
+      && ' thrownPromise instanceof Promise && thrownValue === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval( 'thrownValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 19 ).
+
+    ls_result = lo_context->eval(
+      'var multipleValue = 0; async function multipleAwaits() {'
+      && ' var first = await 3; var second = await Promise.resolve(4);'
+      && ' return first + second; } multipleAwaits().then(function(value) {'
+      && ' multipleValue = value; }); multipleValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'multipleValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 7 ).
+
+    ls_result = lo_context->eval(
+      'var asyncLoopValue = 0; async function consumeAsyncIterator() {'
+      && ' var index = 0; var iterable = {};'
+      && ' iterable[Symbol.asyncIterator] = function() {'
+      && ' return { next: function() { index += 1;'
+      && ' return Promise.resolve(index <= 3'
+      && ' ? { value: index, done: false } : { done: true }); } }; };'
+      && ' for await (var value of iterable) { asyncLoopValue += value; }'
+      && ' return asyncLoopValue; } consumeAsyncIterator(); asyncLoopValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'asyncLoopValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 6 ).
+
+    ls_result = lo_context->eval(
+      'var syncLoopValue = 0; async function consumeSyncIterator() {'
+      && ' for await (const value of [Promise.resolve(4), 5]) {'
+      && ' syncLoopValue += value; } } consumeSyncIterator(); syncLoopValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'syncLoopValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 9 ).
+
+    ls_result = lo_context->eval(
+      'var asyncLoopClosed = false; function* closableValues() {'
+      && ' try { yield 1; yield 2; } finally { asyncLoopClosed = true; } }'
+      && ' async function closeAsyncLoop() {'
+      && ' for await (var value of closableValues()) { break; } }'
+      && ' closeAsyncLoop(); asyncLoopClosed;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_result-bool_value exp = abap_false ).
+    ls_result = lo_context->eval( 'asyncLoopClosed;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    TRY.
+        lo_context->eval( 'for await (var value of []) {}' ).
+        cl_abap_unit_assert=>fail( 'Expected top-level for-await rejection' ).
+      CATCH zcx_qjs_error.
+    ENDTRY.
+
+    TRY.
+        lo_context->eval( 'async function* unsupportedAsyncGenerator() {}' ).
+        cl_abap_unit_assert=>fail( 'Expected async generator syntax rejection' ).
+      CATCH zcx_qjs_error.
+    ENDTRY.
+
+    ls_result = lo_context->eval(
+      'var asyncMethodTotal = 0; class AsyncMethods {'
+      && ' constructor(base) { this.base = base; }'
+      && ' async add(value) { return this.base + await value; }'
+      && ' static async twice(value) { return (await value) * 2; }'
+      && ' async ["computed"](value) { return await value + 1; }'
+      && ' async #secret(value) { return await value + this.base; }'
+      && ' async reveal(value) { return await this.#secret(value); } }'
+      && ' var asyncMethods = new AsyncMethods(5);'
+      && ' asyncMethods.add(Promise.resolve(3)).then(function(value) {'
+      && ' asyncMethodTotal += value; });'
+      && ' AsyncMethods.twice(4).then(function(value) {'
+      && ' asyncMethodTotal += value; });'
+      && ' asyncMethods.computed(6).then(function(value) {'
+      && ' asyncMethodTotal += value; });'
+      && ' asyncMethods.reveal(2).then(function(value) {'
+      && ' asyncMethodTotal += value; }); asyncMethodTotal;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'asyncMethodTotal;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 30 ).
+
+    ls_result = lo_context->eval(
+      'var objectAsyncValue = 0; var async = 11; var namedAsync = {'
+      && ' async method(value) { return this.base + await value; },'
+      && ' async ["computed"](value) { return await value * 3; },'
+      && ' async() { return 9; }, base: 2 }; var asyncProperty = { async: async };'
+      && ' namedAsync.method(5).then(function(value) {'
+      && ' objectAsyncValue += value; });'
+      && ' namedAsync.computed(4).then(function(value) {'
+      && ' objectAsyncValue += value; });'
+      && ' namedAsync.async() === 9 && asyncProperty.async === 11'
+      && ' && objectAsyncValue === 0;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval( 'objectAsyncValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 19 ).
+
+    ls_result = lo_context->eval(
+      'var asyncMethodConstructThrows = false;'
+      && ' try { new asyncMethods.add(1); } catch (error) {'
+      && ' asyncMethodConstructThrows = error instanceof TypeError; }'
+      && ' asyncMethodConstructThrows;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    TRY.
+        lo_context->eval( 'class InvalidAsync { async *items() {} }' ).
+        cl_abap_unit_assert=>fail( 'Expected async generator method rejection' ).
+      CATCH zcx_qjs_error.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD global_object.
+    DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
+    DATA lo_context TYPE REF TO zcl_qjs_context.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    CREATE OBJECT lo_runtime.
+    CREATE OBJECT lo_context EXPORTING runtime = lo_runtime.
+
+    ls_result = lo_context->eval(
+      'var aggregateDescriptor = Object.getOwnPropertyDescriptor('
+      && 'globalThis, "AggregateError");'
+      && ' this === globalThis && globalThis.globalThis === globalThis'
+      && ' && globalThis.AggregateError === AggregateError'
+      && ' && aggregateDescriptor.value === AggregateError'
+      && ' && aggregateDescriptor.writable === true'
+      && ' && aggregateDescriptor.enumerable === false'
+      && ' && aggregateDescriptor.configurable === true;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var globalCell = 1; var first = this.globalCell === 1;'
+      && ' this.globalCell = 2; var second = globalCell === 2;'
+      && ' globalCell = 3; first && second && this.globalCell === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'let lexicalGlobal = 4; const constantGlobal = 5;'
+      && ' !Object.hasOwn(globalThis, "lexicalGlobal")'
+      && ' && !Object.hasOwn(globalThis, "constantGlobal");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    lo_context->set_global(
+      name = 'hostGlobal' value = zcl_qjs_value=>new_int( 6 ) ).
+    ls_result = lo_context->eval(
+      'this.hostGlobal = 7; hostGlobal === 7'
+      && ' && Object.getOwnPropertyDescriptor('
+      && ' globalThis, "hostGlobal").enumerable === false;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number(
+        lo_context->get_global( 'hostGlobal' ) )
+      exp = 7 ).
+    cl_abap_unit_assert=>assert_true(
+      xsdbool( lo_context->get_global_object( ) IS BOUND ) ).
+  ENDMETHOD.
+
+  METHOD promise_rejection_tracking.
+    DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
+    DATA lo_context TYPE REF TO zcl_qjs_context.
+    DATA lo_tracker TYPE REF TO lcl_promise_rejection.
+    CREATE OBJECT lo_tracker.
+    CREATE OBJECT lo_runtime EXPORTING promise_rejection = lo_tracker.
+    CREATE OBJECT lo_context EXPORTING runtime = lo_runtime.
+
+    lo_context->eval( 'var latePromise = Promise.reject("late");' ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->rejected_count exp = 1 ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->handled_count exp = 0 ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( lo_tracker->rejected_reason ) exp = 'late' ).
+
+    lo_context->eval( 'latePromise.catch(function() {});' ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->handled_count exp = 1 ).
+    cl_abap_unit_assert=>assert_bound( lo_tracker->handled_promise ).
+    cl_abap_unit_assert=>assert_true(
+      xsdbool( lo_tracker->handled_promise = lo_tracker->rejected_promise ) ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( lo_tracker->handled_reason ) exp = 'late' ).
+
+    lo_tracker->reset( ).
+    lo_context->eval(
+      'var pendingReject; var pendingPromise = new Promise('
+      && 'function(resolve, reject) { pendingReject = reject; });'
+      && ' pendingPromise.catch(function() {}); pendingReject("covered");' ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->rejected_count exp = 0 ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->handled_count exp = 0 ).
+
+    lo_tracker->reset( ).
+    lo_context->eval( 'var propagated = Promise.reject("source").then();' ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->rejected_count exp = 2 ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->handled_count exp = 1 ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( lo_tracker->rejected_reason ) exp = 'source' ).
+    lo_context->eval( 'propagated.catch(function() {});' ).
+    cl_abap_unit_assert=>assert_equals( act = lo_tracker->handled_count exp = 2 ).
+  ENDMETHOD.
+
+  METHOD promise_intrinsics.
+    DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
+    DATA lo_context TYPE REF TO zcl_qjs_context.
+    DATA ls_result TYPE zcl_qjs_value=>ty_value.
+    CREATE OBJECT lo_runtime.
+    CREATE OBJECT lo_context EXPORTING runtime = lo_runtime.
+
+    ls_result = lo_context->eval(
+      'var order = "";'
+      && ' Promise.resolve(2).then(function(value) {'
+      && ' order += value; return value + 1; }).then(function(value) {'
+      && ' order += value; }); order;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'order;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '23' ).
+
+    ls_result = lo_context->eval(
+      'var rejected = ""; Promise.reject("reason").catch(function(value) {'
+      && ' rejected = value; return "recovered"; }).then(function(value) {'
+      && ' rejected += ":" + value; }); rejected;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'rejected;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'reason:recovered' ).
+
+    ls_result = lo_context->eval(
+      'var settled = 0; new Promise(function(resolve, reject) {'
+      && ' resolve(7); reject(9); }).then(function(value) { settled = value; });'
+      && ' settled;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'settled;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 7 ).
+
+    ls_result = lo_context->eval(
+      'var adopted = 0; Promise.resolve(1).then(function() {'
+      && ' return Promise.resolve(11); }).then(function(value) {'
+      && ' adopted = value; }); adopted;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'adopted;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 11 ).
+
+    ls_result = lo_context->eval(
+      'var objectValue = 0; Promise.resolve({ value: 13 }).then(function(item) {'
+      && ' objectValue = item.value; }); objectValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+    ls_result = lo_context->eval( 'objectValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 13 ).
+
+    ls_result = lo_context->eval(
+      'var thenableOrder = ""; var reads = 0; var thenable = {};'
+      && ' Object.defineProperty(thenable, "then", { get: function() {'
+      && ' reads++; return function(resolve, reject) {'
+      && ' thenableOrder += "job"; resolve(21); reject(22); throw "late"; }; } });'
+      && ' Promise.resolve(thenable).then(function(value) {'
+      && ' thenableOrder += ":" + value; }); reads + ":" + thenableOrder;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '1:' ).
+    ls_result = lo_context->eval( 'thenableOrder;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'job:21' ).
+
+    ls_result = lo_context->eval(
+      'var poisonedReason = ""; var poisoned = {};'
+      && ' Object.defineProperty(poisoned, "then", { get: function() {'
+      && ' throw "poisoned"; } }); Promise.resolve(poisoned).catch(function(reason) {'
+      && ' poisonedReason = reason; }); poisonedReason;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'poisonedReason;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'poisoned' ).
+
+    ls_result = lo_context->eval(
+      'var finalLog = ""; Promise.resolve(3).finally(function() {'
+      && ' finalLog += "cleanup"; return Promise.resolve(99);'
+      && ' }).then(function(value) { finalLog += ":" + value; });'
+      && ' Promise.reject("reason").finally(function() {'
+      && ' finalLog += ":reject-cleanup"; }).catch(function(reason) {'
+      && ' finalLog += ":" + reason; }); finalLog;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'finalLog;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result )
+      exp = 'cleanup:reject-cleanup:reason:3' ).
+
+    ls_result = lo_context->eval(
+      'var override = ""; Promise.resolve(1).finally(function() {'
+      && ' throw "override"; }).catch(function(reason) { override = reason; });'
+      && ' override;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'override;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'override' ).
+
+    ls_result = lo_context->eval(
+      'var genericCatch = { then: function(onFulfilled, onRejected) {'
+      && ' return onFulfilled === undefined && onRejected === 7 ? 17 : 0; } };'
+      && ' var genericFinally = { then: function(onFulfilled, onRejected) {'
+      && ' return onFulfilled !== 8 && onRejected !== 8 ? 23 : 0; } };'
+      && ' var cleanup = function() {};'
+      && ' Promise.prototype.catch.call(genericCatch, 7) === 17'
+      && ' && Promise.prototype.finally.call(genericFinally, 8) === 0'
+      && ' && Promise.prototype.finally.call(genericFinally, cleanup) === 23;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var samePromise = Promise.resolve(1);'
+      && ' Promise.length === 1 && Promise.name === "Promise"'
+      && ' && Promise.prototype.constructor === Promise'
+      && ' && Promise.prototype.then.length === 2'
+      && ' && Promise.prototype.catch.length === 1'
+      && ' && Promise.prototype.finally.length === 1'
+      && ' && Object.prototype.toString.call(samePromise) === "[object Promise]"'
+      && ' && Promise.resolve(samePromise) === samePromise;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var speciesDescriptor = Object.getOwnPropertyDescriptor('
+      && ' Promise, Symbol.species); var speciesReceiver = { marker: 9 };'
+      && ' Promise[Symbol.species] === Promise'
+      && ' && speciesDescriptor.get.call(speciesReceiver) === speciesReceiver'
+      && ' && speciesDescriptor.get.length === 0'
+      && ' && speciesDescriptor.get.name === "get [Symbol.species]"'
+      && ' && speciesDescriptor.set === undefined'
+      && ' && speciesDescriptor.enumerable === false'
+      && ' && speciesDescriptor.configurable === true;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var subclassValue = 0; class PromiseSubclass extends Promise {}'
+      && ' var subclassPromise = new PromiseSubclass(function(resolve) {'
+      && ' resolve(14); }); var subclassResolved = PromiseSubclass.resolve(15);'
+      && ' var subclassThen = subclassPromise.then(function(value) {'
+      && ' subclassValue = value; });'
+      && ' class ExplicitPromise extends Promise {'
+      && ' constructor(executor) { super(executor); this.marker = 3; } }'
+      && ' var explicitPromise = new ExplicitPromise(function(resolve) {'
+      && ' resolve(16); });'
+      && ' subclassPromise instanceof PromiseSubclass'
+      && ' && subclassPromise instanceof Promise'
+      && ' && subclassResolved instanceof PromiseSubclass'
+      && ' && subclassThen instanceof PromiseSubclass'
+      && ' && PromiseSubclass[Symbol.species] === PromiseSubclass'
+      && ' && explicitPromise instanceof ExplicitPromise'
+      && ' && explicitPromise instanceof Promise && explicitPromise.marker === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval( 'subclassValue;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 14 ).
+
+    ls_result = lo_context->eval(
+      'var allResult = ""; var allThenable = { then: function(resolve) {'
+      && ' resolve(2); } }; Promise.all([Promise.resolve(3), 1, allThenable])'
+      && ' .then(function(values) { allResult = values.join(":"); }); allResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'allResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '3:1:2' ).
+
+    ls_result = lo_context->eval(
+      'var allEmpty = -1; Promise.all([]).then(function(values) {'
+      && ' allEmpty = values.length; }); allEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = -1 ).
+    ls_result = lo_context->eval( 'allEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+
+    ls_result = lo_context->eval(
+      'var allFailure = ""; Promise.all([1, Promise.reject("all-fail"), 3])'
+      && ' .catch(function(reason) { allFailure = reason; }); allFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'allFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'all-fail' ).
+
+    ls_result = lo_context->eval(
+      'var resolveCalls = 0; var savedResolve = Promise.resolve;'
+      && ' Promise.resolve = function(value) { resolveCalls++;'
+      && ' return savedResolve.call(Promise, value); };'
+      && ' Promise.all(new Set([4, 5])).then(function(values) {'
+      && ' allResult = values.join(":"); }); Promise.resolve = savedResolve;'
+      && ' resolveCalls;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 2 ).
+    ls_result = lo_context->eval( 'allResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '4:5' ).
+
+    ls_result = lo_context->eval(
+      'var raceResult = ""; Promise.race([Promise.resolve(7),'
+      && ' Promise.resolve(8)]).then(function(value) { raceResult = value; });'
+      && ' raceResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'raceResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '7' ).
+
+    ls_result = lo_context->eval(
+      'var raceFailure = ""; Promise.race([Promise.reject("race-fail"), 9])'
+      && ' .catch(function(reason) { raceFailure = reason; }); raceFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'raceFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = 'race-fail' ).
+
+    ls_result = lo_context->eval(
+      'var invalidAll = false; Promise.all(1).catch(function(error) {'
+      && ' invalidAll = error.name === "TypeError"; }); invalidAll;' ).
+    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    ls_result = lo_context->eval( 'invalidAll;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var settledResult = ""; Promise.allSettled(['
+      && ' Promise.resolve(1), Promise.reject("x"), 2]).then(function(items) {'
+      && ' settledResult = items[0].status + ":" + items[0].value'
+      && ' + ":" + items[1].status + ":" + items[1].reason'
+      && ' + ":" + items[2].status + ":" + items[2].value; });'
+      && ' settledResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'settledResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result )
+      exp = 'fulfilled:1:rejected:x:fulfilled:2' ).
+
+    ls_result = lo_context->eval(
+      'var settledEmpty = -1; Promise.allSettled([]).then(function(items) {'
+      && ' settledEmpty = items.length; }); settledEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = -1 ).
+    ls_result = lo_context->eval( 'settledEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+
+    ls_result = lo_context->eval(
+      'var anyResult = ""; Promise.any([Promise.reject("a"),'
+      && ' Promise.resolve(4), Promise.reject("b")]).then(function(value) {'
+      && ' anyResult = value; }); anyResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'anyResult;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '4' ).
+
+    ls_result = lo_context->eval(
+      'var anyFailure = ""; Promise.any(['
+      && ' Promise.reject("first"), Promise.reject("second")])'
+      && ' .catch(function(error) { anyFailure = error.name + ":"'
+      && ' + (error instanceof AggregateError) + ":" + error.errors.join(":"); });'
+      && ' anyFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result ) exp = '' ).
+    ls_result = lo_context->eval( 'anyFailure;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>to_string( ls_result )
+      exp = 'AggregateError:true:first:second' ).
+
+    ls_result = lo_context->eval(
+      'var anyEmpty = -1; Promise.any([]).catch(function(error) {'
+      && ' anyEmpty = error.errors.length; }); anyEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = -1 ).
+    ls_result = lo_context->eval( 'anyEmpty;' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 0 ).
+
+    ls_result = lo_context->eval(
+      'var aggregate = new AggregateError(new Set([1, 2]), "many");'
+      && ' aggregate instanceof Error && aggregate instanceof AggregateError'
+      && ' && aggregate.name === "AggregateError" && aggregate.message === "many"'
+      && ' && aggregate.errors.join(":") === "1:2"'
+      && ' && !aggregate.propertyIsEnumerable("errors")'
+      && ' && AggregateError.length === 2 && AggregateError.name === "AggregateError"'
+      && ' && Promise.allSettled.length === 1 && Promise.any.length === 1;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var capabilityCalls = 0; var customResolved; var customRejected;'
+      && ' function CustomPromise(executor) { capabilityCalls++;'
+      && ' executor(function(value) { customResolved = value; },'
+      && ' function(reason) { customRejected = reason; }); this.custom = true; }'
+      && ' var resolvedCustom = Promise.resolve.call(CustomPromise, 31);'
+      && ' var rejectedCustom = Promise.reject.call(CustomPromise, "nope");'
+      && ' capabilityCalls === 2 && resolvedCustom instanceof CustomPromise'
+      && ' && rejectedCustom instanceof CustomPromise'
+      && ' && resolvedCustom.custom && rejectedCustom.custom'
+      && ' && customResolved === 31 && customRejected === "nope";' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var nonConstructorRejected = false; var duplicateRejected = false;'
+      && ' try { Promise.resolve.call({}, 1); } catch (error) {'
+      && ' nonConstructorRejected = error instanceof TypeError; }'
+      && ' function DuplicateCapability(executor) {'
+      && ' var resolver = function() {}; executor(resolver, resolver);'
+      && ' executor(resolver, resolver); }'
+      && ' try { Promise.resolve.call(DuplicateCapability, 1); } catch (error) {'
+      && ' duplicateRejected = error instanceof TypeError; }'
+      && ' nonConstructorRejected && duplicateRejected;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var combinatorCapabilities = 0;'
+      && ' function CustomCombinator(executor) { combinatorCapabilities++;'
+      && ' var target = this; executor(function(value) { target.value = value; },'
+      && ' function(reason) { target.reason = reason; }); }'
+      && ' CustomCombinator.resolve = function(value) {'
+      && ' return Promise.resolve(value); };'
+      && ' var customAll = Promise.all.call(CustomCombinator, [2, 3]);'
+      && ' var customSettled = Promise.allSettled.call(CustomCombinator,'
+      && ' [Promise.reject("x")]);'
+      && ' var customRace = Promise.race.call(CustomCombinator, [4]);'
+      && ' var customAny = Promise.any.call(CustomCombinator,'
+      && ' [Promise.reject("a"), 5]);'
+      && ' combinatorCapabilities === 4'
+      && ' && customAll instanceof CustomCombinator'
+      && ' && customSettled instanceof CustomCombinator'
+      && ' && customRace instanceof CustomCombinator'
+      && ' && customAny instanceof CustomCombinator;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval(
+      'customAll.value.join("") === "23"'
+      && ' && customSettled.value[0].status === "rejected"'
+      && ' && customSettled.value[0].reason === "x"'
+      && ' && customRace.value === 4 && customAny.value === 5;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var speciesReads = 0; function CustomSpecies(executor) {'
+      && ' var target = this; executor(function(value) { target.value = value; },'
+      && ' function(reason) { target.reason = reason; }); }'
+      && ' var speciesHolder = {}; Object.defineProperty(speciesHolder,'
+      && ' Symbol.species, { get: function() {'
+      && ' speciesReads++; return CustomSpecies; } });'
+      && ' var speciesSource = Promise.resolve(6);'
+      && ' speciesSource.constructor = speciesHolder;'
+      && ' var speciesResult = speciesSource.then(function(value) {'
+      && ' return value + 1; });'
+      && ' speciesReads === 1 && speciesResult instanceof CustomSpecies;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    ls_result = lo_context->eval( 'speciesResult.value === 7;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = lo_context->eval(
+      'var nullSpeciesSource = Promise.resolve(1); var nullSpecies = {};'
+      && ' nullSpecies[Symbol.species] = null;'
+      && ' nullSpeciesSource.constructor = nullSpecies;'
+      && ' var defaultSpeciesResult = nullSpeciesSource.then();'
+      && ' var invalidSpecies = false; var invalidConstructor = false;'
+      && ' var invalidSpeciesSource = Promise.resolve(1); var invalid = {};'
+      && ' invalid[Symbol.species] = {}; invalidSpeciesSource.constructor = invalid;'
+      && ' try { invalidSpeciesSource.then(); } catch (error) {'
+      && ' invalidSpecies = error instanceof TypeError; }'
+      && ' var invalidConstructorSource = Promise.resolve(1);'
+      && ' invalidConstructorSource.constructor = 1;'
+      && ' try { invalidConstructorSource.then(); } catch (error) {'
+      && ' invalidConstructor = error instanceof TypeError; }'
+      && ' defaultSpeciesResult instanceof Promise'
+      && ' && invalidSpecies && invalidConstructor;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
   METHOD eval_precedence.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     DATA lv_actual TYPE f.
@@ -2539,7 +3304,8 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'typeof undefined === "undefined" && typeof null === "object"'
       && ' && typeof 1 === "number" && typeof "x" === "string"'
-      && ' && typeof Object === "function" && typeof {} === "object";' ).
+      && ' && typeof Object === "function" && typeof {} === "object"'
+      && ' && typeof missingGlobal === "undefined";' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
     ls_result = zcl_qjs=>eval( 'isNaN(NaN) && Infinity > 1;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
@@ -3007,6 +3773,68 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (error.name === "TypeError") caught = caught + 1; }'
       && ' try { 1 instanceof 2; } catch (error) {'
       && ' if (error.name === "TypeError") caught = caught + 1; } caught === 3;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var cause = { code: 7 }; var error = new Error("outer", { cause: cause });'
+      && ' var descriptor = Object.getOwnPropertyDescriptor(error, "cause");'
+      && ' var undefinedCause = new TypeError(undefined, { cause: undefined });'
+      && ' var absentCause = new RangeError("none", {});'
+      && ' var inheritedOptions = Object.create({ cause: 9 });'
+      && ' var inheritedCause = new SyntaxError("inherited", inheritedOptions);'
+      && ' var evalCause = new EvalError("eval", { cause: 10 });'
+      && ' error.cause === cause && descriptor.value === cause'
+      && ' && descriptor.writable && !descriptor.enumerable && descriptor.configurable'
+      && ' && Object.hasOwn(undefinedCause, "cause")'
+      && ' && undefinedCause.cause === undefined'
+      && ' && !Object.hasOwn(absentCause, "cause")'
+      && ' && !Object.hasOwn(new ReferenceError("primitive", 1), "cause")'
+      && ' && inheritedCause.cause === 9 && evalCause.cause === 10'
+      && ' && evalCause instanceof EvalError && evalCause instanceof Error'
+      && ' && EvalError.prototype.constructor === EvalError'
+      && ' && Object.getPrototypeOf(EvalError.prototype) === Error.prototype;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var causeReads = 0; var thrownCause = false; var options = {};'
+      && ' Object.defineProperty(options, "cause", { get: function() {'
+      && ' causeReads++; throw "cause-failure"; } });'
+      && ' try { new URIError("bad", options); } catch (error) {'
+      && ' thrownCause = error === "cause-failure"; }'
+      && ' causeReads === 1 && thrownCause;' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'var sequence = ""; var message = { toString: function() {'
+      && ' sequence += "m"; return "many"; } };'
+      && ' var options = {}; Object.defineProperty(options, "cause", {'
+      && ' get: function() { sequence += "c"; return 4; } });'
+      && ' var errors = {}; errors[Symbol.iterator] = function() {'
+      && ' sequence += "i"; return { next: function() {'
+      && ' sequence += "n"; return { done: true }; } }; };'
+      && ' var aggregate = new AggregateError(errors, message, options);'
+      && ' sequence === "mcin" && aggregate.message === "many"'
+      && ' && aggregate.cause === 4 && aggregate.errors.length === 0'
+      && ' && !aggregate.propertyIsEnumerable("cause");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+
+    ls_result = zcl_qjs=>eval(
+      'class AggregateSubclass extends AggregateError {}'
+      && ' class ExplicitTypeError extends TypeError {'
+      && ' constructor(message) { super(message); this.marker = 5; } }'
+      && ' var aggregateSubclass = new AggregateSubclass([1, 2], "many");'
+      && ' var explicitTypeError = new ExplicitTypeError("bad");'
+      && ' function NullPrototypeTarget() {}'
+      && ' NullPrototypeTarget.prototype = null;'
+      && ' var reflected = Reflect.construct('
+      && ' AggregateError, [[]], NullPrototypeTarget);'
+      && ' aggregateSubclass instanceof AggregateSubclass'
+      && ' && aggregateSubclass instanceof AggregateError'
+      && ' && aggregateSubclass.errors.join(":") === "1:2"'
+      && ' && explicitTypeError instanceof ExplicitTypeError'
+      && ' && explicitTypeError instanceof TypeError'
+      && ' && explicitTypeError.message === "bad" && explicitTypeError.marker === 5'
+      && ' && Object.getPrototypeOf(reflected) === AggregateError.prototype;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 

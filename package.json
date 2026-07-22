@@ -16,12 +16,13 @@
     "prepare:test262": "node scripts/prepare-test262.mjs",
     "verify:opcodes": "npm run prepare:quickjs && node scripts/verify-quickjs-opcodes.mjs",
     "verify:oracle": "npm run prepare:oracle && node scripts/verify-quickjs-oracle.mjs",
+    "verify:profile": "node scripts/verify-profile.mjs",
     "test262:run": "npm run prepare:test262 && node scripts/test262-execute.mjs",
     "test262:selftest": "node scripts/test262-metadata.test.mjs",
     "lint": "npm run prepare:open-abap && abaplint",
     "transpile": "npm run prepare:open-abap && npm run clean && abap_transpile",
     "unit": "npm run transpile && node --expose-gc output/index.mjs",
-    "test": "npm run verify:opcodes && npm run verify:oracle && npm run lint && npm run unit && npm run test262:selftest && npm run test262:run"
+    "test": "npm run verify:profile && npm run verify:opcodes && npm run verify:oracle && npm run lint && npm run unit && npm run test262:selftest && npm run test262:run"
   },
   "devDependencies": {
     "@abaplint/cli": "2.120.4",

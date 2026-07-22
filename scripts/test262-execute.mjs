@@ -13,6 +13,17 @@ const lock = JSON.parse(readFileSync(resolve(workspace, "upstream-lock.json"), "
 const checkout = resolve(workspace, ".cache", "test262");
 const baseHarness = `
 function Test262Error(message) { this.message = message; }
+var SuppressedError;
+var __zqjsDoneCalled = false;
+var __zqjsDoneError;
+function $DONE(error) {
+  if (__zqjsDoneCalled) {
+    __zqjsDoneError = new Test262Error("$DONE called more than once");
+    return;
+  }
+  __zqjsDoneCalled = true;
+  if (error !== undefined) __zqjsDoneError = error;
+}
 function __zqjsSameValue(actual, expected, message) {
   if (actual === expected) {
     if (actual === 0 && 1 / actual !== 1 / expected) {
@@ -120,10 +131,37 @@ if (actualCommit !== lock.test262.commit) {
 
 await import("../output/init.mjs");
 const { zcl_qjs } = await import("../output/zcl_qjs.clas.mjs");
+const { zcl_qjs_runtime } = await import("../output/zcl_qjs_runtime.clas.mjs");
+const { zcl_qjs_context } = await import("../output/zcl_qjs_context.clas.mjs");
 let mismatches = 0;
 const totals = { pass: 0, fail: 0, unsupported: 0, "infrastructure-skip": 0 };
+const testFilter = process.env.TEST262_FILTER ?? "";
+const configuredTests = testFilter
+  ? config.tests.filter(configured => normalizeTest(configured).path.includes(testFilter))
+  : config.tests;
+if (testFilter && configuredTests.length === 0) {
+  throw new Error(`TEST262_FILTER matched no configured tests: ${testFilter}`);
+}
 
-for (const configured of config.tests) {
+async function evalPositive(source, metadata) {
+  if (!metadata.flags.includes("async")) {
+    await zcl_qjs.eval({ source, max_steps: config.maxSteps ?? 100000 });
+    return;
+  }
+  const runtime = await new zcl_qjs_runtime().constructor_({
+    max_steps: config.maxSteps ?? 100000
+  });
+  const context = await new zcl_qjs_context().constructor_({ runtime });
+  await context.eval({ source });
+  await context.eval({
+    source: `
+if (!__zqjsDoneCalled) throw new Test262Error("async test did not call $DONE");
+if (__zqjsDoneError !== undefined) throw __zqjsDoneError;
+`
+  });
+}
+
+for (const configured of configuredTests) {
   const test = normalizeTest(configured);
   const fixture = resolve(checkout, test.path);
   let outcome = "pass";
@@ -138,7 +176,11 @@ for (const configured of config.tests) {
   } else {
     const raw = readFileSync(fixture, "utf8").replaceAll("\r\n", "\n");
     const parsed = parseTest262Metadata(raw);
-    const unsupported = unsupportedReasons(parsed.metadata, config.supportedFeatures ?? []);
+    const unsupported = unsupportedReasons(
+      parsed.metadata,
+      config.supportedFeatures ?? [],
+      config.supportedFlags ?? []
+    );
     if (unsupported.length) {
       outcome = "unsupported";
       reason = unsupported.join("; ");
@@ -187,7 +229,7 @@ for (const configured of config.tests) {
           }
         } else {
           try {
-            await zcl_qjs.eval({ source, max_steps: config.maxSteps ?? 100000 });
+            await evalPositive(source, parsed.metadata);
           } catch (error) {
             outcome = "fail";
             reason = errorText(error);

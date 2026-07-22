@@ -17,6 +17,9 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
+    METHODS get_global_object
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
     METHODS eval
       IMPORTING source TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -37,6 +40,7 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mv_disposed TYPE abap_bool.
     DATA mt_globals TYPE ty_globals.
+    DATA mo_global_object TYPE REF TO zcl_qjs_object.
     METHODS assert_active RAISING zcx_qjs_error.
     METHODS install_string_method
       IMPORTING prototype TYPE REF TO zcl_qjs_object name TYPE string
@@ -73,6 +77,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_string_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA lo_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_generator_function_proto TYPE REF TO zcl_qjs_object.
+    DATA lo_promise_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_reference TYPE REF TO object.
     DATA lo_object_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_array_intrinsic TYPE REF TO zcl_qjs_native_function.
@@ -82,16 +87,19 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_parse_int_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_parse_float_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_function_intrinsic TYPE REF TO zcl_qjs_native_function.
+    DATA lo_promise_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_object_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_function_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_array_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_string_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_error_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_eval_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_type_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_range_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_syntax_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_reference_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_uri_error_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_aggregate_error_prototype TYPE REF TO zcl_qjs_object.
     DATA lv_constructor_property TYPE string VALUE 'constructor'.
     DATA lv_to_string_name TYPE string VALUE 'toString'.
     DATA lv_has_own_property_name TYPE string VALUE 'hasOwnProperty'.
@@ -99,11 +107,13 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lv_property_is_enum_name TYPE string VALUE 'propertyIsEnumerable'.
     DATA lv_is_prototype_of_name TYPE string VALUE 'isPrototypeOf'.
     DATA lv_error_name TYPE string VALUE 'Error'.
+    DATA lv_eval_error_name TYPE string VALUE 'EvalError'.
     DATA lv_type_error_name TYPE string VALUE 'TypeError'.
     DATA lv_range_error_name TYPE string VALUE 'RangeError'.
     DATA lv_syntax_error_name TYPE string VALUE 'SyntaxError'.
     DATA lv_reference_error_name TYPE string VALUE 'ReferenceError'.
     DATA lv_uri_error_name TYPE string VALUE 'URIError'.
+    DATA lv_aggregate_error_name TYPE string VALUE 'AggregateError'.
     DATA lv_error_to_string_name TYPE string VALUE 'toString'.
     DATA ls_native_value TYPE zcl_qjs_value=>ty_value.
     IF runtime IS NOT BOUND OR runtime->is_disposed( ) = abap_true.
@@ -113,6 +123,9 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     mo_runtime = runtime.
     lo_object_prototype = mo_runtime->create_object( ).
     mo_runtime->set_object_prototype( lo_object_prototype ).
+    mo_global_object = mo_runtime->create_object( lo_object_prototype ).
+    set_global(
+      name = 'globalThis' value = zcl_qjs_value=>new_object( mo_global_object ) ).
     lo_function_prototype = mo_runtime->create_object( ).
     mo_runtime->set_function_prototype( lo_function_prototype ).
     lo_string_prototype = mo_runtime->create_object( ).
@@ -303,6 +316,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_string_iterator_proto = mo_runtime->create_object( lo_object_prototype ).
     lo_generator_prototype = mo_runtime->create_object( lo_object_prototype ).
     lo_generator_function_proto = mo_runtime->create_object( lo_function_prototype ).
+    lo_promise_prototype = mo_runtime->create_object( lo_object_prototype ).
     mo_runtime->set_map_prototype( lo_map_prototype ).
     mo_runtime->set_set_prototype( lo_set_prototype ).
     mo_runtime->set_map_iterator_proto( lo_map_iterator_proto ).
@@ -311,6 +325,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     mo_runtime->set_string_iterator_proto( lo_string_iterator_proto ).
     mo_runtime->set_generator_prototype( lo_generator_prototype ).
     mo_runtime->set_generator_function_proto( lo_generator_function_proto ).
+    mo_runtime->set_promise_prototype( lo_promise_prototype ).
     lo_generator_function_proto->define_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_generator_prototype )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
@@ -327,6 +342,127 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       identity = ls_to_string_tag-symbol_id
       value = zcl_qjs_value=>new_string( 'Generator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
+
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise
+                                      runtime = mo_runtime.
+    lo_promise_intrinsic = lo_native.
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'Promise' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'prototype' value = zcl_qjs_value=>new_object( lo_promise_prototype )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    lo_reference = lo_native.
+    DATA(ls_promise_constructor) = zcl_qjs_value=>new_object( lo_reference ).
+    set_global( name = 'Promise' value = ls_promise_constructor ).
+    lo_promise_prototype->define_property(
+      name = lv_constructor_property value = ls_promise_constructor
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    DATA(ls_promise_species_symbol) = mo_runtime->well_known_symbol( 'species' ).
+    CREATE OBJECT lo_native
+      EXPORTING id      = zcl_qjs_native_function=>id_promise_species_get
+                runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 0 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'get [Symbol.species]' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_symbol_accessor(
+      identity = ls_promise_species_symbol-symbol_id
+      getter = zcl_qjs_value=>new_object( lo_reference )
+      setter = zcl_qjs_value=>new_undefined( )
+      enumerable = abap_false configurable = abap_true ).
+    lo_promise_prototype->define_symbol_property(
+      identity = ls_to_string_tag-symbol_id
+      value = zcl_qjs_value=>new_string( 'Promise' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    install_collection_method(
+      prototype = lo_promise_prototype name = 'then'
+      id = zcl_qjs_native_function=>id_promise_then length = 2 ).
+    install_collection_method(
+      prototype = lo_promise_prototype name = 'catch'
+      id = zcl_qjs_native_function=>id_promise_catch length = 1 ).
+    install_collection_method(
+      prototype = lo_promise_prototype name = 'finally'
+      id = zcl_qjs_native_function=>id_promise_finally length = 1 ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise_resolve
+                                      runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'resolve' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'resolve' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise_reject
+                                      runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'reject' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'reject' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise_all
+                                      runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'all' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'all' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise_race
+                                      runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'race' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'race' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native
+      EXPORTING id      = zcl_qjs_native_function=>id_promise_all_settled
+                runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'allSettled' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'allSettled' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_promise_any
+                                      runtime = mo_runtime.
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'any' )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 1 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_reference = lo_native.
+    lo_promise_intrinsic->define_property(
+      name = 'any' value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_map
       runtime                            = mo_runtime.
@@ -1425,6 +1561,8 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'stringify' value = zcl_qjs_value=>new_object( lo_reference ) ).
     set_global( name = 'JSON' value = zcl_qjs_value=>new_object( lo_json ) ).
     lo_error_prototype = mo_runtime->create_object( ).
+    lo_eval_error_prototype = mo_runtime->create_object(
+      prototype = lo_error_prototype ).
     lo_type_error_prototype = mo_runtime->create_object(
       prototype = lo_error_prototype ).
     lo_range_error_prototype = mo_runtime->create_object(
@@ -1435,8 +1573,12 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       prototype = lo_error_prototype ).
     lo_uri_error_prototype = mo_runtime->create_object(
       prototype = lo_error_prototype ).
+    lo_aggregate_error_prototype = mo_runtime->create_object(
+      prototype = lo_error_prototype ).
     mo_runtime->set_error_prototype(
       name = lv_error_name prototype = lo_error_prototype ).
+    mo_runtime->set_error_prototype(
+      name = lv_eval_error_name prototype = lo_eval_error_prototype ).
     mo_runtime->set_error_prototype(
       name = lv_type_error_name prototype = lo_type_error_prototype ).
     mo_runtime->set_error_prototype(
@@ -1447,6 +1589,8 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = lv_reference_error_name prototype = lo_reference_error_prototype ).
     mo_runtime->set_error_prototype(
       name = lv_uri_error_name prototype = lo_uri_error_prototype ).
+    mo_runtime->set_error_prototype(
+      name = lv_aggregate_error_name prototype = lo_aggregate_error_prototype ).
 
     lo_error_prototype->define_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_error_name )
@@ -1469,6 +1613,12 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'name' value = zcl_qjs_value=>new_string( lv_type_error_name )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_type_error_prototype->define_property(
+      name = 'message' value = zcl_qjs_value=>new_string( CONV string( '' ) )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    lo_eval_error_prototype->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( lv_eval_error_name )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    lo_eval_error_prototype->define_property(
       name = 'message' value = zcl_qjs_value=>new_string( CONV string( '' ) )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_range_error_prototype->define_property(
@@ -1495,6 +1645,12 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_uri_error_prototype->define_property(
       name = 'message' value = zcl_qjs_value=>new_string( CONV string( '' ) )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
+    lo_aggregate_error_prototype->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( lv_aggregate_error_name )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    lo_aggregate_error_prototype->define_property(
+      name = 'message' value = zcl_qjs_value=>new_string( CONV string( '' ) )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_error
       runtime                            = mo_runtime.
@@ -1504,13 +1660,30 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_native->set_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_error_prototype ) ).
     lo_reference = lo_native.
-    set_global( name = lv_error_name value = zcl_qjs_value=>new_object( lo_reference ) ).
+    DATA(ls_error_constructor) = zcl_qjs_value=>new_object( lo_reference ).
+    set_global( name = lv_error_name value = ls_error_constructor ).
     lo_error_prototype->define_property(
+      name = lv_constructor_property value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+
+    CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_eval_error
+      runtime                            = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
+    lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
+    lo_native->set_property(
+      name = 'name' value = zcl_qjs_value=>new_string( lv_eval_error_name ) ).
+    lo_native->set_property(
+      name = 'prototype' value = zcl_qjs_value=>new_object( lo_eval_error_prototype ) ).
+    lo_reference = lo_native.
+    set_global(
+      name = lv_eval_error_name value = zcl_qjs_value=>new_object( lo_reference ) ).
+    lo_eval_error_prototype->define_property(
       name = lv_constructor_property value = zcl_qjs_value=>new_object( lo_reference )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_type_error
       runtime                            = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
     lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
     lo_native->set_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_type_error_name ) ).
@@ -1525,6 +1698,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_range_error
       runtime                            = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
     lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
     lo_native->set_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_range_error_name ) ).
@@ -1539,6 +1713,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_syntax_error
       runtime                            = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
     lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
     lo_native->set_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_syntax_error_name ) ).
@@ -1553,6 +1728,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
 
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_reference_error runtime = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
     lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
     lo_native->set_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_reference_error_name ) ).
@@ -1568,6 +1744,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
 
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_uri_error
       runtime                            = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
     lo_native->set_property( name = 'length' value = zcl_qjs_value=>new_int( 1 ) ).
     lo_native->set_property(
       name = 'name' value = zcl_qjs_value=>new_string( lv_uri_error_name ) ).
@@ -1578,6 +1755,26 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = lv_uri_error_name value = zcl_qjs_value=>new_object( lo_reference ) ).
     lo_uri_error_prototype->define_property(
       name = lv_constructor_property value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    CREATE OBJECT lo_native EXPORTING id      = zcl_qjs_native_function=>id_aggregate_error
+                                      runtime = mo_runtime.
+    lo_native->set_internal_prototype( ls_error_constructor ).
+    lo_native->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 2 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'name' value = zcl_qjs_value=>new_string( lv_aggregate_error_name )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    lo_native->define_property(
+      name = 'prototype' value = zcl_qjs_value=>new_object(
+        lo_aggregate_error_prototype )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    lo_reference = lo_native.
+    DATA(ls_aggregate_error_constructor) = zcl_qjs_value=>new_object( lo_reference ).
+    set_global(
+      name = lv_aggregate_error_name value = ls_aggregate_error_constructor ).
+    lo_aggregate_error_prototype->define_property(
+      name = lv_constructor_property value = ls_aggregate_error_constructor
       writable = abap_true enumerable = abap_false configurable = abap_true ).
   ENDMETHOD.
 
@@ -1650,6 +1847,11 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     ls_global-name = name.
     CREATE OBJECT ls_global-cell EXPORTING value = value runtime = mo_runtime.
     INSERT ls_global INTO TABLE mt_globals.
+    IF mo_global_object IS BOUND.
+      mo_global_object->define_cell_property(
+        name = name cell = ls_global-cell writable = abap_true
+        enumerable = abap_false configurable = abap_true ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD register_function.
@@ -1681,6 +1883,11 @@ CLASS zcl_qjs_context IMPLEMENTATION.
         EXPORTING reason = 'Unknown JavaScript global'.
     ENDIF.
     result = ls_global-cell->get( ).
+  ENDMETHOD.
+
+  METHOD get_global_object.
+    assert_active( ).
+    result = mo_global_object.
   ENDMETHOD.
 
   METHOD eval.
@@ -1717,12 +1924,18 @@ CLASS zcl_qjs_context IMPLEMENTATION.
         ls_global-name = ls_binding-name.
         ls_global-cell = lo_cell.
         INSERT ls_global INTO TABLE mt_globals.
+        IF ls_binding-lexical = abap_false.
+          mo_global_object->define_cell_property(
+            name = ls_binding-name cell = lo_cell writable = ls_spec-mutable
+            enumerable = abap_true configurable = abap_true ).
+        ENDIF.
       ENDIF.
       APPEND lo_cell TO lt_cells.
     ENDLOOP.
     CREATE OBJECT lo_vm
       EXPORTING runtime = mo_runtime limits = mo_runtime->get_limits( ).
     result = lo_vm->execute( function = lo_function initial_cells = lt_cells ).
+    mo_runtime->drain_jobs( ).
   ENDMETHOD.
 
   METHOD call.
@@ -1753,10 +1966,12 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     CREATE OBJECT lo_vm
       EXPORTING runtime = mo_runtime limits = mo_runtime->get_limits( ).
     result = lo_vm->execute( lo_function ).
+    mo_runtime->drain_jobs( ).
   ENDMETHOD.
 
   METHOD dispose.
     CLEAR mt_globals.
+    CLEAR mo_global_object.
     CLEAR mo_runtime.
     mv_disposed = abap_true.
   ENDMETHOD.

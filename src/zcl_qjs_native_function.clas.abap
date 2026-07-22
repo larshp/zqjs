@@ -191,6 +191,35 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_generator_next TYPE i VALUE 196.
     CONSTANTS id_generator_throw TYPE i VALUE 197.
     CONSTANTS id_generator_return TYPE i VALUE 198.
+    CONSTANTS id_promise TYPE i VALUE 199.
+    CONSTANTS id_promise_then TYPE i VALUE 200.
+    CONSTANTS id_promise_catch TYPE i VALUE 201.
+    CONSTANTS id_promise_resolve TYPE i VALUE 202.
+    CONSTANTS id_promise_reject TYPE i VALUE 203.
+    CONSTANTS id_promise_fulfill TYPE i VALUE 204.
+    CONSTANTS id_promise_reject_fn TYPE i VALUE 205.
+    CONSTANTS id_promise_finally TYPE i VALUE 206.
+    CONSTANTS id_promise_finalizer TYPE i VALUE 207.
+    CONSTANTS id_promise_finally_continue TYPE i VALUE 208.
+    CONSTANTS id_promise_all TYPE i VALUE 209.
+    CONSTANTS id_promise_race TYPE i VALUE 210.
+    CONSTANTS id_promise_all_fulfill TYPE i VALUE 211.
+    CONSTANTS id_promise_combinator_reject TYPE i VALUE 212.
+    CONSTANTS id_promise_race_fulfill TYPE i VALUE 213.
+    CONSTANTS id_aggregate_error TYPE i VALUE 214.
+    CONSTANTS id_promise_all_settled TYPE i VALUE 215.
+    CONSTANTS id_promise_any TYPE i VALUE 216.
+    CONSTANTS id_promise_all_settled_fulfill TYPE i VALUE 217.
+    CONSTANTS id_promise_all_settled_reject TYPE i VALUE 218.
+    CONSTANTS id_promise_any_reject TYPE i VALUE 219.
+    CONSTANTS id_promise_capability_executor TYPE i VALUE 220.
+    CONSTANTS id_eval_error TYPE i VALUE 221.
+    CONSTANTS id_promise_species_get TYPE i VALUE 222.
+    CONSTANTS id_async_resume_fulfill TYPE i VALUE 223.
+    CONSTANTS id_async_resume_reject TYPE i VALUE 224.
+    CONSTANTS id_async_from_sync_next TYPE i VALUE 225.
+    CONSTANTS id_async_from_sync_result TYPE i VALUE 226.
+    CONSTANTS id_async_from_sync_return TYPE i VALUE 227.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -202,7 +231,10 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set_property IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value.
     TYPES: BEGIN OF ty_own_property,
       found TYPE abap_bool,
+      accessor TYPE abap_bool,
       value TYPE zcl_qjs_value=>ty_value,
+      getter TYPE zcl_qjs_value=>ty_value,
+      setter TYPE zcl_qjs_value=>ty_value,
       writable TYPE abap_bool,
       enumerable TYPE abap_bool,
       configurable TYPE abap_bool,
@@ -222,6 +254,21 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS has_symbol_property
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS define_symbol_accessor
+      IMPORTING identity TYPE int8 getter TYPE zcl_qjs_value=>ty_value
+        setter TYPE zcl_qjs_value=>ty_value enumerable TYPE abap_bool
+        configurable TYPE abap_bool.
+    METHODS get_own_symbol_property
+      IMPORTING identity TYPE int8
+      RETURNING VALUE(result) TYPE ty_own_property.
+    METHODS get_symbol_with_receiver
+      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS set_internal_prototype
+      IMPORTING prototype TYPE zcl_qjs_value=>ty_value.
+    METHODS get_internal_prototype
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
   PRIVATE SECTION.
     TYPES:
       BEGIN OF ty_integer,
@@ -240,15 +287,31 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_symbol_property,
       identity TYPE int8,
       value TYPE zcl_qjs_value=>ty_value,
+      getter TYPE zcl_qjs_value=>ty_value,
+      setter TYPE zcl_qjs_value=>ty_value,
+      accessor TYPE abap_bool,
+      writable TYPE abap_bool,
+      enumerable TYPE abap_bool,
+      configurable TYPE abap_bool,
     END OF ty_symbol_property.
     TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
       WITH UNIQUE KEY identity.
+    TYPES: BEGIN OF ty_promise_capability,
+      promise TYPE zcl_qjs_value=>ty_value,
+      resolve TYPE zcl_qjs_value=>ty_value,
+      reject TYPE zcl_qjs_value=>ty_value,
+    END OF ty_promise_capability.
+    TYPES: BEGIN OF ty_error_cause,
+      found TYPE abap_bool,
+      value TYPE zcl_qjs_value=>ty_value,
+    END OF ty_error_cause.
     DATA mv_id TYPE i.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mo_context TYPE REF TO zcl_qjs_context.
     DATA mo_random TYPE REF TO cl_abap_random_int.
     DATA mt_properties TYPE ty_properties.
     DATA mt_symbol_properties TYPE ty_symbol_properties.
+    DATA ms_internal_prototype TYPE zcl_qjs_value=>ty_value.
     DATA ms_bound_target TYPE zcl_qjs_value=>ty_value.
     DATA ms_bound_this TYPE zcl_qjs_value=>ty_value.
     DATA mt_bound_arguments TYPE zif_qjs_callable=>ty_arguments.
@@ -262,6 +325,18 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING value TYPE zcl_qjs_value=>ty_value name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
+    METHODS new_promise_capability
+      IMPORTING constructor TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE ty_promise_capability
+      RAISING zcx_qjs_error zcx_qjs_throw.
+    METHODS promise_species_constructor
+      IMPORTING promise TYPE REF TO zcl_qjs_object
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error zcx_qjs_throw.
+    METHODS get_error_cause
+      IMPORTING options TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE ty_error_cause
+      RAISING zcx_qjs_error zcx_qjs_throw.
     METHODS array_to_length
       IMPORTING value TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE int8
@@ -843,6 +918,14 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD set_internal_prototype.
+    ms_internal_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD get_internal_prototype.
+    result = ms_internal_prototype.
+  ENDMETHOD.
+
   METHOD get_property.
     DATA ls_property TYPE ty_property.
     READ TABLE mt_properties WITH TABLE KEY name = name INTO ls_property.
@@ -937,6 +1020,56 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD define_symbol_accessor.
+    DATA(ls_property) = VALUE ty_symbol_property(
+      identity = identity getter = getter setter = setter accessor = abap_true
+      enumerable = enumerable configurable = configurable ).
+    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
+    INSERT ls_property INTO TABLE mt_symbol_properties.
+  ENDMETHOD.
+
+  METHOD get_own_symbol_property.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    result-found = abap_true.
+    result-accessor = ls_property-accessor.
+    result-value = ls_property-value.
+    result-getter = ls_property-getter.
+    result-setter = ls_property-setter.
+    result-writable = ls_property-writable.
+    result-enumerable = ls_property-enumerable.
+    result-configurable = ls_property-configurable.
+  ENDMETHOD.
+
+  METHOD get_symbol_with_receiver.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc = 0.
+      IF ls_property-accessor = abap_true.
+        IF ls_property-getter-tag = zcl_qjs_value=>tag_undefined
+            OR ls_property-getter-tag = 0.
+          result = zcl_qjs_value=>new_undefined( ).
+        ELSE.
+          result = mo_runtime->invoke_callable(
+            callable = ls_property-getter this_value = receiver ).
+        ENDIF.
+      ELSE.
+        result = ls_property-value.
+      ENDIF.
+      RETURN.
+    ENDIF.
+    DATA(lo_function_prototype) = mo_runtime->get_function_prototype( ).
+    IF lo_function_prototype IS BOUND.
+      result = lo_function_prototype->reflect_get_symbol(
+        identity = identity receiver = receiver ).
+    ELSE.
+      result = zcl_qjs_value=>new_undefined( ).
+    ENDIF.
+  ENDMETHOD.
+
   METHOD is_callable.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lo_callable TYPE REF TO zif_qjs_callable.
@@ -981,7 +1114,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       CASE lo_native->mv_id.
         WHEN id_object OR id_array OR id_error OR id_type_error OR id_range_error
             OR id_syntax_error OR id_reference_error OR id_uri_error OR id_function
-            OR id_number OR id_string OR id_boolean OR id_map OR id_set.
+            OR id_number OR id_string OR id_boolean OR id_map OR id_set
+            OR id_promise OR id_aggregate_error OR id_eval_error.
           result = abap_true.
         WHEN id_bound_function.
           result = is_constructable( lo_native->ms_bound_target ).
@@ -1032,6 +1166,138 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       result = lo_properties->get_property( name ).
     ELSE.
       result = zcl_qjs_value=>new_undefined( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD new_promise_capability.
+    IF is_constructable( constructor ) = abap_false.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise constructor is not constructable'.
+    ENDIF.
+    DATA(lo_executor) = NEW zcl_qjs_native_function(
+      id = id_promise_capability_executor runtime = mo_runtime ).
+    lo_executor->define_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 2 )
+      writable = abap_false enumerable = abap_false configurable = abap_true ).
+    DATA lo_executor_ref TYPE REF TO object.
+    lo_executor_ref = lo_executor.
+    DATA lt_capability_arguments TYPE zif_qjs_callable=>ty_arguments.
+    APPEND zcl_qjs_value=>new_object( lo_executor_ref ) TO lt_capability_arguments.
+    result-promise = mo_runtime->construct_value(
+      constructor = constructor arguments = lt_capability_arguments ).
+    IF result-promise-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise constructor returned a non-object'.
+    ENDIF.
+    DATA(ls_capability_resolve) = lo_executor->get_own_property( '[[Resolve]]' ).
+    DATA(ls_capability_reject) = lo_executor->get_own_property( '[[Reject]]' ).
+    IF ls_capability_resolve-found = abap_false
+        OR ls_capability_reject-found = abap_false
+        OR is_callable( ls_capability_resolve-value ) = abap_false
+        OR is_callable( ls_capability_reject-value ) = abap_false.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise capability functions are not callable'.
+    ENDIF.
+    result-resolve = ls_capability_resolve-value.
+    result-reject = ls_capability_reject-value.
+  ENDMETHOD.
+
+  METHOD promise_species_constructor.
+    DATA lv_constructor_name TYPE string VALUE 'constructor'.
+    DATA(ls_constructor) = promise->get( lv_constructor_name ).
+    DATA(lo_promise_prototype) = mo_runtime->get_promise_prototype( ).
+    IF ls_constructor-tag = zcl_qjs_value=>tag_undefined.
+      result = lo_promise_prototype->get( lv_constructor_name ).
+      RETURN.
+    ENDIF.
+    IF ls_constructor-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise constructor property is not an object'.
+    ENDIF.
+    DATA(ls_species_symbol) = mo_runtime->well_known_symbol( 'species' ).
+    DATA ls_species TYPE zcl_qjs_value=>ty_value.
+    DATA lo_species_object TYPE REF TO zcl_qjs_object.
+    DATA lo_species_closure TYPE REF TO zcl_qjs_closure.
+    DATA lo_species_properties TYPE REF TO zif_qjs_property_container.
+    TRY.
+        lo_species_object ?= ls_constructor-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_species_object IS BOUND.
+      ls_species = lo_species_object->get_symbol( ls_species_symbol-symbol_id ).
+    ELSE.
+      TRY.
+          lo_species_closure ?= ls_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_species_closure IS BOUND.
+        ls_species = lo_species_closure->get_symbol_property(
+          ls_species_symbol-symbol_id ).
+      ELSE.
+        lo_species_properties = ls_constructor-property_ref.
+        IF lo_species_properties IS NOT BOUND.
+          TRY.
+              lo_species_properties ?= ls_constructor-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_species_properties IS BOUND.
+          ls_species = lo_species_properties->get_symbol_property(
+            ls_species_symbol-symbol_id ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    IF ls_species-tag = 0 OR ls_species-tag = zcl_qjs_value=>tag_undefined
+        OR ls_species-tag = zcl_qjs_value=>tag_null.
+      result = lo_promise_prototype->get( lv_constructor_name ).
+      RETURN.
+    ENDIF.
+    IF is_constructable( ls_species ) = abap_false.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: Promise species is not constructable'.
+    ENDIF.
+    result = ls_species.
+  ENDMETHOD.
+
+  METHOD get_error_cause.
+    IF options-tag <> zcl_qjs_value=>tag_object.
+      RETURN.
+    ENDIF.
+    DATA lv_cause_name TYPE string VALUE 'cause'.
+    DATA lo_cause_object TYPE REF TO zcl_qjs_object.
+    DATA lo_cause_closure TYPE REF TO zcl_qjs_closure.
+    DATA lo_cause_native TYPE REF TO zcl_qjs_native_function.
+    TRY.
+        lo_cause_object ?= options-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_cause_object IS BOUND.
+      result-found = lo_cause_object->has_property( lv_cause_name ).
+      IF result-found = abap_true.
+        result-value = lo_cause_object->get( lv_cause_name ).
+      ENDIF.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_cause_closure ?= options-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_cause_closure IS BOUND.
+      result-found = lo_cause_closure->has_property( lv_cause_name ).
+      IF result-found = abap_true.
+        result-value = lo_cause_closure->get_property( lv_cause_name ).
+      ENDIF.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_cause_native ?= options-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_cause_native IS BOUND.
+      result-found = lo_cause_native->has_property( lv_cause_name ).
+      IF result-found = abap_true.
+        result-value = lo_cause_native->get_property( lv_cause_name ).
+      ENDIF.
     ENDIF.
   ENDMETHOD.
 
@@ -1976,28 +2242,47 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~get_symbol_property.
-    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
-      INTO DATA(ls_property).
-    IF sy-subrc = 0.
-      result = ls_property-value.
-    ELSE.
-      DATA(lo_function_prototype) = mo_runtime->get_function_prototype( ).
-      IF lo_function_prototype IS BOUND.
-        result = lo_function_prototype->get_symbol( identity ).
-      ELSE.
-        result = zcl_qjs_value=>new_undefined( ).
-      ENDIF.
-    ENDIF.
+    DATA lo_getter_self TYPE REF TO object.
+    lo_getter_self = me.
+    result = get_symbol_with_receiver(
+      identity = identity receiver = zcl_qjs_value=>new_object( lo_getter_self ) ).
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~set_symbol_property.
-    DATA(ls_property) = VALUE ty_symbol_property(
-      identity = identity value = value ).
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc = 0 AND ls_property-accessor = abap_true.
+      IF ls_property-setter-tag <> zcl_qjs_value=>tag_undefined
+          AND ls_property-setter-tag <> 0.
+        DATA lo_setter_self TYPE REF TO object.
+        lo_setter_self = me.
+        DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND value TO lt_setter_arguments.
+        DATA(ls_setter_result) = mo_runtime->invoke_callable(
+          callable   = ls_property-setter
+          this_value = zcl_qjs_value=>new_object( lo_setter_self )
+          arguments  = lt_setter_arguments ).
+      ENDIF.
+      RETURN.
+    ELSEIF sy-subrc = 0 AND ls_property-writable = abap_false.
+      RETURN.
+    ELSEIF sy-subrc <> 0.
+      ls_property = VALUE ty_symbol_property(
+        identity = identity writable = abap_true enumerable = abap_true
+        configurable = abap_true ).
+    ENDIF.
+    ls_property-value = value.
     DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
     INSERT ls_property INTO TABLE mt_symbol_properties.
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~delete_symbol_property.
+    READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
+      INTO DATA(ls_property).
+    IF sy-subrc = 0 AND ls_property-configurable = abap_false.
+      result = abap_false.
+      RETURN.
+    ENDIF.
     DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
     result = abap_true.
   ENDMETHOD.
@@ -2032,8 +2317,520 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA lv_string_offset TYPE i.
     DATA lv_string_count TYPE i.
     DATA ls_string_integer TYPE ty_integer.
+    DATA lt_empty_combinator_arguments TYPE zif_qjs_callable=>ty_arguments.
+    DATA ls_empty_combinator_result TYPE zcl_qjs_value=>ty_value.
+    DATA lt_combinator_error_arguments TYPE zif_qjs_callable=>ty_arguments.
+    DATA ls_combinator_rejected TYPE zcl_qjs_value=>ty_value.
     READ TABLE arguments INDEX 1 INTO ls_argument.
     CASE mv_id.
+      WHEN id_promise.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: Promise constructor requires new'.
+      WHEN id_promise_species_get.
+        result = this_value.
+      WHEN id_async_resume_fulfill OR id_async_resume_reject.
+        DATA lo_async_task TYPE REF TO zcl_qjs_async_task.
+        TRY.
+            lo_async_task ?= ms_bound_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_async_task IS NOT BOUND.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: invalid async continuation'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_async_value).
+        IF sy-subrc <> 0.
+          ls_async_value = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        lo_async_task->resume(
+          value    = ls_async_value
+          rejected = xsdbool( mv_id = id_async_resume_reject ) ).
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_async_from_sync_next.
+        DATA(ls_sync_step) = mo_runtime->iterator_next( ms_bound_target ).
+        DATA(lo_sync_value_promise) = mo_runtime->create_promise( ).
+        lo_sync_value_promise->promise_settle(
+          value = ls_sync_step-value rejected = abap_false ).
+        DATA(lo_sync_result_promise) = mo_runtime->create_promise( ).
+        DATA(lo_sync_result_handler) = NEW zcl_qjs_native_function(
+          id = id_async_from_sync_result runtime = mo_runtime
+          bound_target = zcl_qjs_value=>new_boolean( ls_sync_step-done ) ).
+        DATA lo_sync_result_handler_ref TYPE REF TO object.
+        lo_sync_result_handler_ref = lo_sync_result_handler.
+        lo_sync_value_promise->promise_add_reaction(
+          on_fulfilled = zcl_qjs_value=>new_object( lo_sync_result_handler_ref )
+          on_rejected  = zcl_qjs_value=>new_undefined( )
+          next_promise = lo_sync_result_promise ).
+        result = zcl_qjs_value=>new_object( lo_sync_result_promise ).
+      WHEN id_async_from_sync_result.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(lo_async_sync_result) = mo_runtime->create_object( ).
+        lo_async_sync_result->define_property( name = 'value' value = ls_argument ).
+        lo_async_sync_result->define_property(
+          name = 'done' value = zcl_qjs_value=>new_boolean(
+            ms_bound_target-bool_value ) ).
+        result = zcl_qjs_value=>new_object( lo_async_sync_result ).
+      WHEN id_async_from_sync_return.
+        mo_runtime->iterator_close( ms_bound_target ).
+        DATA(lo_async_sync_return_result) = mo_runtime->create_object( ).
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        lo_async_sync_return_result->define_property(
+          name = 'value' value = ls_argument ).
+        lo_async_sync_return_result->define_property(
+          name = 'done' value = zcl_qjs_value=>new_boolean( abap_true ) ).
+        DATA(lo_async_sync_return_promise) = mo_runtime->create_promise( ).
+        lo_async_sync_return_promise->promise_settle(
+          value    = zcl_qjs_value=>new_object( lo_async_sync_return_result )
+          rejected = abap_false ).
+        result = zcl_qjs_value=>new_object( lo_async_sync_return_promise ).
+      WHEN id_promise_capability_executor.
+        DATA(ls_existing_capability_resolve) = get_own_property( '[[Resolve]]' ).
+        DATA(ls_existing_capability_reject) = get_own_property( '[[Reject]]' ).
+        IF ( ls_existing_capability_resolve-found = abap_true
+              AND ls_existing_capability_resolve-value-tag
+                <> zcl_qjs_value=>tag_undefined )
+            OR ( ls_existing_capability_reject-found = abap_true
+              AND ls_existing_capability_reject-value-tag
+                <> zcl_qjs_value=>tag_undefined ).
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Promise capability executor called twice'.
+        ENDIF.
+        DATA ls_capability_resolve_arg TYPE zcl_qjs_value=>ty_value.
+        DATA ls_capability_reject_arg TYPE zcl_qjs_value=>ty_value.
+        READ TABLE arguments INDEX 1 INTO ls_capability_resolve_arg.
+        IF sy-subrc <> 0.
+          ls_capability_resolve_arg = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_capability_reject_arg.
+        IF sy-subrc <> 0.
+          ls_capability_reject_arg = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        define_property(
+          name = '[[Resolve]]' value = ls_capability_resolve_arg
+          writable = abap_false enumerable = abap_false configurable = abap_false ).
+        define_property(
+          name = '[[Reject]]' value = ls_capability_reject_arg
+          writable = abap_false enumerable = abap_false configurable = abap_false ).
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_promise_catch.
+        DATA(ls_catch_then) = get_callable_property(
+          value = this_value name = 'then' ).
+        DATA lt_catch_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND zcl_qjs_value=>new_undefined( ) TO lt_catch_arguments.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        APPEND ls_argument TO lt_catch_arguments.
+        result = mo_runtime->invoke_callable(
+          callable = ls_catch_then this_value = this_value
+          arguments = lt_catch_arguments ).
+      WHEN id_promise_finally.
+        DATA(ls_finally_then) = get_callable_property(
+          value = this_value name = 'then' ).
+        DATA(ls_finally_handler) = ls_argument.
+        IF ls_finally_handler-tag = 0.
+          ls_finally_handler = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA ls_finally_fulfilled TYPE zcl_qjs_value=>ty_value.
+        DATA ls_finally_rejected TYPE zcl_qjs_value=>ty_value.
+        IF mo_runtime->is_callable_value( ls_finally_handler ) = abap_true.
+          DATA lo_finally_fulfilled TYPE REF TO zcl_qjs_native_function.
+          DATA lo_finally_rejected TYPE REF TO zcl_qjs_native_function.
+          CREATE OBJECT lo_finally_fulfilled
+            EXPORTING id = id_promise_finalizer runtime = mo_runtime
+              bound_target = ls_finally_handler
+              bound_this = zcl_qjs_value=>new_boolean( abap_false ).
+          CREATE OBJECT lo_finally_rejected
+            EXPORTING id = id_promise_finalizer runtime = mo_runtime
+              bound_target = ls_finally_handler
+              bound_this = zcl_qjs_value=>new_boolean( abap_true ).
+          DATA lo_finally_fulfilled_ref TYPE REF TO object.
+          DATA lo_finally_rejected_ref TYPE REF TO object.
+          lo_finally_fulfilled_ref = lo_finally_fulfilled.
+          lo_finally_rejected_ref = lo_finally_rejected.
+          ls_finally_fulfilled = zcl_qjs_value=>new_object( lo_finally_fulfilled_ref ).
+          ls_finally_rejected = zcl_qjs_value=>new_object( lo_finally_rejected_ref ).
+        ELSE.
+          ls_finally_fulfilled = ls_finally_handler.
+          ls_finally_rejected = ls_finally_handler.
+        ENDIF.
+        DATA lt_finally_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND ls_finally_fulfilled TO lt_finally_arguments.
+        APPEND ls_finally_rejected TO lt_finally_arguments.
+        result = mo_runtime->invoke_callable(
+          callable = ls_finally_then this_value = this_value
+          arguments = lt_finally_arguments ).
+      WHEN id_promise_then.
+        DATA lo_promise TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_promise ?= this_value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_promise IS NOT BOUND OR lo_promise->is_promise( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Promise method receiver is not a Promise'.
+        ENDIF.
+        DATA(ls_species_constructor) = promise_species_constructor( lo_promise ).
+        DATA(ls_then_capability) = new_promise_capability( ls_species_constructor ).
+        DATA ls_on_fulfilled TYPE zcl_qjs_value=>ty_value.
+        DATA ls_on_rejected TYPE zcl_qjs_value=>ty_value.
+        READ TABLE arguments INDEX 1 INTO ls_on_fulfilled.
+        READ TABLE arguments INDEX 2 INTO ls_on_rejected.
+        IF ls_on_fulfilled-tag = 0.
+          ls_on_fulfilled = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF ls_on_rejected-tag = 0.
+          ls_on_rejected = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        lo_promise->promise_add_reaction(
+          on_fulfilled = ls_on_fulfilled on_rejected = ls_on_rejected
+          next_resolve = ls_then_capability-resolve
+          next_reject = ls_then_capability-reject ).
+        result = ls_then_capability-promise.
+      WHEN id_promise_finalizer.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF mo_runtime->is_callable_value( ms_bound_target ) = abap_false.
+          IF ms_bound_this-bool_value = abap_true.
+            RAISE EXCEPTION TYPE zcx_qjs_throw EXPORTING value = ls_argument.
+          ENDIF.
+          result = ls_argument.
+          RETURN.
+        ENDIF.
+        DATA(ls_cleanup_result) = mo_runtime->invoke_callable(
+          callable = ms_bound_target this_value = zcl_qjs_value=>new_undefined( ) ).
+        DATA(lo_cleanup_promise) = mo_runtime->create_promise( ).
+        lo_cleanup_promise->promise_settle(
+          value = ls_cleanup_result rejected = abap_false ).
+        DATA(lo_finally_bridge) = mo_runtime->create_promise( ).
+        DATA lo_finally_continue TYPE REF TO zcl_qjs_native_function.
+        CREATE OBJECT lo_finally_continue
+          EXPORTING id = id_promise_finally_continue runtime = mo_runtime
+            bound_target = ls_argument bound_this = ms_bound_this.
+        DATA lo_finally_continue_ref TYPE REF TO object.
+        lo_finally_continue_ref = lo_finally_continue.
+        DATA(ls_no_rejection_handler) = zcl_qjs_value=>new_undefined( ).
+        lo_cleanup_promise->promise_add_reaction(
+          on_fulfilled = zcl_qjs_value=>new_object( lo_finally_continue_ref )
+          on_rejected = ls_no_rejection_handler next_promise = lo_finally_bridge ).
+        result = zcl_qjs_value=>new_object( lo_finally_bridge ).
+      WHEN id_promise_finally_continue.
+        IF ms_bound_this-bool_value = abap_true.
+          RAISE EXCEPTION TYPE zcx_qjs_throw EXPORTING value = ms_bound_target.
+        ENDIF.
+        result = ms_bound_target.
+      WHEN id_promise_all OR id_promise_race OR id_promise_all_settled
+          OR id_promise_any.
+        DATA(ls_combinator_capability) = new_promise_capability( this_value ).
+        DATA(ls_combinator_result) = ls_combinator_capability-promise.
+        TRY.
+            DATA(ls_combinator_resolve) = get_callable_property(
+              value = this_value name = 'resolve' ).
+            IF mo_runtime->is_callable_value( ls_combinator_resolve ) = abap_false.
+              RAISE EXCEPTION TYPE zcx_qjs_error
+                EXPORTING reason = 'TypeError: Promise resolve is not callable'.
+            ENDIF.
+            IF ls_argument-tag = 0.
+              ls_argument = zcl_qjs_value=>new_undefined( ).
+            ENDIF.
+            DATA(ls_combinator_iterator) = mo_runtime->get_iterator( ls_argument ).
+            DATA(lo_combinator_values) = mo_runtime->create_array( ).
+            DATA(lo_combinator_state) = mo_runtime->create_object( ).
+            lo_combinator_state->set(
+              name = '[[Resolve]]' value = ls_combinator_capability-resolve ).
+            lo_combinator_state->set(
+              name = '[[Reject]]' value = ls_combinator_capability-reject ).
+            lo_combinator_state->set(
+              name  = '[[Values]]'
+              value = zcl_qjs_value=>new_object( lo_combinator_values ) ).
+            lo_combinator_state->set(
+              name = '[[Remaining]]' value = zcl_qjs_value=>new_int( 0 ) ).
+            DATA lv_combinator_index TYPE i.
+            WHILE abap_true = abap_true.
+              DATA(ls_combinator_step) = mo_runtime->iterator_next(
+                ls_combinator_iterator ).
+              IF ls_combinator_step-done = abap_true.
+                EXIT.
+              ENDIF.
+              DATA lt_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
+              APPEND ls_combinator_step-value TO lt_resolve_arguments.
+              DATA(ls_resolved_input) = mo_runtime->invoke_callable(
+                callable = ls_combinator_resolve this_value = this_value
+                arguments = lt_resolve_arguments ).
+              DATA(lo_input_promise) = mo_runtime->create_promise( ).
+              lo_input_promise->promise_settle(
+                value = ls_resolved_input rejected = abap_false ).
+              DATA ls_combinator_fulfill TYPE zcl_qjs_value=>ty_value.
+              IF mv_id = id_promise_all OR mv_id = id_promise_all_settled
+                  OR mv_id = id_promise_any.
+                lo_combinator_values->set_element(
+                  index = CONV int8( lv_combinator_index )
+                  value = zcl_qjs_value=>new_undefined( ) ).
+                lo_combinator_state->set(
+                  name  = '[[Remaining]]'
+                  value = zcl_qjs_value=>new_int( lv_combinator_index + 1 ) ).
+              ENDIF.
+              IF mv_id = id_promise_all.
+                DATA lo_all_fulfill TYPE REF TO zcl_qjs_native_function.
+                CREATE OBJECT lo_all_fulfill
+                  EXPORTING id = id_promise_all_fulfill runtime = mo_runtime
+                    bound_target = zcl_qjs_value=>new_object( lo_combinator_state )
+                    bound_this = zcl_qjs_value=>new_int( lv_combinator_index ).
+                DATA lo_all_fulfill_ref TYPE REF TO object.
+                lo_all_fulfill_ref = lo_all_fulfill.
+                ls_combinator_fulfill = zcl_qjs_value=>new_object(
+                  lo_all_fulfill_ref ).
+              ELSEIF mv_id = id_promise_all_settled.
+                DATA lo_settled_fulfill TYPE REF TO zcl_qjs_native_function.
+                CREATE OBJECT lo_settled_fulfill
+                  EXPORTING id = id_promise_all_settled_fulfill runtime = mo_runtime
+                    bound_target = zcl_qjs_value=>new_object( lo_combinator_state )
+                    bound_this = zcl_qjs_value=>new_int( lv_combinator_index ).
+                DATA lo_settled_fulfill_ref TYPE REF TO object.
+                lo_settled_fulfill_ref = lo_settled_fulfill.
+                ls_combinator_fulfill = zcl_qjs_value=>new_object(
+                  lo_settled_fulfill_ref ).
+              ELSE.
+                DATA lo_race_fulfill TYPE REF TO zcl_qjs_native_function.
+                CREATE OBJECT lo_race_fulfill
+                  EXPORTING id = id_promise_race_fulfill runtime = mo_runtime
+                    bound_target = ls_combinator_result.
+                DATA lo_race_fulfill_ref TYPE REF TO object.
+                lo_race_fulfill_ref = lo_race_fulfill.
+                ls_combinator_fulfill = zcl_qjs_value=>new_object(
+                  lo_race_fulfill_ref ).
+              ENDIF.
+              DATA lv_combinator_reject_id TYPE i VALUE id_promise_combinator_reject.
+              DATA ls_combinator_reject_target TYPE zcl_qjs_value=>ty_value.
+              ls_combinator_reject_target = ls_combinator_capability-reject.
+              IF mv_id = id_promise_all_settled.
+                lv_combinator_reject_id = id_promise_all_settled_reject.
+                ls_combinator_reject_target = zcl_qjs_value=>new_object(
+                  lo_combinator_state ).
+              ELSEIF mv_id = id_promise_any.
+                lv_combinator_reject_id = id_promise_any_reject.
+                ls_combinator_reject_target = zcl_qjs_value=>new_object(
+                  lo_combinator_state ).
+              ENDIF.
+              IF mv_id = id_promise_race OR mv_id = id_promise_any.
+                ls_combinator_fulfill = ls_combinator_capability-resolve.
+              ENDIF.
+              DATA lo_combinator_reject TYPE REF TO zcl_qjs_native_function.
+              CREATE OBJECT lo_combinator_reject
+                EXPORTING id = lv_combinator_reject_id runtime = mo_runtime
+                  bound_target = ls_combinator_reject_target
+                  bound_this = zcl_qjs_value=>new_int( lv_combinator_index ).
+              DATA lo_combinator_reject_ref TYPE REF TO object.
+              lo_combinator_reject_ref = lo_combinator_reject.
+              DATA(lo_combinator_dummy) = mo_runtime->create_promise( ).
+              lo_input_promise->promise_add_reaction(
+                on_fulfilled = ls_combinator_fulfill
+                on_rejected  = zcl_qjs_value=>new_object( lo_combinator_reject_ref )
+                next_promise = lo_combinator_dummy ).
+              lv_combinator_index = lv_combinator_index + 1.
+            ENDWHILE.
+            IF ( mv_id = id_promise_all OR mv_id = id_promise_all_settled )
+                AND lv_combinator_index = 0.
+              APPEND zcl_qjs_value=>new_object( lo_combinator_values )
+                TO lt_empty_combinator_arguments.
+              ls_empty_combinator_result = mo_runtime->invoke_callable(
+                callable   = ls_combinator_capability-resolve
+                this_value = zcl_qjs_value=>new_undefined( )
+                arguments  = lt_empty_combinator_arguments ).
+            ELSEIF mv_id = id_promise_any AND lv_combinator_index = 0.
+              DATA(ls_empty_aggregate) = mo_runtime->create_aggregate_error(
+                errors  = lo_combinator_values
+                message = 'All promises were rejected' ).
+              CLEAR lt_empty_combinator_arguments.
+              APPEND ls_empty_aggregate TO lt_empty_combinator_arguments.
+              ls_empty_combinator_result = mo_runtime->invoke_callable(
+                callable   = ls_combinator_capability-reject
+                this_value = zcl_qjs_value=>new_undefined( )
+                arguments  = lt_empty_combinator_arguments ).
+            ENDIF.
+          CATCH zcx_qjs_throw INTO DATA(lx_combinator_throw).
+            IF ls_combinator_iterator-tag = zcl_qjs_value=>tag_object.
+              TRY.
+                  mo_runtime->iterator_close( ls_combinator_iterator ).
+                CATCH zcx_qjs_throw zcx_qjs_error.
+              ENDTRY.
+            ENDIF.
+            APPEND lx_combinator_throw->value TO lt_combinator_error_arguments.
+            ls_combinator_rejected = mo_runtime->invoke_callable(
+              callable   = ls_combinator_capability-reject
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_combinator_error_arguments ).
+          CATCH zcx_qjs_error INTO DATA(lx_combinator_error).
+            IF ls_combinator_iterator-tag = zcl_qjs_value=>tag_object.
+              TRY.
+                  mo_runtime->iterator_close( ls_combinator_iterator ).
+                CATCH zcx_qjs_throw zcx_qjs_error.
+              ENDTRY.
+            ENDIF.
+            DATA(ls_combinator_error_value) = mo_runtime->create_error_from_reason(
+              lx_combinator_error->reason ).
+            CLEAR lt_combinator_error_arguments.
+            APPEND ls_combinator_error_value TO lt_combinator_error_arguments.
+            ls_combinator_rejected = mo_runtime->invoke_callable(
+              callable   = ls_combinator_capability-reject
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_combinator_error_arguments ).
+        ENDTRY.
+        result = ls_combinator_result.
+      WHEN id_promise_all_fulfill.
+        DATA lo_all_state TYPE REF TO zcl_qjs_object.
+        lo_all_state ?= ms_bound_target-object_ref.
+        DATA lo_all_values TYPE REF TO zcl_qjs_object.
+        DATA(ls_all_values) = lo_all_state->get( '[[Values]]' ).
+        lo_all_values ?= ls_all_values-object_ref.
+        lo_all_values->set_element(
+          index = CONV int8( ms_bound_this-int_value ) value = ls_argument ).
+        DATA(ls_all_remaining) = lo_all_state->get( '[[Remaining]]' ).
+        DATA(lv_all_remaining) = ls_all_remaining-int_value - 1.
+        lo_all_state->set(
+          name  = '[[Remaining]]'
+          value = zcl_qjs_value=>new_int( lv_all_remaining ) ).
+        IF lv_all_remaining = 0.
+          DATA(ls_all_resolve) = lo_all_state->get( '[[Resolve]]' ).
+          DATA lt_all_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
+          APPEND ls_all_values TO lt_all_resolve_arguments.
+          DATA(ls_all_resolved) = mo_runtime->invoke_callable(
+            callable   = ls_all_resolve
+            this_value = zcl_qjs_value=>new_undefined( )
+            arguments  = lt_all_resolve_arguments ).
+        ENDIF.
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_promise_combinator_reject OR id_promise_race_fulfill.
+        DATA lt_combinator_settle_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND ls_argument TO lt_combinator_settle_arguments.
+        DATA(ls_combinator_settled) = mo_runtime->invoke_callable(
+          callable   = ms_bound_target
+          this_value = zcl_qjs_value=>new_undefined( )
+          arguments  = lt_combinator_settle_arguments ).
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_promise_all_settled_fulfill OR id_promise_all_settled_reject.
+        DATA lo_settled_state TYPE REF TO zcl_qjs_object.
+        lo_settled_state ?= ms_bound_target-object_ref.
+        DATA lo_settled_values TYPE REF TO zcl_qjs_object.
+        DATA(ls_settled_values) = lo_settled_state->get( '[[Values]]' ).
+        lo_settled_values ?= ls_settled_values-object_ref.
+        DATA(lo_settlement) = mo_runtime->create_object( ).
+        IF mv_id = id_promise_all_settled_fulfill.
+          lo_settlement->set(
+            name = 'status' value = zcl_qjs_value=>new_string( 'fulfilled' ) ).
+          lo_settlement->set( name = 'value' value = ls_argument ).
+        ELSE.
+          lo_settlement->set(
+            name = 'status' value = zcl_qjs_value=>new_string( 'rejected' ) ).
+          lo_settlement->set( name = 'reason' value = ls_argument ).
+        ENDIF.
+        lo_settled_values->set_element(
+          index = CONV int8( ms_bound_this-int_value )
+          value = zcl_qjs_value=>new_object( lo_settlement ) ).
+        DATA(ls_settled_remaining) = lo_settled_state->get( '[[Remaining]]' ).
+        DATA(lv_settled_remaining) = ls_settled_remaining-int_value - 1.
+        lo_settled_state->set(
+          name  = '[[Remaining]]'
+          value = zcl_qjs_value=>new_int( lv_settled_remaining ) ).
+        IF lv_settled_remaining = 0.
+          DATA(ls_settled_resolve) = lo_settled_state->get( '[[Resolve]]' ).
+          DATA lt_settled_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
+          APPEND ls_settled_values TO lt_settled_resolve_arguments.
+          DATA(ls_settled_resolved) = mo_runtime->invoke_callable(
+            callable   = ls_settled_resolve
+            this_value = zcl_qjs_value=>new_undefined( )
+            arguments  = lt_settled_resolve_arguments ).
+        ENDIF.
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_promise_any_reject.
+        DATA lo_any_state TYPE REF TO zcl_qjs_object.
+        lo_any_state ?= ms_bound_target-object_ref.
+        DATA lo_any_errors TYPE REF TO zcl_qjs_object.
+        DATA(ls_any_errors) = lo_any_state->get( '[[Values]]' ).
+        lo_any_errors ?= ls_any_errors-object_ref.
+        lo_any_errors->set_element(
+          index = CONV int8( ms_bound_this-int_value ) value = ls_argument ).
+        DATA(ls_any_remaining) = lo_any_state->get( '[[Remaining]]' ).
+        DATA(lv_any_remaining) = ls_any_remaining-int_value - 1.
+        lo_any_state->set(
+          name = '[[Remaining]]' value = zcl_qjs_value=>new_int( lv_any_remaining ) ).
+        IF lv_any_remaining = 0.
+          DATA(ls_any_aggregate) = mo_runtime->create_aggregate_error(
+            errors = lo_any_errors message = 'All promises were rejected' ).
+          DATA(ls_any_reject) = lo_any_state->get( '[[Reject]]' ).
+          DATA lt_any_reject_arguments TYPE zif_qjs_callable=>ty_arguments.
+          APPEND ls_any_aggregate TO lt_any_reject_arguments.
+          DATA(ls_any_rejected) = mo_runtime->invoke_callable(
+            callable   = ls_any_reject
+            this_value = zcl_qjs_value=>new_undefined( )
+            arguments  = lt_any_reject_arguments ).
+        ENDIF.
+        result = zcl_qjs_value=>new_undefined( ).
+      WHEN id_promise_resolve OR id_promise_reject.
+        IF this_value-tag <> zcl_qjs_value=>tag_object.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Promise constructor receiver is not an object'.
+        ENDIF.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_promise_static_value).
+        IF sy-subrc <> 0.
+          ls_promise_static_value = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        IF mv_id = id_promise_resolve
+            AND ls_promise_static_value-tag = zcl_qjs_value=>tag_object.
+          DATA lo_existing_promise TYPE REF TO zcl_qjs_object.
+          TRY.
+              lo_existing_promise ?= ls_promise_static_value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_existing_promise IS BOUND
+              AND lo_existing_promise->is_promise( ) = abap_true.
+            DATA lv_promise_constructor_name TYPE string VALUE 'constructor'.
+            DATA(ls_existing_constructor) = lo_existing_promise->get(
+              lv_promise_constructor_name ).
+            IF zcl_qjs_value=>strict_equal(
+                left = ls_existing_constructor right = this_value ) = abap_true.
+              result = ls_promise_static_value.
+              RETURN.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+        DATA(ls_static_capability) = new_promise_capability( this_value ).
+        DATA lt_static_settle_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND ls_promise_static_value TO lt_static_settle_arguments.
+        IF mv_id = id_promise_reject.
+          DATA(ls_static_settle_result) = mo_runtime->invoke_callable(
+            callable   = ls_static_capability-reject
+            this_value = zcl_qjs_value=>new_undefined( )
+            arguments  = lt_static_settle_arguments ).
+        ELSE.
+          ls_static_settle_result = mo_runtime->invoke_callable(
+            callable   = ls_static_capability-resolve
+            this_value = zcl_qjs_value=>new_undefined( )
+            arguments  = lt_static_settle_arguments ).
+        ENDIF.
+        result = ls_static_capability-promise.
+      WHEN id_promise_fulfill OR id_promise_reject_fn.
+        DATA lo_bound_promise TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_bound_promise ?= ms_bound_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_bound_promise IS NOT BOUND OR lo_bound_promise->is_promise( ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: invalid promise resolver'.
+        ENDIF.
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        lo_bound_promise->promise_settle(
+          value    = ls_argument
+          rejected = xsdbool( mv_id = id_promise_reject_fn ) ).
+        result = zcl_qjs_value=>new_undefined( ).
       WHEN id_function.
         DATA lv_parameters TYPE string.
         DATA lv_body TYPE string.
@@ -5381,16 +6178,27 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           ls_own_value = ls_own_property-value.
           ls_own_getter = ls_own_property-getter.
           ls_own_setter = ls_own_property-setter.
-        ELSEIF ls_own_key-tag = zcl_qjs_value=>tag_symbol.
-          lv_own_found = abap_false.
         ELSE.
-          DATA(ls_native_own_property) = lo_own_native->get_own_property(
-            zcl_qjs_value=>to_string( ls_own_key ) ).
-          lv_own_found = ls_native_own_property-found.
-          lv_own_writable = ls_native_own_property-writable.
-          lv_own_enumerable = ls_native_own_property-enumerable.
-          lv_own_configurable = ls_native_own_property-configurable.
-          ls_own_value = ls_native_own_property-value.
+          IF ls_own_key-tag = zcl_qjs_value=>tag_symbol.
+            DATA(ls_native_own_symbol) = lo_own_native->get_own_symbol_property(
+              ls_own_key-symbol_id ).
+            lv_own_found = ls_native_own_symbol-found.
+            lv_own_writable = ls_native_own_symbol-writable.
+            lv_own_enumerable = ls_native_own_symbol-enumerable.
+            lv_own_configurable = ls_native_own_symbol-configurable.
+            lv_own_accessor = ls_native_own_symbol-accessor.
+            ls_own_value = ls_native_own_symbol-value.
+            ls_own_getter = ls_native_own_symbol-getter.
+            ls_own_setter = ls_native_own_symbol-setter.
+          ELSE.
+            DATA(ls_native_own_property) = lo_own_native->get_own_property(
+              zcl_qjs_value=>to_string( ls_own_key ) ).
+            lv_own_found = ls_native_own_property-found.
+            lv_own_writable = ls_native_own_property-writable.
+            lv_own_enumerable = ls_native_own_property-enumerable.
+            lv_own_configurable = ls_native_own_property-configurable.
+            ls_own_value = ls_native_own_property-value.
+          ENDIF.
         ENDIF.
         IF lv_own_found = abap_false.
           result = zcl_qjs_value=>new_undefined( ).
@@ -5499,11 +6307,25 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             IF lo_proto_closure IS BOUND.
               lo_current_proto = lo_proto_closure->get_property_storage(
                 )->get_prototype( ).
-            ELSEIF is_callable( ls_proto_target ) = abap_true.
-              lo_current_proto = mo_runtime->get_function_prototype( ).
             ELSE.
-              RAISE EXCEPTION TYPE zcx_qjs_error
-                EXPORTING reason = 'TypeError: prototype target is unsupported'.
+              DATA lo_proto_native TYPE REF TO zcl_qjs_native_function.
+              TRY.
+                  lo_proto_native ?= ls_proto_target-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+              IF lo_proto_native IS BOUND.
+                DATA(ls_native_proto) = lo_proto_native->get_internal_prototype( ).
+                IF ls_native_proto-tag <> 0.
+                  result = ls_native_proto.
+                  RETURN.
+                ENDIF.
+                lo_current_proto = mo_runtime->get_function_prototype( ).
+              ELSEIF is_callable( ls_proto_target ) = abap_true.
+                lo_current_proto = mo_runtime->get_function_prototype( ).
+              ELSE.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'TypeError: prototype target is unsupported'.
+              ENDIF.
             ENDIF.
         ENDTRY.
         IF lo_current_proto IS BOUND.
@@ -5522,6 +6344,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDIF.
         DATA lo_set_proto_closure TYPE REF TO zcl_qjs_closure.
         DATA lo_set_proto_base TYPE REF TO zcl_qjs_closure.
+        DATA(lv_set_proto_constructable_base) = abap_false.
         CLEAR lo_set_proto_closure.
         CLEAR lo_set_proto_base.
         TRY.
@@ -5539,6 +6362,10 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDTRY.
         DATA lo_new_prototype TYPE REF TO zcl_qjs_object.
         IF ls_set_proto_value-tag = zcl_qjs_value=>tag_object.
+          IF lo_set_proto_closure IS BOUND
+              AND is_constructable( ls_set_proto_value ) = abap_true.
+            lv_set_proto_constructable_base = abap_true.
+          ENDIF.
           TRY.
               lo_new_prototype ?= ls_set_proto_value-object_ref.
             CATCH cx_sy_move_cast_error.
@@ -5548,14 +6375,19 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
                 CATCH cx_sy_move_cast_error.
               ENDTRY.
               IF lo_new_prototype IS NOT BOUND.
-                RAISE EXCEPTION TYPE zcx_qjs_error
-                  EXPORTING reason = 'TypeError: prototype value must be ordinary'.
+                IF lv_set_proto_constructable_base = abap_true.
+                  lo_new_prototype = mo_runtime->get_function_prototype( ).
+                ELSE.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason = 'TypeError: prototype value must be ordinary'.
+                ENDIF.
               ENDIF.
           ENDTRY.
         ENDIF.
         lo_object->set_prototype( lo_new_prototype ).
-        IF lo_set_proto_closure IS BOUND AND lo_set_proto_base IS BOUND.
-          lo_set_proto_closure->set_base_class( lo_set_proto_base ).
+        IF lo_set_proto_closure IS BOUND
+            AND lv_set_proto_constructable_base = abap_true.
+          lo_set_proto_closure->set_base_constructor( ls_set_proto_value ).
         ENDIF.
         result = ls_set_proto_target.
       WHEN id_object_define_properties.
@@ -5945,8 +6777,54 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           ls_argument = zcl_qjs_value=>new_undefined( ).
         ENDIF.
         result = zcl_qjs_json=>stringify( ls_argument ).
+      WHEN id_aggregate_error.
+        DATA lv_aggregate_message TYPE string.
+        DATA lv_aggregate_has_message TYPE abap_bool.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_aggregate_message).
+        IF sy-subrc = 0
+            AND ls_aggregate_message-tag <> zcl_qjs_value=>tag_undefined.
+          lv_aggregate_message = mo_runtime->to_string( ls_aggregate_message ).
+          lv_aggregate_has_message = abap_true.
+        ENDIF.
+        READ TABLE arguments INDEX 3 INTO DATA(ls_aggregate_options).
+        IF sy-subrc <> 0.
+          ls_aggregate_options = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(ls_aggregate_cause) = get_error_cause( ls_aggregate_options ).
+        DATA(lo_aggregate_errors) = mo_runtime->create_array( ).
+        IF ls_argument-tag = 0.
+          ls_argument = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(ls_aggregate_iterator) = mo_runtime->get_iterator( ls_argument ).
+        DATA(lv_aggregate_index) = CONV int8( 0 ).
+        WHILE abap_true = abap_true.
+          DATA(ls_aggregate_step) = mo_runtime->iterator_next(
+            ls_aggregate_iterator ).
+          IF ls_aggregate_step-done = abap_true.
+            EXIT.
+          ENDIF.
+          lo_aggregate_errors->set_element(
+            index = lv_aggregate_index value = ls_aggregate_step-value ).
+          lv_aggregate_index = lv_aggregate_index + 1.
+        ENDWHILE.
+        IF lv_aggregate_has_message = abap_true
+            AND ls_aggregate_cause-found = abap_true.
+          result = mo_runtime->create_aggregate_error(
+            errors  = lo_aggregate_errors
+            message = lv_aggregate_message
+            cause   = ls_aggregate_cause-value ).
+        ELSEIF lv_aggregate_has_message = abap_true.
+          result = mo_runtime->create_aggregate_error(
+            errors = lo_aggregate_errors message = lv_aggregate_message ).
+        ELSEIF ls_aggregate_cause-found = abap_true.
+          result = mo_runtime->create_aggregate_error(
+            errors = lo_aggregate_errors cause = ls_aggregate_cause-value ).
+        ELSE.
+          result = mo_runtime->create_aggregate_error(
+            errors = lo_aggregate_errors ).
+        ENDIF.
       WHEN id_error OR id_type_error OR id_range_error OR id_syntax_error
-          OR id_reference_error OR id_uri_error.
+          OR id_reference_error OR id_uri_error OR id_eval_error.
         lv_error_name = 'Error'.
         CASE mv_id.
           WHEN id_type_error. lv_error_name = 'TypeError'.
@@ -5954,12 +6832,29 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WHEN id_syntax_error. lv_error_name = 'SyntaxError'.
           WHEN id_reference_error. lv_error_name = 'ReferenceError'.
           WHEN id_uri_error. lv_error_name = 'URIError'.
+          WHEN id_eval_error. lv_error_name = 'EvalError'.
         ENDCASE.
         CLEAR lv_error_message.
+        DATA lv_error_has_message TYPE abap_bool.
         IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
-          lv_error_message = zcl_qjs_value=>to_string( ls_argument ).
+          lv_error_message = mo_runtime->to_string( ls_argument ).
+          lv_error_has_message = abap_true.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_error_options).
+        IF sy-subrc <> 0.
+          ls_error_options = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(ls_error_cause) = get_error_cause( ls_error_options ).
+        IF lv_error_has_message = abap_true AND ls_error_cause-found = abap_true.
+          result = mo_runtime->create_error(
+            name = lv_error_name message = lv_error_message
+            cause = ls_error_cause-value ).
+        ELSEIF lv_error_has_message = abap_true.
           result = mo_runtime->create_error(
             name = lv_error_name message = lv_error_message ).
+        ELSEIF ls_error_cause-found = abap_true.
+          result = mo_runtime->create_error(
+            name = lv_error_name cause = ls_error_cause-value ).
         ELSE.
           result = mo_runtime->create_error( name = lv_error_name ).
         ENDIF.
@@ -6028,9 +6923,47 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA ls_primitive TYPE zcl_qjs_value=>ty_value.
     CASE mv_id.
       WHEN id_object OR id_array OR id_error OR id_type_error OR id_range_error
-          OR id_syntax_error OR id_reference_error OR id_uri_error OR id_function.
+          OR id_syntax_error OR id_reference_error OR id_uri_error OR id_eval_error
+          OR id_function.
         result = zif_qjs_callable~call(
           this_value = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
+      WHEN id_aggregate_error.
+        result = zif_qjs_callable~call(
+          this_value = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
+      WHEN id_promise.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_executor).
+        IF runtime->is_callable_value( ls_executor ) = abap_false.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: Promise executor is not callable'.
+        ENDIF.
+        lo_object = runtime->create_promise( ).
+        DATA(ls_promise_value) = zcl_qjs_value=>new_object( lo_object ).
+        DATA lo_resolve TYPE REF TO zcl_qjs_native_function.
+        DATA lo_reject TYPE REF TO zcl_qjs_native_function.
+        CREATE OBJECT lo_resolve EXPORTING id = id_promise_fulfill runtime = runtime
+          bound_target = ls_promise_value.
+        CREATE OBJECT lo_reject EXPORTING id = id_promise_reject_fn runtime = runtime
+          bound_target = ls_promise_value.
+        DATA lo_resolve_ref TYPE REF TO object.
+        DATA lo_reject_ref TYPE REF TO object.
+        lo_resolve_ref = lo_resolve.
+        lo_reject_ref = lo_reject.
+        DATA lt_executor_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND zcl_qjs_value=>new_object( lo_resolve_ref ) TO lt_executor_arguments.
+        APPEND zcl_qjs_value=>new_object( lo_reject_ref ) TO lt_executor_arguments.
+        TRY.
+            DATA(ls_executor_result) = runtime->invoke_callable(
+              callable = ls_executor this_value = zcl_qjs_value=>new_undefined( )
+              arguments = lt_executor_arguments ).
+          CATCH zcx_qjs_throw INTO DATA(lx_executor_throw).
+            lo_object->promise_settle(
+              value = lx_executor_throw->value rejected = abap_true ).
+          CATCH zcx_qjs_error INTO DATA(lx_executor_error).
+            lo_object->promise_settle(
+              value    = runtime->create_error_from_reason( lx_executor_error->reason )
+              rejected = abap_true ).
+        ENDTRY.
+        result = ls_promise_value.
       WHEN id_number OR id_string OR id_boolean.
         ls_primitive = zif_qjs_callable~call(
           this_value = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
@@ -6148,7 +7081,18 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_set_size OR id_set_entries OR id_set_values OR id_set_for_each
           OR id_collection_next OR id_iterator_self OR id_array_entries
           OR id_array_keys OR id_array_values OR id_string_iterator
-          OR id_generator_next OR id_generator_throw OR id_generator_return.
+          OR id_generator_next OR id_generator_throw OR id_generator_return
+          OR id_promise_then OR id_promise_catch OR id_promise_resolve
+          OR id_promise_reject OR id_promise_fulfill OR id_promise_reject_fn
+          OR id_promise_finally OR id_promise_finalizer
+          OR id_promise_finally_continue OR id_promise_all OR id_promise_race
+          OR id_promise_all_fulfill OR id_promise_combinator_reject
+          OR id_promise_race_fulfill OR id_promise_all_settled OR id_promise_any
+          OR id_promise_all_settled_fulfill OR id_promise_all_settled_reject
+          OR id_promise_any_reject OR id_promise_capability_executor
+          OR id_async_resume_fulfill OR id_async_resume_reject
+          OR id_async_from_sync_next OR id_async_from_sync_result
+          OR id_async_from_sync_return.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.

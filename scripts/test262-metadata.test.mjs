@@ -32,6 +32,17 @@ assert.deepEqual(
   ["unsupported feature: BigInt"]
 );
 
+const asyncMetadata = parseTest262Metadata(`/*---
+flags: [async]
+features: [async-functions]
+---*/
+$DONE();
+`);
+assert.deepEqual(
+  unsupportedReasons(asyncMetadata.metadata, ["async-functions"], ["async"]),
+  []
+);
+
 const inlineNegative = parseTest262Metadata(`/*---
 negative: { phase: runtime, type: TypeError }
 ---*/

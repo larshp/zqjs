@@ -86,6 +86,8 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS token_super TYPE i VALUE 83.
     CONSTANTS token_private_identifier TYPE i VALUE 84.
     CONSTANTS token_yield TYPE i VALUE 85.
+    CONSTANTS token_arrow TYPE i VALUE 86.
+    CONSTANTS token_void TYPE i VALUE 87.
 
     TYPES:
       BEGIN OF ty_token,
@@ -514,7 +516,12 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
           mv_offset = mv_offset + 1.
         ENDIF.
       WHEN '='.
-        IF mv_offset + 2 < strlen( mv_source ) AND mv_source+mv_offset(3) = '==='.
+        IF lv_next_offset < strlen( mv_source )
+            AND mv_source+lv_next_offset(1) = '>'.
+          result-kind = token_arrow.
+          mv_offset = mv_offset + 1.
+        ELSEIF mv_offset + 2 < strlen( mv_source )
+            AND mv_source+mv_offset(3) = '==='.
           result-kind = token_strict_eq.
           mv_offset = mv_offset + 2.
         ELSEIF lv_next_offset < strlen( mv_source )
@@ -664,6 +671,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             WHEN 'in'. result-kind = token_in.
             WHEN 'delete'. result-kind = token_delete.
             WHEN 'typeof'. result-kind = token_typeof.
+            WHEN 'void'. result-kind = token_void.
             WHEN 'class'. result-kind = token_class.
             WHEN 'extends'. result-kind = token_extends.
             WHEN 'super'. result-kind = token_super.

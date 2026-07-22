@@ -36,6 +36,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
         constructible TYPE abap_bool DEFAULT abap_true
         class_constructor TYPE abap_bool DEFAULT abap_false
         generator TYPE abap_bool DEFAULT abap_false
+        async TYPE abap_bool DEFAULT abap_false
         atoms TYPE ty_atoms OPTIONAL
         captures TYPE ty_captures OPTIONAL
         local_specs TYPE ty_local_specs OPTIONAL.
@@ -70,6 +71,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS is_constructible RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_class_constructor RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_generator RETURNING VALUE(result) TYPE abap_bool.
+    METHODS is_async RETURNING VALUE(result) TYPE abap_bool.
     METHODS set_class_field_metadata
       IMPORTING derived TYPE abap_bool
         default_derived TYPE abap_bool DEFAULT abap_false.
@@ -98,6 +100,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_constructible TYPE abap_bool.
     DATA mv_class_constructor TYPE abap_bool.
     DATA mv_generator TYPE abap_bool.
+    DATA mv_async TYPE abap_bool.
     DATA mv_derived_class TYPE abap_bool.
     DATA mv_default_derived TYPE abap_bool.
     DATA mt_atoms TYPE ty_atoms.
@@ -123,6 +126,7 @@ CLASS zcl_qjs_function IMPLEMENTATION.
     mv_constructible = constructible.
     mv_class_constructor = class_constructor.
     mv_generator = generator.
+    mv_async = async.
     mt_atoms = atoms.
     mt_captures = captures.
     mt_local_specs = local_specs.
@@ -190,6 +194,9 @@ CLASS zcl_qjs_function IMPLEMENTATION.
   ENDMETHOD.
   METHOD is_generator.
     result = mv_generator.
+  ENDMETHOD.
+  METHOD is_async.
+    result = mv_async.
   ENDMETHOD.
   METHOD set_class_field_metadata.
     mv_derived_class = derived.

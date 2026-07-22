@@ -4,6 +4,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_global_binding,
       name TYPE string,
       index TYPE i,
+      lexical TYPE abap_bool,
     END OF ty_global_binding.
     TYPES ty_global_bindings TYPE STANDARD TABLE OF ty_global_binding WITH DEFAULT KEY.
     METHODS constructor
@@ -35,6 +36,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       continue_target TYPE i,
       has_iterator TYPE abap_bool,
       exception_handler TYPE abap_bool,
+      async_iterator TYPE abap_bool,
       iterator_local TYPE i,
       break_jumps TYPE ty_jump_indices,
       continue_jumps TYPE ty_jump_indices,
@@ -65,6 +67,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       static_block TYPE abap_bool,
       private TYPE abap_bool,
       generator TYPE abap_bool,
+      async TYPE abap_bool,
       initializer TYPE REF TO zcl_qjs_function,
     END OF ty_class_method.
     TYPES ty_class_methods TYPE STANDARD TABLE OF ty_class_method WITH DEFAULT KEY.
@@ -98,7 +101,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_parsing_class_method TYPE abap_bool.
     DATA mv_parsing_class_constructor TYPE abap_bool.
     DATA mv_parsing_generator_method TYPE abap_bool.
+    DATA mv_parsing_async_function TYPE abap_bool.
     DATA mv_in_generator TYPE abap_bool.
+    DATA mv_in_async TYPE abap_bool.
     DATA mo_last_function TYPE REF TO zcl_qjs_function.
 
     METHODS advance
@@ -110,6 +115,11 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
         zcx_qjs_error.
     METHODS parse_assignment RAISING zcx_qjs_error.
     METHODS parse_yield RAISING zcx_qjs_error.
+    METHODS is_arrow_function_start RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS parse_arrow_function RAISING zcx_qjs_error.
+    METHODS is_async_function_start RETURNING VALUE(result) TYPE abap_bool
+      RAISING zcx_qjs_error.
     METHODS is_pattern_assignment
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
@@ -193,9 +203,12 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS parse_while RAISING zcx_qjs_error.
     METHODS parse_for RAISING zcx_qjs_error.
     METHODS parse_for_in RAISING zcx_qjs_error.
-    METHODS parse_for_of RAISING zcx_qjs_error.
+    METHODS parse_for_of
+      IMPORTING async TYPE abap_bool DEFAULT abap_false
+      RAISING zcx_qjs_error.
     METHODS parse_for_pattern
       IMPORTING declaration_kind TYPE i is_for_of TYPE abap_bool
+        async TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS is_for_in_head
       RETURNING VALUE(result) TYPE abap_bool
@@ -248,6 +261,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS emit_iterator_closes
       IMPORTING for_throw TYPE abap_bool DEFAULT abap_false
+      RAISING zcx_qjs_error.
+    METHODS emit_iterator_close
+      IMPORTING async TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS declare_lexical
       IMPORTING name TYPE string constant TYPE abap_bool
@@ -374,14 +390,25 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           mo_emitter->emit( zif_qjs_opcodes=>leave_catch ).
           mo_emitter->emit(  opcode = zif_qjs_opcodes=>get_local
                             operand = ls_loop-iterator_local ).
-          mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+          emit_iterator_close( ls_loop-async_iterator ).
         ELSE.
           mo_emitter->emit( zif_qjs_opcodes=>swap ).
-          mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+          emit_iterator_close( ls_loop-async_iterator ).
         ENDIF.
       ENDIF.
       lv_index = lv_index - 1.
     ENDWHILE.
+  ENDMETHOD.
+
+  METHOD emit_iterator_close.
+    IF async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_call ).
+      mo_emitter->emit( zif_qjs_opcodes=>await ).
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_check_object ).
+      mo_emitter->emit( zif_qjs_opcodes=>drop ).
+    ELSE.
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD declare_scan_binding.
@@ -697,6 +724,19 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ms_token = mo_lexer->next( ).
   ENDMETHOD.
 
+  METHOD is_async_function_start.
+    IF ms_token-kind <> zcl_qjs_lexer=>token_identifier
+        OR ms_token-text <> 'async'.
+      RETURN.
+    ENDIF.
+    DATA(lo_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+    lo_scanner->set_offset( mo_lexer->get_offset( ) ).
+    DATA(ls_next) = lo_scanner->next( ).
+    result = xsdbool(
+      ls_next-kind = zcl_qjs_lexer=>token_function
+        AND ls_next-line_terminator_before = abap_false ).
+  ENDMETHOD.
+
   METHOD compile.
     IF ms_token-kind = zcl_qjs_lexer=>token_eof.
       mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
@@ -718,18 +758,26 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     LOOP AT mt_locals INTO ls_local.
       ls_binding-name = ls_local-name.
       ls_binding-index = ls_local-index.
+      ls_binding-lexical = ls_local-lexical.
       APPEND ls_binding TO result.
     ENDLOOP.
     READ TABLE mt_scopes INDEX 1 INTO lt_root_scope.
     LOOP AT lt_root_scope INTO ls_local.
       ls_binding-name = ls_local-name.
       ls_binding-index = ls_local-index.
+      ls_binding-lexical = ls_local-lexical.
       APPEND ls_binding TO result.
     ENDLOOP.
     SORT result BY index.
   ENDMETHOD.
 
   METHOD parse_statement.
+    IF is_async_function_start( ) = abap_true.
+      mv_parsing_async_function = abap_true.
+      advance( ).
+      parse_function_declaration( ).
+      RETURN.
+    ENDIF.
     CASE ms_token-kind.
       WHEN zcl_qjs_lexer=>token_if.
         parse_if( ).
@@ -1047,11 +1095,19 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA ls_parent_binding TYPE ty_local.
     DATA lv_generator TYPE abap_bool.
     DATA lv_outer_in_generator TYPE abap_bool.
+    DATA lv_async TYPE abap_bool.
+    DATA lv_outer_in_async TYPE abap_bool.
 
+    lv_async = mv_parsing_async_function.
+    CLEAR mv_parsing_async_function.
     advance( ).
     IF ms_token-kind = zcl_qjs_lexer=>token_star.
       lv_generator = abap_true.
       advance( ).
+    ENDIF.
+    IF lv_async = abap_true AND lv_generator = abap_true.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Async generators are not supported'.
     ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
       RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1081,6 +1137,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lt_outer_loops = mt_loops.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
+    lv_outer_in_async = mv_in_async.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     mt_parent_locals = mt_locals.
     LOOP AT mt_scopes INTO lt_visible_scope.
@@ -1097,6 +1154,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     APPEND lt_root_scope TO mt_scopes.
     mv_in_function = abap_true.
     mv_in_generator = lv_generator.
+    mv_in_async = lv_async.
 
     ls_local-name = lv_name.
     ls_local-index = mo_emitter->allocate_local( ).
@@ -1223,7 +1281,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       parameter_count = lv_parameter_count function_length = lv_function_length
       has_self = abap_true has_this = abap_true
       has_arguments = abap_true name = lv_name generator = lv_generator
-      constructible = xsdbool( lv_generator = abap_false ) ).
+      async = lv_async
+      constructible = xsdbool( lv_generator = abap_false AND lv_async = abap_false ) ).
     WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
       IF ms_token-kind = zcl_qjs_lexer=>token_eof.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1246,6 +1305,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_hoists = lt_outer_hoists.
     mv_in_function = lv_outer_in_function.
     mv_in_generator = lv_outer_in_generator.
+    mv_in_async = lv_outer_in_async.
     ls_function_value = zcl_qjs_value=>new_object( lo_function ).
     READ TABLE mt_hoists WITH TABLE KEY name = lv_name INTO ls_hoist.
     IF sy-subrc = 0.
@@ -1290,7 +1350,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_class_constructor TYPE abap_bool.
     DATA lv_generator TYPE abap_bool.
     DATA lv_outer_in_generator TYPE abap_bool.
+    DATA lv_async TYPE abap_bool.
+    DATA lv_outer_in_async TYPE abap_bool.
 
+    lv_async = mv_parsing_async_function.
+    CLEAR mv_parsing_async_function.
     lv_class_method = mv_parsing_class_method.
     lv_class_constructor = mv_parsing_class_constructor.
     lv_generator = mv_parsing_generator_method.
@@ -1301,6 +1365,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF ms_token-kind = zcl_qjs_lexer=>token_star.
       lv_generator = abap_true.
       advance( ).
+    ENDIF.
+    IF lv_async = abap_true AND lv_generator = abap_true.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Async generators are not supported'.
     ENDIF.
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
       lv_name = ms_token-text.
@@ -1321,6 +1389,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lt_outer_loops = mt_loops.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
+    lv_outer_in_async = mv_in_async.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     mt_parent_locals = mt_locals.
     LOOP AT mt_scopes INTO lt_visible_scope.
@@ -1337,6 +1406,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     APPEND lt_root_scope TO mt_scopes.
     mv_in_function = abap_true.
     mv_in_generator = lv_generator.
+    mv_in_async = lv_async.
 
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
@@ -1466,9 +1536,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       has_self = abap_true has_this = abap_true
       has_arguments = abap_true name = lv_name
       constructible = xsdbool(
-        lv_generator = abap_false
+        lv_generator = abap_false AND lv_async = abap_false
           AND ( lv_class_method = abap_false OR lv_class_constructor = abap_true ) )
-      class_constructor = lv_class_constructor generator = lv_generator ).
+      class_constructor = lv_class_constructor generator = lv_generator
+      async = lv_async ).
     WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
       IF ms_token-kind = zcl_qjs_lexer=>token_eof.
         RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1490,6 +1561,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_hoists = lt_outer_hoists.
     mv_in_function = lv_outer_in_function.
     mv_in_generator = lv_outer_in_generator.
+    mv_in_async = lv_outer_in_async.
     mo_last_function = lo_function.
     mo_emitter->emit_closure( zcl_qjs_value=>new_object( lo_function ) ).
   ENDMETHOD.
@@ -1821,9 +1893,27 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         APPEND ls_method TO lt_methods.
         CONTINUE.
       ENDIF.
+      IF ms_token-kind = zcl_qjs_lexer=>token_identifier
+          AND ms_token-text = 'async'.
+        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
+        ls_class_lookahead = lo_class_scanner->next( ).
+        IF ls_class_lookahead-line_terminator_before = abap_false
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_assign
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_semicolon
+            AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_rbrace.
+          ls_method-async = abap_true.
+          advance( ).
+        ENDIF.
+      ENDIF.
       IF ms_token-kind = zcl_qjs_lexer=>token_star.
         ls_method-generator = abap_true.
         advance( ).
+      ENDIF.
+      IF ls_method-async = abap_true AND ls_method-generator = abap_true.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Async generators are not supported'.
       ENDIF.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
@@ -1901,6 +1991,10 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       lv_is_constructor = abap_false.
       IF lv_method_name = `constructor` AND ls_method-accessor_kind = 0.
+        IF ls_method-async = abap_true.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Class constructor cannot be async'.
+        ENDIF.
         IF ls_method-generator = abap_true.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'Class constructor cannot be a generator'.
@@ -1913,6 +2007,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       mv_parsing_class_method = abap_true.
       mv_parsing_class_constructor = lv_is_constructor.
       mv_parsing_generator_method = ls_method-generator.
+      mv_parsing_async_function = ls_method-async.
       mv_super_static = ls_method-static.
       mv_super_call_allowed = lv_is_constructor.
       ms_token-kind = zcl_qjs_lexer=>token_function.
@@ -2360,7 +2455,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF lv_has_element = abap_true.
       lv_done_jump = mo_emitter->position( ).
       mo_emitter->emit( zif_qjs_opcodes=>if_true ).
-      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+      emit_iterator_close( <loop>-async_iterator ).
       mo_emitter->patch(
         instruction = lv_done_jump target = mo_emitter->position( ) ).
     ELSE.
@@ -2664,19 +2759,37 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_body_jump TYPE i.
     DATA lv_continue_target TYPE i.
     DATA ls_loop TYPE ty_loop.
+    DATA lv_async TYPE abap_bool.
     advance( ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_identifier
+        AND ms_token-text = 'await'.
+      IF mv_in_async = abap_false.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'for await is only valid in async functions'.
+      ENDIF.
+      lv_async = abap_true.
+      advance( ).
+    ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_lparen.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Expected opening parenthesis after for'.
     ENDIF.
     advance( ).
     IF is_for_in_head( ) = abap_true.
+      IF lv_async = abap_true.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'for await loop requires of'.
+      ENDIF.
       parse_for_in( ).
       RETURN.
     ENDIF.
     IF is_for_of_head( ) = abap_true.
-      parse_for_of( ).
+      parse_for_of( lv_async ).
       RETURN.
+    ENDIF.
+    IF lv_async = abap_true.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'for await loop requires of'.
     ENDIF.
     IF ms_token-kind = zcl_qjs_lexer=>token_var.
       parse_var( ).
@@ -2845,7 +2958,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_body_token = ms_token.
     lv_body_offset = mo_lexer->get_offset( ).
     IF is_for_of = abap_true.
-      mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+      IF async = abap_true.
+        mo_emitter->emit( zif_qjs_opcodes=>for_await_of_start ).
+      ELSE.
+        mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+      ENDIF.
       lv_iterator_local = mo_emitter->allocate_local( ).
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>put_local operand = lv_iterator_local ).
@@ -2857,7 +2974,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF is_for_of = abap_true.
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
-      mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
+      IF async = abap_true.
+        mo_emitter->emit( zif_qjs_opcodes=>for_await_of_next ).
+        mo_emitter->emit( zif_qjs_opcodes=>await ).
+        mo_emitter->emit( zif_qjs_opcodes=>iterator_get_value_done ).
+      ELSE.
+        mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
+      ENDIF.
     ELSE.
       mo_emitter->emit( zif_qjs_opcodes=>for_in_next ).
     ENDIF.
@@ -2889,6 +3012,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_loop-continue_target = lv_next_target.
     ls_loop-has_iterator = is_for_of.
     ls_loop-exception_handler = is_for_of.
+    ls_loop-async_iterator = async.
     ls_loop-iterator_local = lv_iterator_local.
     APPEND ls_loop TO mt_loops.
     parse_statement( ).
@@ -2910,7 +3034,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         instruction = lv_catch_instruction target = mo_emitter->position( ) ).
       mo_emitter->emit(
         opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
-      mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+      emit_iterator_close( async ).
       mo_emitter->emit( zif_qjs_opcodes=>throw ).
       mo_emitter->patch(
         instruction = lv_normal_jump target = mo_emitter->position( ) ).
@@ -3044,7 +3168,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF ms_token-kind = zcl_qjs_lexer=>token_lbracket
         OR ms_token-kind = zcl_qjs_lexer=>token_lbrace.
       parse_for_pattern(
-        declaration_kind = lv_declaration_kind is_for_of = abap_true ).
+        declaration_kind = lv_declaration_kind is_for_of = abap_true
+        async = async ).
       RETURN.
     ENDIF.
     IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
@@ -3081,7 +3206,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     advance( ).
 
-    mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+    IF async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>for_await_of_start ).
+    ELSE.
+      mo_emitter->emit( zif_qjs_opcodes=>for_of_start ).
+    ENDIF.
     lv_iterator_local = mo_emitter->allocate_local( ).
     mo_emitter->emit(
       opcode = zif_qjs_opcodes=>put_local operand = lv_iterator_local ).
@@ -3089,7 +3218,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_next_target = mo_emitter->position( ).
     mo_emitter->emit(
       opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
-    mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
+    IF async = abap_true.
+      mo_emitter->emit( zif_qjs_opcodes=>for_await_of_next ).
+      mo_emitter->emit( zif_qjs_opcodes=>await ).
+      mo_emitter->emit( zif_qjs_opcodes=>iterator_get_value_done ).
+    ELSE.
+      mo_emitter->emit( zif_qjs_opcodes=>for_of_next ).
+    ENDIF.
     lv_done_jump = mo_emitter->position( ).
     mo_emitter->emit( zif_qjs_opcodes=>if_true ).
     mo_emitter->emit(
@@ -3111,6 +3246,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_loop-continue_target = lv_next_target.
     ls_loop-has_iterator = abap_true.
     ls_loop-exception_handler = abap_true.
+    ls_loop-async_iterator = async.
     ls_loop-iterator_local = lv_iterator_local.
     APPEND ls_loop TO mt_loops.
     parse_statement( ).
@@ -3130,7 +3266,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       instruction = lv_catch_instruction target = mo_emitter->position( ) ).
     mo_emitter->emit(
       opcode = zif_qjs_opcodes=>get_local operand = lv_iterator_local ).
-    mo_emitter->emit( zif_qjs_opcodes=>iterator_close ).
+    emit_iterator_close( async ).
     mo_emitter->emit( zif_qjs_opcodes=>throw ).
     mo_emitter->patch(
       instruction = lv_normal_jump target = mo_emitter->position( ) ).
@@ -3216,11 +3352,288 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       parse_yield( ).
       RETURN.
     ENDIF.
+    IF is_arrow_function_start( ) = abap_true.
+      parse_arrow_function( ).
+      RETURN.
+    ENDIF.
     IF is_pattern_assignment( ) = abap_true.
       parse_pattern_assignment( ).
       RETURN.
     ENDIF.
     parse_conditional( ).
+  ENDMETHOD.
+
+  METHOD is_arrow_function_start.
+    DATA lo_scanner TYPE REF TO zcl_qjs_lexer.
+    DATA ls_scan TYPE zcl_qjs_lexer=>ty_token.
+    DATA lv_depth TYPE i.
+
+    IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
+      CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+      lo_scanner->set_offset( mo_lexer->get_offset( ) ).
+      ls_scan = lo_scanner->next( ).
+      IF ls_scan-kind = zcl_qjs_lexer=>token_arrow.
+        result = xsdbool( ls_scan-line_terminator_before = abap_false ).
+        RETURN.
+      ENDIF.
+      IF ms_token-text <> 'async'
+          OR ls_scan-line_terminator_before = abap_true.
+        RETURN.
+      ENDIF.
+      IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
+        ls_scan = lo_scanner->next( ).
+        result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_arrow
+          AND ls_scan-line_terminator_before = abap_false ).
+        RETURN.
+      ELSEIF ls_scan-kind <> zcl_qjs_lexer=>token_lparen.
+        RETURN.
+      ENDIF.
+    ELSEIF ms_token-kind = zcl_qjs_lexer=>token_lparen.
+      CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+      lo_scanner->set_offset( mo_lexer->get_offset( ) ).
+    ELSE.
+      RETURN.
+    ENDIF.
+
+    lv_depth = 1.
+    WHILE lv_depth > 0.
+      ls_scan = lo_scanner->next( ).
+      IF ls_scan-kind = zcl_qjs_lexer=>token_lparen.
+        lv_depth = lv_depth + 1.
+      ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_rparen.
+        lv_depth = lv_depth - 1.
+      ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_eof.
+        RETURN.
+      ENDIF.
+    ENDWHILE.
+    ls_scan = lo_scanner->next( ).
+    result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_arrow
+      AND ls_scan-line_terminator_before = abap_false ).
+  ENDMETHOD.
+
+  METHOD parse_arrow_function.
+    DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lt_outer_locals TYPE ty_locals.
+    DATA lt_outer_loops TYPE ty_loops.
+    DATA lt_outer_parent_locals TYPE ty_locals.
+    DATA lt_outer_finally TYPE ty_finally_stack.
+    DATA lt_outer_scopes TYPE ty_scopes.
+    DATA lt_outer_hoists TYPE ty_hoists.
+    DATA lt_root_scope TYPE ty_locals.
+    DATA lt_visible_scope TYPE ty_locals.
+    DATA ls_visible_binding TYPE ty_local.
+    DATA ls_local TYPE ty_local.
+    DATA ls_parent_binding TYPE ty_local.
+    DATA ls_global_this TYPE ty_local.
+    DATA lv_outer_in_function TYPE abap_bool.
+    DATA lv_outer_in_generator TYPE abap_bool.
+    DATA lv_outer_in_async TYPE abap_bool.
+    DATA lv_async TYPE abap_bool.
+    DATA lv_parenthesized TYPE abap_bool.
+    DATA lv_parameter_count TYPE i.
+    DATA lv_function_length TYPE i.
+    DATA lv_seen_default TYPE abap_bool.
+    DATA lv_default_jump TYPE i.
+    DATA lo_function TYPE REF TO zcl_qjs_function.
+
+    IF ms_token-kind = zcl_qjs_lexer=>token_identifier
+        AND ms_token-text = 'async'.
+      DATA(lo_async_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+      lo_async_scanner->set_offset( mo_lexer->get_offset( ) ).
+      DATA(ls_after_async) = lo_async_scanner->next( ).
+      IF ls_after_async-kind <> zcl_qjs_lexer=>token_arrow
+          AND ls_after_async-line_terminator_before = abap_false.
+        lv_async = abap_true.
+        advance( ).
+      ENDIF.
+    ENDIF.
+    IF ms_token-kind = zcl_qjs_lexer=>token_lparen.
+      lv_parenthesized = abap_true.
+      advance( ).
+    ENDIF.
+
+    lo_outer_emitter = mo_emitter.
+    lt_outer_locals = mt_locals.
+    lt_outer_parent_locals = mt_parent_locals.
+    lt_outer_finally = mt_finally.
+    lt_outer_scopes = mt_scopes.
+    lt_outer_hoists = mt_hoists.
+    lt_outer_loops = mt_loops.
+    lv_outer_in_function = mv_in_function.
+    lv_outer_in_generator = mv_in_generator.
+    lv_outer_in_async = mv_in_async.
+    CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
+    mt_parent_locals = mt_locals.
+    LOOP AT mt_scopes INTO lt_visible_scope.
+      LOOP AT lt_visible_scope INTO ls_visible_binding.
+        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
+        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
+      ENDLOOP.
+    ENDLOOP.
+    IF lv_outer_in_function = abap_false.
+      READ TABLE mt_parent_locals WITH TABLE KEY name = 'globalThis'
+        INTO ls_global_this.
+      IF sy-subrc = 0.
+        DELETE TABLE mt_parent_locals WITH TABLE KEY name = 'this'.
+        ls_global_this-name = 'this'.
+        INSERT ls_global_this INTO TABLE mt_parent_locals.
+      ENDIF.
+    ENDIF.
+    CLEAR mt_locals.
+    CLEAR mt_loops.
+    CLEAR mt_finally.
+    CLEAR mt_scopes.
+    CLEAR mt_hoists.
+    APPEND lt_root_scope TO mt_scopes.
+    mv_in_function = abap_true.
+    mv_in_generator = abap_false.
+    mv_in_async = lv_async.
+
+    WHILE ( lv_parenthesized = abap_true
+          AND ms_token-kind <> zcl_qjs_lexer=>token_rparen )
+        OR ( lv_parenthesized = abap_false AND lv_parameter_count = 0 ).
+      IF ms_token-kind = zcl_qjs_lexer=>token_ellipsis.
+        advance( ).
+        IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Expected arrow rest parameter name'.
+        ENDIF.
+        ls_local-name = ms_token-text.
+        ls_local-index = mo_emitter->allocate_local( ).
+        ls_local-kind = zcl_qjs_function=>capture_local.
+        INSERT ls_local INTO TABLE mt_locals.
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>rest operand = lv_parameter_count ).
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>put_local operand = ls_local-index ).
+        advance( ).
+        IF ms_token-kind <> zcl_qjs_lexer=>token_rparen.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Arrow rest parameter must be last'.
+        ENDIF.
+        CONTINUE.
+      ENDIF.
+      IF ms_token-kind = zcl_qjs_lexer=>token_lbracket
+          OR ms_token-kind = zcl_qjs_lexer=>token_lbrace.
+        DATA(lv_arrow_pattern_default) = parse_pattern_parameter(
+          lv_parameter_count ).
+        lv_parameter_count = lv_parameter_count + 1.
+        IF lv_arrow_pattern_default = abap_true.
+          lv_seen_default = abap_true.
+        ELSEIF lv_seen_default = abap_false.
+          lv_function_length = lv_function_length + 1.
+        ENDIF.
+      ELSE.
+        IF ms_token-kind <> zcl_qjs_lexer=>token_identifier.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Expected arrow parameter'.
+        ENDIF.
+        CLEAR ls_local.
+        ls_local-name = ms_token-text.
+        ls_local-index = mo_emitter->allocate_local( ).
+        ls_local-kind = zcl_qjs_function=>capture_local.
+        INSERT ls_local INTO TABLE mt_locals.
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>get_arg operand = lv_parameter_count ).
+        mo_emitter->emit(
+          opcode = zif_qjs_opcodes=>put_local operand = ls_local-index ).
+        lv_parameter_count = lv_parameter_count + 1.
+        advance( ).
+        IF ms_token-kind = zcl_qjs_lexer=>token_assign.
+          lv_seen_default = abap_true.
+          mo_emitter->emit(
+            opcode = zif_qjs_opcodes=>get_local operand = ls_local-index ).
+          mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+          mo_emitter->emit( zif_qjs_opcodes=>strict_equal ).
+          lv_default_jump = mo_emitter->position( ).
+          mo_emitter->emit( zif_qjs_opcodes=>if_false ).
+          advance( ).
+          parse_assignment( ).
+          mo_emitter->emit(
+            opcode = zif_qjs_opcodes=>put_local operand = ls_local-index ).
+          mo_emitter->patch(
+            instruction = lv_default_jump target = mo_emitter->position( ) ).
+        ELSEIF lv_seen_default = abap_false.
+          lv_function_length = lv_function_length + 1.
+        ENDIF.
+      ENDIF.
+      IF lv_parenthesized = abap_false.
+        EXIT.
+      ELSEIF ms_token-kind = zcl_qjs_lexer=>token_comma.
+        advance( ).
+      ELSEIF ms_token-kind <> zcl_qjs_lexer=>token_rparen.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Expected comma in arrow parameters'.
+      ENDIF.
+    ENDWHILE.
+    IF lv_parenthesized = abap_true.
+      IF ms_token-kind <> zcl_qjs_lexer=>token_rparen.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Expected closing arrow parameter parenthesis'.
+      ENDIF.
+      advance( ).
+    ENDIF.
+    IF ms_token-kind <> zcl_qjs_lexer=>token_arrow
+        OR ms_token-line_terminator_before = abap_true.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'Expected arrow token'.
+    ENDIF.
+    advance( ).
+
+    LOOP AT mt_parent_locals INTO ls_parent_binding.
+      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
+        TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        CLEAR ls_local.
+        ls_local-name = ls_parent_binding-name.
+        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_parent
+            source_index = ls_parent_binding-index ).
+        ELSE.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_local
+            source_index = ls_parent_binding-index ).
+        ENDIF.
+        ls_local-kind = zcl_qjs_function=>capture_parent.
+        INSERT ls_local INTO TABLE mt_locals.
+      ENDIF.
+    ENDLOOP.
+    mo_emitter->set_signature(
+      parameter_count = lv_parameter_count function_length = lv_function_length
+      constructible = abap_false async = lv_async ).
+    IF ms_token-kind = zcl_qjs_lexer=>token_lbrace.
+      predeclare_scope(
+        start_offset = mo_lexer->get_offset( ) stop_at_brace = abap_true ).
+      advance( ).
+      WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
+        IF ms_token-kind = zcl_qjs_lexer=>token_eof.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'Expected closing arrow function brace'.
+        ENDIF.
+        parse_statement( ).
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+      ENDWHILE.
+      advance( ).
+      mo_emitter->emit( zif_qjs_opcodes=>return_undefined ).
+    ELSE.
+      parse_assignment( ).
+      mo_emitter->emit( zif_qjs_opcodes=>return ).
+    ENDIF.
+    lo_function = mo_emitter->to_function( ).
+
+    mo_emitter = lo_outer_emitter.
+    mt_locals = lt_outer_locals.
+    mt_parent_locals = lt_outer_parent_locals.
+    mt_loops = lt_outer_loops.
+    mt_finally = lt_outer_finally.
+    mt_scopes = lt_outer_scopes.
+    mt_hoists = lt_outer_hoists.
+    mv_in_function = lv_outer_in_function.
+    mv_in_generator = lv_outer_in_generator.
+    mv_in_async = lv_outer_in_async.
+    mo_last_function = lo_function.
+    mo_emitter->emit_closure( zcl_qjs_value=>new_object( lo_function ) ).
   ENDMETHOD.
 
   METHOD parse_yield.
@@ -4046,6 +4459,19 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         advance( ).
         mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
       WHEN zcl_qjs_lexer=>token_identifier.
+        IF is_async_function_start( ) = abap_true.
+          mv_parsing_async_function = abap_true.
+          advance( ).
+          parse_function_expression( ).
+          mv_parser_depth = mv_parser_depth - 1.
+          RETURN.
+        ELSEIF ms_token-text = 'await' AND mv_in_async = abap_true.
+          advance( ).
+          parse_postfix( ).
+          mo_emitter->emit( zif_qjs_opcodes=>await ).
+          mv_parser_depth = mv_parser_depth - 1.
+          RETURN.
+        ENDIF.
         DATA(lv_name) = ms_token-text.
         DATA(ls_binding) = find_binding( lv_name ).
         advance( ).
@@ -4099,7 +4525,15 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               opcode = zif_qjs_opcodes=>get_local operand = ls_this_binding-index ).
           ENDIF.
         ELSE.
-          mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+          READ TABLE mt_locals WITH TABLE KEY name = 'globalThis'
+            INTO DATA(ls_global_this_binding).
+          IF sy-subrc = 0.
+            mo_emitter->emit(
+              opcode  = zif_qjs_opcodes=>get_local
+              operand = ls_global_this_binding-index ).
+          ELSE.
+            mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+          ENDIF.
         ENDIF.
       WHEN zcl_qjs_lexer=>token_super.
         IF mv_has_super = abap_false.
@@ -4200,8 +4634,32 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         mo_emitter->emit( zif_qjs_opcodes=>logical_not ).
       WHEN zcl_qjs_lexer=>token_typeof.
         advance( ).
-        parse_postfix( ).
+        DATA(lv_typeof_unresolvable) = abap_false.
+        IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
+          TRY.
+              DATA(ls_typeof_binding) = find_binding( ms_token-text ).
+            CATCH zcx_qjs_error.
+              lv_typeof_unresolvable = abap_true.
+          ENDTRY.
+        ENDIF.
+        IF lv_typeof_unresolvable = abap_true.
+          advance( ).
+          IF ms_token-kind = zcl_qjs_lexer=>token_dot
+              OR ms_token-kind = zcl_qjs_lexer=>token_lbracket
+              OR ms_token-kind = zcl_qjs_lexer=>token_lparen.
+            RAISE EXCEPTION TYPE zcx_qjs_error
+              EXPORTING reason = 'Unknown JavaScript identifier in typeof operand'.
+          ENDIF.
+          mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
+        ELSE.
+          parse_postfix( ).
+        ENDIF.
         mo_emitter->emit( zif_qjs_opcodes=>type_of ).
+      WHEN zcl_qjs_lexer=>token_void.
+        advance( ).
+        parse_postfix( ).
+        mo_emitter->emit( zif_qjs_opcodes=>drop ).
+        mo_emitter->emit( zif_qjs_opcodes=>push_undefined ).
       WHEN zcl_qjs_lexer=>token_bit_not.
         advance( ).
         parse_postfix( ).
@@ -4321,7 +4779,126 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           operand = ls_object_home_binding-index ).
         advance( ).
         WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
-          IF ms_token-kind = zcl_qjs_lexer=>token_star.
+          IF ms_token-kind = zcl_qjs_lexer=>token_identifier
+              AND ms_token-text = 'async'.
+            DATA(lo_object_async_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            lo_object_async_scanner->set_offset( mo_lexer->get_offset( ) ).
+            DATA(ls_object_async_lookahead) = lo_object_async_scanner->next( ).
+            IF ls_object_async_lookahead-line_terminator_before = abap_false
+                AND ls_object_async_lookahead-kind <> zcl_qjs_lexer=>token_lparen
+                AND ls_object_async_lookahead-kind <> zcl_qjs_lexer=>token_colon
+                AND ls_object_async_lookahead-kind <> zcl_qjs_lexer=>token_comma
+                AND ls_object_async_lookahead-kind <> zcl_qjs_lexer=>token_rbrace
+                AND ls_object_async_lookahead-kind <> zcl_qjs_lexer=>token_assign
+                AND ls_object_async_lookahead-kind
+                  <> zcl_qjs_lexer=>token_semicolon.
+              advance( ).
+              IF ms_token-kind = zcl_qjs_lexer=>token_star.
+                RAISE EXCEPTION TYPE zcx_qjs_error
+                  EXPORTING reason = 'Async generators are not supported'.
+              ENDIF.
+              DATA lv_object_async_computed TYPE abap_bool.
+              DATA lv_object_async_name TYPE string.
+              IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
+                lv_object_async_computed = abap_true.
+                advance( ).
+                parse_expression( ).
+                IF ms_token-kind <> zcl_qjs_lexer=>token_rbracket.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason =
+                      'Expected closing computed async-method bracket'.
+                ENDIF.
+              ELSE.
+                IF is_identifier_name( ms_token-kind ) = abap_false
+                    AND ms_token-kind <> zcl_qjs_lexer=>token_string
+                    AND ms_token-kind <> zcl_qjs_lexer=>token_number.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason = 'Expected object async method name'.
+                ENDIF.
+                lv_object_async_name = ms_token-text.
+                IF ms_token-kind = zcl_qjs_lexer=>token_number.
+                  lv_object_async_name = zcl_qjs_value=>to_string(
+                    zcl_qjs_number=>parse_literal( ms_token-text ) ).
+                ENDIF.
+              ENDIF.
+              DATA(ls_old_object_async_super) = ms_super_binding.
+              DATA(lv_old_object_async_has_super) = mv_has_super.
+              DATA(lv_old_object_async_super_static) = mv_super_static.
+              DATA(lv_old_object_async_super_method) = mv_super_object_method.
+              DATA(lv_old_object_async_super_call) = mv_super_call_allowed.
+              ms_super_binding = ls_object_home_binding.
+              mv_has_super = abap_true.
+              mv_super_static = abap_true.
+              mv_super_object_method = abap_true.
+              mv_super_call_allowed = abap_false.
+              mv_parsing_class_method = abap_true.
+              mv_parsing_async_function = abap_true.
+              ms_token-kind = zcl_qjs_lexer=>token_function.
+              parse_function_expression( ).
+              ms_super_binding = ls_old_object_async_super.
+              mv_has_super = lv_old_object_async_has_super.
+              mv_super_static = lv_old_object_async_super_static.
+              mv_super_object_method = lv_old_object_async_super_method.
+              mv_super_call_allowed = lv_old_object_async_super_call.
+              IF lv_object_async_computed = abap_true.
+                mo_emitter->emit(
+                  opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
+              ELSE.
+                mo_emitter->emit(
+                  opcode   = zif_qjs_opcodes=>define_method
+                  operand  = mo_emitter->intern_atom( lv_object_async_name )
+                  operand2 = 10 ).
+              ENDIF.
+              ELSE.
+                DATA(lv_object_name_async) = ms_token-text.
+                DATA(lv_object_async_atom) = mo_emitter->intern_atom(
+                  lv_object_name_async ).
+              IF ls_object_async_lookahead-kind = zcl_qjs_lexer=>token_lparen.
+                DATA(ls_old_named_async_super) = ms_super_binding.
+                DATA(lv_old_named_async_has_super) = mv_has_super.
+                DATA(lv_old_named_async_static) = mv_super_static.
+                DATA(lv_old_named_async_method) = mv_super_object_method.
+                DATA(lv_old_named_async_call) = mv_super_call_allowed.
+                ms_super_binding = ls_object_home_binding.
+                mv_has_super = abap_true.
+                mv_super_static = abap_true.
+                mv_super_object_method = abap_true.
+                mv_super_call_allowed = abap_false.
+                mv_parsing_class_method = abap_true.
+                ms_token-kind = zcl_qjs_lexer=>token_function.
+                parse_function_expression( ).
+                ms_super_binding = ls_old_named_async_super.
+                mv_has_super = lv_old_named_async_has_super.
+                mv_super_static = lv_old_named_async_static.
+                mv_super_object_method = lv_old_named_async_method.
+                mv_super_call_allowed = lv_old_named_async_call.
+                mo_emitter->emit(
+                  opcode   = zif_qjs_opcodes=>define_method
+                  operand  = lv_object_async_atom
+                  operand2 = 10 ).
+              ELSE.
+                advance( ).
+                IF ms_token-kind = zcl_qjs_lexer=>token_colon.
+                  advance( ).
+                  mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+                  parse_assignment( ).
+                  mo_emitter->emit(
+                    opcode  = zif_qjs_opcodes=>put_field
+                    operand = lv_object_async_atom ).
+                ELSEIF ms_token-kind = zcl_qjs_lexer=>token_comma
+                    OR ms_token-kind = zcl_qjs_lexer=>token_rbrace.
+                  mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+                  emit_binding_get( find_binding( lv_object_name_async ) ).
+                  mo_emitter->emit(
+                    opcode  = zif_qjs_opcodes=>put_field
+                    operand = lv_object_async_atom ).
+                ELSE.
+                  RAISE EXCEPTION TYPE zcx_qjs_error
+                    EXPORTING reason = 'Expected colon after object property name'.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ELSEIF ms_token-kind = zcl_qjs_lexer=>token_star.
             DATA lv_object_generator_computed TYPE abap_bool.
             DATA lv_object_generator_name TYPE string.
             advance( ).
@@ -4407,6 +4984,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 EXPORTING reason = 'Expected object literal property name'.
             ENDIF.
             DATA(lv_object_name) = ms_token-text.
+            DATA(lv_object_shorthand) = xsdbool(
+              ms_token-kind = zcl_qjs_lexer=>token_identifier ).
             IF ms_token-kind = zcl_qjs_lexer=>token_number.
               lv_object_name = zcl_qjs_value=>to_string(
                 zcl_qjs_number=>parse_literal( ms_token-text ) ).
@@ -4440,15 +5019,23 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 operand2 = 10 ).
             ELSE.
               advance( ).
-              IF ms_token-kind <> zcl_qjs_lexer=>token_colon.
+              IF ms_token-kind = zcl_qjs_lexer=>token_colon.
+                advance( ).
+                mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+                parse_assignment( ).
+                mo_emitter->emit(
+                  opcode = zif_qjs_opcodes=>put_field operand = lv_object_atom ).
+              ELSEIF lv_object_shorthand = abap_true
+                  AND ( ms_token-kind = zcl_qjs_lexer=>token_comma
+                    OR ms_token-kind = zcl_qjs_lexer=>token_rbrace ).
+                mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
+                emit_binding_get( find_binding( lv_object_name ) ).
+                mo_emitter->emit(
+                  opcode = zif_qjs_opcodes=>put_field operand = lv_object_atom ).
+              ELSE.
                 RAISE EXCEPTION TYPE zcx_qjs_error
                   EXPORTING reason = 'Expected colon after object property name'.
               ENDIF.
-              advance( ).
-              mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
-              parse_assignment( ).
-              mo_emitter->emit(
-                opcode = zif_qjs_opcodes=>put_field operand = lv_object_atom ).
             ENDIF.
           ENDIF.
           IF ms_token-kind = zcl_qjs_lexer=>token_comma.

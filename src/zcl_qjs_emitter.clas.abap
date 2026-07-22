@@ -46,7 +46,8 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
         has_arguments TYPE abap_bool DEFAULT abap_false
         constructible TYPE abap_bool DEFAULT abap_true
         class_constructor TYPE abap_bool DEFAULT abap_false
-        generator TYPE abap_bool DEFAULT abap_false.
+        generator TYPE abap_bool DEFAULT abap_false
+        async TYPE abap_bool DEFAULT abap_false.
     METHODS intern_atom
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE i.
@@ -68,6 +69,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_constructible TYPE abap_bool VALUE abap_true.
     DATA mv_class_constructor TYPE abap_bool.
     DATA mv_generator TYPE abap_bool.
+    DATA mv_async TYPE abap_bool.
     DATA mt_atoms TYPE zcl_qjs_function=>ty_atoms.
     DATA mt_captures TYPE zcl_qjs_function=>ty_captures.
     DATA mt_local_specs TYPE zcl_qjs_function=>ty_local_specs.
@@ -105,6 +107,7 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
         constructible   = mv_constructible
         class_constructor = mv_class_constructor
         generator         = mv_generator
+        async             = mv_async
         atoms           = mt_atoms
         captures        = mt_captures
         local_specs     = mt_local_specs.
@@ -179,6 +182,7 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
     mv_constructible = constructible.
     mv_class_constructor = class_constructor.
     mv_generator = generator.
+    mv_async = async.
   ENDMETHOD.
 
   METHOD intern_atom.

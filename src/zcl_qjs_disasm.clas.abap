@@ -88,11 +88,19 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
         result = 'define_method_computed'.
       WHEN zif_qjs_opcodes=>for_in_start. result = 'for_in_start'.
       WHEN zif_qjs_opcodes=>for_of_start. result = 'for_of_start'.
+      WHEN zif_qjs_opcodes=>for_await_of_start. result = 'for_await_of_start'.
       WHEN zif_qjs_opcodes=>for_in_next. result = 'for_in_next'.
       WHEN zif_qjs_opcodes=>for_of_next. result = 'for_of_next'.
+      WHEN zif_qjs_opcodes=>for_await_of_next. result = 'for_await_of_next'.
+      WHEN zif_qjs_opcodes=>iterator_check_object.
+        result = 'iterator_check_object'.
+      WHEN zif_qjs_opcodes=>iterator_get_value_done.
+        result = 'iterator_get_value_done'.
       WHEN zif_qjs_opcodes=>iterator_close. result = 'iterator_close'.
+      WHEN zif_qjs_opcodes=>iterator_call. result = 'iterator_call'.
       WHEN zif_qjs_opcodes=>yield. result = 'yield'.
       WHEN zif_qjs_opcodes=>yield_star. result = 'yield_star'.
+      WHEN zif_qjs_opcodes=>await. result = 'await'.
       WHEN zif_qjs_opcodes=>to_object. result = 'to_object'.
       WHEN zif_qjs_opcodes=>throw. result = 'throw'.
       WHEN zif_qjs_opcodes=>catch. result = 'catch'.

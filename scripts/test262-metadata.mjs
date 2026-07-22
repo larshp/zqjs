@@ -87,13 +87,19 @@ export function stripJavaScriptComments(source) {
   return result;
 }
 
-export function unsupportedReasons(metadata, supportedFeatures = []) {
+export function unsupportedReasons(
+  metadata,
+  supportedFeatures = [],
+  supportedFlags = []
+) {
   const supported = new Set(supportedFeatures);
+  const allowedFlags = new Set(supportedFlags);
   const reasons = metadata.features
     .filter(feature => !supported.has(feature))
     .map(feature => `unsupported feature: ${feature}`);
   for (const flag of metadata.flags) {
-    if (["module", "async", "onlyStrict"].includes(flag)) {
+    if (["module", "async", "onlyStrict"].includes(flag)
+        && !allowedFlags.has(flag)) {
       reasons.push(`unsupported flag: ${flag}`);
     }
   }

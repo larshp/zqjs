@@ -283,8 +283,8 @@ carry a **Partial** note. Verification on a representative real ABAP stack is st
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 99 opcodes; abaplint covers 64 files with no findings; all
-current ABAP Unit suites pass; and the pinned test262 slice reports 806 pass, 3
+QuickJS table contains 100 opcodes; abaplint covers 68 files with no findings; all
+current ABAP Unit suites pass; and the pinned test262 slice reports 938 pass, 3
 reasoned unsupported, and 0 fail.
 
 ### Phase 0 — Scope, reproducibility & host proof
@@ -295,9 +295,10 @@ reasoned unsupported, and 0 fail.
 - [ ] Pin the QuickJS release **and commit**, test262 commit, Unicode version, npm
       dependencies, open-abap version, minimum SAP_BASIS/kernel, and PCRE baseline.
       Preserve upstream MIT notices for derived/generated material.
-      **Partial:** QuickJS, test262, npm/open-abap, and minimum SAP versions are
-      recorded; Unicode/PCRE baselines and the complete derived-material notice audit
-      remain.
+      **Partial:** `compatibility-profile.json` now records and build-verifies the
+      QuickJS release/commit, test262, Unicode, npm/open-abap, Node, minimum SAP_BASIS,
+      Unicode-only, and real-ABAP release-gate contracts. A concrete PCRE version awaits
+      the real-host probe, and the complete derived-material notice audit remains.
 - [ ] Repo layout, lockfile, `abaplint.jsonc`, transpiler/open-abap runner, and CI.
       **Partial:** the repository, lockfile, lint/transpile/test runners, and the
       transpiled lane exist; a real-ABAP CI lane remains.
@@ -345,8 +346,8 @@ reasoned unsupported, and 0 fail.
 - [ ] `zcl_qjs_limits` and cancellation checks: instruction, frame/operand stack,
       parser depth, atoms, objects/estimated bytes, source/bytecode size, and job queue.
       **Partial:** instruction, stack/frame, parser, atom/object, and source/bytecode
-      limits plus cancellation are implemented; estimated-byte and job-queue limits
-      remain.
+      limits, a bounded Promise job queue, and cancellation are implemented;
+      estimated-byte and broader async job-queue limits remain.
 - [x] Minimal callable/object cells needed by the first VM slice.
 - **Exit:** every primitive and special Number state round-trips; arithmetic/coercion,
       string/code-unit, completion, atom-lifecycle, and limit tests pass on both hosts.
@@ -376,7 +377,8 @@ reasoned unsupported, and 0 fail.
       lexical environments, and stack metadata verification.
 - [x] Exceptions end-to-end now: `throw`, `try/catch/finally`, internal TypeError/
       RangeError/SyntaxError creation, real Error/native-error prototype identity,
-      and abrupt-completion unwinding.
+      `EvalError`, standard Error and AggregateError `options.cause`, and abrupt-
+      completion unwinding.
 - [x] Enforce instruction/stack/parser/allocation limits in all new paths.
 - **Exit:** arithmetic, `if`/`while`/`for`, recursion, closure counters, and caught/finally
       exceptions pass their test262 subsets and host-differential tests.
@@ -537,6 +539,29 @@ reasoned unsupported, and 0 fail.
       residual edge cases discovered by it.
 - [ ] Promises + bounded microtask/job queue; async functions/`await`; then async
       generators if included in the profile.
+      **Partial:** an initial Promise constructor, `resolve`/`reject`, `then`, generic
+      `catch`/`finally`, first-settlement behavior, promise adoption, deferred foreign-
+      thenable assimilation, iterable `Promise.all`/`allSettled`/`any`/`race`, ordered
+      aggregate results and errors, constructor-sensitive capability creation for all
+      static operations, the intrinsic `Promise[Symbol.species]` accessor, custom
+      species chaining for `then`, `AggregateError`,
+      and a bounded FIFO queue
+      drained at context checkpoints are implemented and covered by focused ABAP Unit
+      and selected synchronous test262 descriptor/behavioral tests. Promise and native
+      Error subclasses now preserve `newTarget`, inherited statics, and Promise species.
+      The runtime also exposes a `HostPromiseRejectionTracker`-style callback with exact
+      rejected/handled transitions. `globalThis` and top-level script `this` expose
+      cell-backed global data properties, including the standard `AggregateError`
+      descriptor. Initial async function declarations, expressions, and public/private
+      instance/static/computed class and object methods execute immediately and return
+      Promises; `await` suspends explicit VM frames and resumes through ordered
+      fulfillment/rejection jobs, including sequential awaits, `try`/`catch`/`finally`,
+      hoisting, and return-value assimilation. The test262 runner validates asynchronous
+      `$DONE` completion in a persistent context and supports focused path filtering.
+      Ordinary and async arrows support concise/block bodies, default/rest parameters,
+      nesting, non-constructibility, and lexical `this`/`arguments`; lexical
+      `super`/`new.target` and broader early-error/name-inference coverage remain.
+      `for await..of`, async generators, and broader behavioral test262 coverage remain.
 - [ ] ES modules: parse/link/evaluate, host resolver/loader, import/export, and dynamic
       `import()`. Add module test262 harness support here.
 - [ ] Direct `eval` and `Function` construction only if the Phase 0 profile includes

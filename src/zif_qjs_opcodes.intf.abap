@@ -44,11 +44,17 @@ INTERFACE zif_qjs_opcodes PUBLIC.
   CONSTANTS define_method_computed TYPE i VALUE 82.
   CONSTANTS for_in_start TYPE i VALUE 122.
   CONSTANTS for_of_start TYPE i VALUE 123.
+  CONSTANTS for_await_of_start TYPE i VALUE 124.
   CONSTANTS for_in_next TYPE i VALUE 125.
   CONSTANTS for_of_next TYPE i VALUE 126.
+  CONSTANTS for_await_of_next TYPE i VALUE 127.
+  CONSTANTS iterator_check_object TYPE i VALUE 128.
+  CONSTANTS iterator_get_value_done TYPE i VALUE 129.
   CONSTANTS iterator_close TYPE i VALUE 130.
+  CONSTANTS iterator_call TYPE i VALUE 132.
   CONSTANTS yield TYPE i VALUE 134.
   CONSTANTS yield_star TYPE i VALUE 135.
+  CONSTANTS await TYPE i VALUE 137.
   CONSTANTS to_object TYPE i VALUE 111.
   CONSTANTS if_false TYPE i VALUE 104.
   CONSTANTS if_true TYPE i VALUE 105.

@@ -15,6 +15,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
         initial_closure TYPE REF TO zcl_qjs_closure OPTIONAL
         initial_this TYPE zcl_qjs_value=>ty_value OPTIONAL
         initial_arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        initial_constructor TYPE abap_bool DEFAULT abap_false
         resume TYPE abap_bool DEFAULT abap_false
         resume_kind TYPE i DEFAULT 0
         resume_value TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -23,6 +24,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         zcx_qjs_error.
     METHODS was_suspended RETURNING VALUE(result) TYPE abap_bool.
+    METHODS was_await_suspended RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_complete RETURNING VALUE(result) TYPE abap_bool.
 
   PRIVATE SECTION.
@@ -62,6 +64,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_generator_suspended TYPE abap_bool.
     DATA mv_generator_complete TYPE abap_bool.
     DATA mv_generator_delegating TYPE abap_bool.
+    DATA mv_await_suspended TYPE abap_bool.
 
     METHODS pop
       CHANGING
@@ -179,6 +182,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       CLEAR mt_saved_stack.
       CLEAR mt_saved_frames.
       CLEAR mv_generator_suspended.
+      CLEAR mv_await_suspended.
       IF mv_generator_delegating = abap_true.
         APPEND resume_value TO lt_stack.
         APPEND zcl_qjs_value=>new_int( resume_kind ) TO lt_stack.
@@ -230,6 +234,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     ls_frame-arguments = initial_arguments.
     ls_frame-pc = 1.
     ls_frame-stack_base = 0.
+    ls_frame-is_constructor = initial_constructor.
+    IF initial_constructor = abap_true.
+      ls_frame-constructor_this = initial_this.
+    ENDIF.
     DO function->get_local_count( ) TIMES.
       READ TABLE initial_cells INDEX sy-index INTO lo_cell.
       IF sy-subrc <> 0.
@@ -523,6 +531,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = mo_runtime->get_iterator( ls_value ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_await_of_start.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_value = mo_runtime->get_async_iterator( ls_value ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>for_of_next.
           ls_value = pop( CHANGING stack = lt_stack ).
           ls_for_of_next = mo_runtime->iterator_next( ls_value ).
@@ -530,6 +543,31 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           APPEND ls_for_of_next-value TO lt_stack.
           APPEND zcl_qjs_value=>new_boolean( ls_for_of_next-done ) TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>for_await_of_next.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          DATA(ls_async_iterator) = ls_value.
+          ls_value = mo_runtime->iterator_next_value( ls_async_iterator ).
+          APPEND ls_async_iterator TO lt_stack.
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>iterator_get_value_done.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_for_of_next = mo_runtime->iterator_result( ls_value ).
+          APPEND ls_for_of_next-value TO lt_stack.
+          APPEND zcl_qjs_value=>new_boolean( ls_for_of_next-done ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>iterator_call.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          ls_value = mo_runtime->iterator_close_value( ls_value ).
+          APPEND ls_value TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>iterator_check_object.
+          ls_value = pop( CHANGING stack = lt_stack ).
+          IF ls_value-tag <> zcl_qjs_value=>tag_object.
+            throw_error(
+              name = 'TypeError' message = 'iterator result is not an object' ).
+          ENDIF.
+          APPEND ls_value TO lt_stack.
         WHEN zif_qjs_opcodes=>iterator_close.
           ls_value = pop( CHANGING stack = lt_stack ).
           mo_runtime->iterator_close( ls_value ).
@@ -1791,6 +1829,58 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           IF ls_value-tag <> zcl_qjs_value=>tag_object.
             throw_error( name = 'TypeError' message = 'value is not callable' ).
           ENDIF.
+          IF ls_instruction-opcode = zif_qjs_opcodes=>call_method
+              AND ls_instruction-operand2 = 1.
+            IF ls_frame-closure IS NOT BOUND.
+              throw_error( name = 'TypeError' message = 'super constructor is invalid' ).
+            ENDIF.
+            DATA lo_super_result_prototype TYPE REF TO zcl_qjs_object.
+            DATA lo_super_placeholder TYPE REF TO zcl_qjs_object.
+            TRY.
+                lo_super_placeholder ?= ls_frame-constructor_this-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+            IF lo_super_placeholder IS BOUND.
+              lo_super_result_prototype = lo_super_placeholder->get_prototype( ).
+            ENDIF.
+            DATA(ls_super_new_target) = zcl_qjs_value=>new_object(
+              ls_frame-closure ).
+            TRY.
+                ls_this = mo_runtime->construct_value(
+                  constructor = ls_value new_target = ls_super_new_target
+                  arguments = lt_arguments ).
+              CATCH zcx_qjs_error INTO lo_host_error.
+                RAISE EXCEPTION TYPE zcx_qjs_throw
+                  EXPORTING value = mo_runtime->create_error_from_reason(
+                    lo_host_error->reason ).
+            ENDTRY.
+            IF lo_super_result_prototype IS BOUND.
+              DATA lo_super_result_object TYPE REF TO zcl_qjs_object.
+              TRY.
+                  lo_super_result_object ?= ls_this-object_ref.
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+              IF lo_super_result_object IS BOUND.
+                lo_super_result_object->set_prototype( lo_super_result_prototype ).
+              ENDIF.
+            ENDIF.
+            DATA(lv_super_this_index) = 1.
+            IF ls_frame-function->has_self_binding( ) = abap_true.
+              lv_super_this_index = 2.
+            ENDIF.
+            READ TABLE ls_frame-locals INDEX lv_super_this_index INTO lo_cell.
+            IF sy-subrc = 0.
+              lo_cell->set( ls_this ).
+            ENDIF.
+            IF ls_frame-is_constructor = abap_true.
+              ls_frame-constructor_this = ls_this.
+              MODIFY lt_frames FROM ls_frame INDEX lv_frame_index.
+            ENDIF.
+            ls_frame-closure->initialize_instance_fields( receiver = ls_this ).
+            APPEND ls_this TO lt_stack.
+            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            CONTINUE.
+          ENDIF.
           CLEAR lo_host_constructor.
           IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
             TRY.
@@ -1878,10 +1968,22 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mo_limits->check_operand_stack( lines( lt_stack ) ).
             CONTINUE.
           ENDIF.
+          IF lo_called->is_async( ) = abap_true.
+            IF lo_closure IS NOT BOUND.
+              throw_error(
+                name = 'TypeError' message = 'async function has no closure' ).
+            ENDIF.
+            DATA(lo_async_task) = NEW zcl_qjs_async_task(
+              runtime = mo_runtime closure = lo_closure this_value = ls_this
+              arguments = lt_arguments ).
+            APPEND lo_async_task->start( ) TO lt_stack.
+            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            CONTINUE.
+          ENDIF.
           IF lo_closure IS BOUND
               AND lo_called->is_default_derived_constructor( ) = abap_true.
             TRY.
-                lo_closure->invoke_default_derived(
+                ls_this = lo_closure->invoke_default_derived(
                   receiver = ls_this arguments = lt_arguments ).
               CATCH zcx_qjs_error INTO lo_host_error.
                 RAISE EXCEPTION TYPE zcx_qjs_throw
@@ -2064,6 +2166,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
           RETURN.
+        WHEN zif_qjs_opcodes=>await.
+          result = pop( CHANGING stack = lt_stack ).
+          mt_saved_stack = lt_stack.
+          mt_saved_frames = lt_frames.
+          mv_generator_suspended = abap_true.
+          mv_await_suspended = abap_true.
+          RETURN.
         WHEN zif_qjs_opcodes=>return.
           result = pop( CHANGING stack = lt_stack ).
           IF ls_frame-is_constructor = abap_true
@@ -2168,6 +2277,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
 
   METHOD was_suspended.
     result = mv_generator_suspended.
+  ENDMETHOD.
+
+  METHOD was_await_suspended.
+    result = mv_await_suspended.
   ENDMETHOD.
 
   METHOD is_complete.

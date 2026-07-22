@@ -21,7 +21,9 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
         max_steps TYPE int8 DEFAULT 100000
         max_atoms TYPE i DEFAULT 4096
         max_objects TYPE i DEFAULT 10000
+        max_jobs TYPE i DEFAULT 1024
         cancellation TYPE REF TO zif_qjs_cancellation OPTIONAL
+        promise_rejection TYPE REF TO zif_qjs_promise_rejection OPTIONAL
       RAISING zcx_qjs_error.
 
     METHODS get_limits RETURNING VALUE(result) TYPE REF TO zcl_qjs_limits
@@ -61,6 +63,31 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
         arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
+    METHODS create_promise
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
+    METHODS enqueue_promise_job
+      IMPORTING settled_promise TYPE REF TO zcl_qjs_object
+        on_fulfilled TYPE zcl_qjs_value=>ty_value
+        on_rejected TYPE zcl_qjs_value=>ty_value
+        next_promise TYPE REF TO zcl_qjs_object OPTIONAL
+        next_resolve TYPE zcl_qjs_value=>ty_value OPTIONAL
+        next_reject TYPE zcl_qjs_value=>ty_value OPTIONAL
+      RAISING zcx_qjs_error.
+    METHODS enqueue_thenable_job
+      IMPORTING promise TYPE REF TO zcl_qjs_object
+        thenable TYPE zcl_qjs_value=>ty_value
+        then_method TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS drain_jobs RAISING zcx_qjs_error.
+    METHODS track_promise_rejection
+      IMPORTING promise TYPE REF TO zcl_qjs_object
+        reason TYPE zcl_qjs_value=>ty_value
+        handled TYPE abap_bool
+      RAISING zcx_qjs_error.
+    METHODS is_callable_value
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS invoke_callable
       IMPORTING callable TYPE zcl_qjs_value=>ty_value
         this_value TYPE zcl_qjs_value=>ty_value
@@ -70,6 +97,18 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS get_iterator
       IMPORTING value TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS get_async_iterator
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS iterator_next_value
+      IMPORTING iterator TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS iterator_result
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE ty_iterator_result
       RAISING zcx_qjs_error.
     METHODS iterator_next
       IMPORTING iterator TYPE zcl_qjs_value=>ty_value
@@ -84,6 +123,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS iterator_close
       IMPORTING iterator TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS iterator_close_value
+      IMPORTING iterator TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS to_primitive
       IMPORTING value TYPE zcl_qjs_value=>ty_value
@@ -148,6 +191,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_generator_prototype
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_promise_prototype
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_promise_prototype
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_error_prototype
       IMPORTING name TYPE string prototype TYPE REF TO zcl_qjs_object.
     METHODS get_error_prototype
@@ -159,10 +206,16 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
     METHODS create_error
       IMPORTING name TYPE string message TYPE string OPTIONAL
+        cause TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS create_error_from_reason
       IMPORTING reason TYPE string
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
+    METHODS create_aggregate_error
+      IMPORTING errors TYPE REF TO zcl_qjs_object message TYPE string OPTIONAL
+        cause TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS allocated_object_count RETURNING VALUE(result) TYPE i.
@@ -216,6 +269,23 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_array_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_string_iterator_proto TYPE REF TO zcl_qjs_object.
     DATA mo_generator_prototype TYPE REF TO zcl_qjs_object.
+    DATA mo_promise_prototype TYPE REF TO zcl_qjs_object.
+    TYPES: BEGIN OF ty_promise_job,
+      kind TYPE i,
+      settled_promise TYPE REF TO zcl_qjs_object,
+      on_fulfilled TYPE zcl_qjs_value=>ty_value,
+      on_rejected TYPE zcl_qjs_value=>ty_value,
+      next_promise TYPE REF TO zcl_qjs_object,
+      next_resolve TYPE zcl_qjs_value=>ty_value,
+      next_reject TYPE zcl_qjs_value=>ty_value,
+      promise TYPE REF TO zcl_qjs_object,
+      thenable TYPE zcl_qjs_value=>ty_value,
+      then_method TYPE zcl_qjs_value=>ty_value,
+    END OF ty_promise_job.
+    TYPES ty_promise_jobs TYPE STANDARD TABLE OF ty_promise_job WITH DEFAULT KEY.
+    DATA mt_promise_jobs TYPE ty_promise_jobs.
+    DATA mv_max_jobs TYPE i.
+    DATA mo_promise_rejection TYPE REF TO zif_qjs_promise_rejection.
     DATA mt_error_prototypes TYPE ty_error_prototypes.
     DATA mt_resources TYPE STANDARD TABLE OF REF TO zif_qjs_disposable
       WITH DEFAULT KEY.
@@ -224,15 +294,17 @@ ENDCLASS.
 
 CLASS zcl_qjs_runtime IMPLEMENTATION.
   METHOD constructor.
-    IF max_objects <= 0.
+    IF max_objects <= 0 OR max_jobs <= 0.
       RAISE EXCEPTION TYPE zcx_qjs_error
-        EXPORTING reason = 'Object limit must be positive'.
+        EXPORTING reason = 'Object and job queue limits must be positive'.
     ENDIF.
     CREATE OBJECT mo_limits
       EXPORTING max_steps = max_steps cancellation = cancellation.
     CREATE OBJECT mo_atoms EXPORTING max_atoms = max_atoms.
     CREATE OBJECT mo_empty_shape.
     mv_max_objects = max_objects.
+    mv_max_jobs = max_jobs.
+    mo_promise_rejection = promise_rejection.
   ENDMETHOD.
 
   METHOD assert_active.
@@ -356,6 +428,173 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       this_value = this_value arguments = arguments ).
   ENDMETHOD.
 
+  METHOD create_promise.
+    result = create_object( prototype = mo_promise_prototype ).
+    result->initialize_promise( ).
+  ENDMETHOD.
+
+  METHOD is_callable_value.
+    DATA lo_callable TYPE REF TO zif_qjs_callable.
+    DATA lo_closure TYPE REF TO zcl_qjs_closure.
+    IF value-tag <> zcl_qjs_value=>tag_object.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_closure ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_closure IS BOUND.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    TRY.
+        lo_callable ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    result = xsdbool( lo_callable IS BOUND ).
+  ENDMETHOD.
+
+  METHOD enqueue_promise_job.
+    assert_active( ).
+    IF lines( mt_promise_jobs ) >= mv_max_jobs.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'JavaScript job queue budget exhausted'.
+    ENDIF.
+    APPEND VALUE ty_promise_job(
+      kind = 1 settled_promise = settled_promise on_fulfilled = on_fulfilled
+      on_rejected = on_rejected next_promise = next_promise
+      next_resolve = next_resolve next_reject = next_reject ) TO mt_promise_jobs.
+  ENDMETHOD.
+
+  METHOD enqueue_thenable_job.
+    assert_active( ).
+    IF lines( mt_promise_jobs ) >= mv_max_jobs.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'JavaScript job queue budget exhausted'.
+    ENDIF.
+    APPEND VALUE ty_promise_job(
+      kind = 2 promise = promise thenable = thenable then_method = then_method )
+      TO mt_promise_jobs.
+  ENDMETHOD.
+
+  METHOD track_promise_rejection.
+    assert_active( ).
+    IF mo_promise_rejection IS BOUND.
+      mo_promise_rejection->track(
+        promise = promise reason = reason handled = handled ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD drain_jobs.
+    DATA ls_job TYPE ty_promise_job.
+    DATA ls_handler TYPE zcl_qjs_value=>ty_value.
+    DATA ls_input TYPE zcl_qjs_value=>ty_value.
+    DATA lt_arguments TYPE zif_qjs_callable=>ty_arguments.
+    WHILE mt_promise_jobs IS NOT INITIAL.
+      mo_limits->consume( ).
+      READ TABLE mt_promise_jobs INDEX 1 INTO ls_job.
+      DELETE mt_promise_jobs INDEX 1.
+      IF ls_job-kind = 2.
+        DATA(ls_thenable_promise) = zcl_qjs_value=>new_object( ls_job-promise ).
+        DATA(lo_then_resolve) = NEW zcl_qjs_native_function(
+          id = zcl_qjs_native_function=>id_promise_fulfill runtime = me
+          bound_target = ls_thenable_promise ).
+        DATA(lo_then_reject) = NEW zcl_qjs_native_function(
+          id = zcl_qjs_native_function=>id_promise_reject_fn runtime = me
+          bound_target = ls_thenable_promise ).
+        DATA lo_then_resolve_ref TYPE REF TO object.
+        DATA lo_then_reject_ref TYPE REF TO object.
+        lo_then_resolve_ref = lo_then_resolve.
+        lo_then_reject_ref = lo_then_reject.
+        DATA lt_then_arguments TYPE zif_qjs_callable=>ty_arguments.
+        APPEND zcl_qjs_value=>new_object( lo_then_resolve_ref ) TO lt_then_arguments.
+        APPEND zcl_qjs_value=>new_object( lo_then_reject_ref ) TO lt_then_arguments.
+        TRY.
+            DATA(ls_then_result) = invoke_callable(
+              callable = ls_job-then_method this_value = ls_job-thenable
+              arguments = lt_then_arguments ).
+          CATCH zcx_qjs_throw INTO DATA(lx_then_throw).
+            ls_job-promise->promise_settle(
+              value = lx_then_throw->value rejected = abap_true ).
+          CATCH zcx_qjs_error INTO DATA(lx_then_error).
+            ls_job-promise->promise_settle(
+              value    = create_error_from_reason( lx_then_error->reason )
+              rejected = abap_true ).
+        ENDTRY.
+        CONTINUE.
+      ENDIF.
+      IF ls_job-settled_promise->promise_state( ) = zcl_qjs_object=>promise_rejected.
+        ls_handler = ls_job-on_rejected.
+      ELSE.
+        ls_handler = ls_job-on_fulfilled.
+      ENDIF.
+      ls_input = ls_job-settled_promise->promise_result( ).
+      IF is_callable_value( ls_handler ) = abap_false.
+        IF ls_job-next_promise IS BOUND.
+          ls_job-next_promise->promise_settle(
+            value    = ls_input
+            rejected = xsdbool( ls_job-settled_promise->promise_state( )
+              = zcl_qjs_object=>promise_rejected ) ).
+        ELSE.
+          DATA(ls_forwarder) = ls_job-next_resolve.
+          IF ls_job-settled_promise->promise_state( )
+              = zcl_qjs_object=>promise_rejected.
+            ls_forwarder = ls_job-next_reject.
+          ENDIF.
+          CLEAR lt_arguments.
+          APPEND ls_input TO lt_arguments.
+          DATA(ls_forwarded) = invoke_callable(
+            callable = ls_forwarder this_value = zcl_qjs_value=>new_undefined( )
+            arguments = lt_arguments ).
+        ENDIF.
+        CONTINUE.
+      ENDIF.
+      CLEAR lt_arguments.
+      APPEND ls_input TO lt_arguments.
+      TRY.
+          DATA(ls_result) = invoke_callable(
+            callable = ls_handler this_value = zcl_qjs_value=>new_undefined( )
+            arguments = lt_arguments ).
+          IF ls_job-next_promise IS BOUND.
+            ls_job-next_promise->promise_settle(
+              value = ls_result rejected = abap_false ).
+          ELSE.
+            CLEAR lt_arguments.
+            APPEND ls_result TO lt_arguments.
+            DATA(ls_resolved_result) = invoke_callable(
+              callable   = ls_job-next_resolve
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_arguments ).
+          ENDIF.
+        CATCH zcx_qjs_throw INTO DATA(lx_job_throw).
+          IF ls_job-next_promise IS BOUND.
+            ls_job-next_promise->promise_settle(
+              value = lx_job_throw->value rejected = abap_true ).
+          ELSE.
+            CLEAR lt_arguments.
+            APPEND lx_job_throw->value TO lt_arguments.
+            DATA(ls_rejected_throw) = invoke_callable(
+              callable   = ls_job-next_reject
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_arguments ).
+          ENDIF.
+        CATCH zcx_qjs_error INTO DATA(lx_job_error).
+          DATA(ls_job_error_value) = create_error_from_reason( lx_job_error->reason ).
+          IF ls_job-next_promise IS BOUND.
+            ls_job-next_promise->promise_settle(
+              value = ls_job_error_value rejected = abap_true ).
+          ELSE.
+            CLEAR lt_arguments.
+            APPEND ls_job_error_value TO lt_arguments.
+            DATA(ls_rejected_error) = invoke_callable(
+              callable   = ls_job-next_reject
+              this_value = zcl_qjs_value=>new_undefined( )
+              arguments  = lt_arguments ).
+          ENDIF.
+      ENDTRY.
+    ENDWHILE.
+  ENDMETHOD.
+
   METHOD invoke_callable.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lo_callable TYPE REF TO zif_qjs_callable.
@@ -424,7 +663,67 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-  METHOD iterator_next.
+  METHOD get_async_iterator.
+    DATA(ls_async_symbol) = well_known_symbol( 'asyncIterator' ).
+    DATA ls_method TYPE zcl_qjs_value=>ty_value.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_properties TYPE REF TO zif_qjs_property_container.
+    IF value-tag = zcl_qjs_value=>tag_object.
+      TRY.
+          lo_object ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_object IS BOUND.
+        ls_method = lo_object->get_symbol( ls_async_symbol-symbol_id ).
+      ELSE.
+        lo_properties = value-property_ref.
+        IF lo_properties IS NOT BOUND.
+          TRY.
+              lo_properties ?= value-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        IF lo_properties IS BOUND.
+          ls_method = lo_properties->get_symbol_property(
+            ls_async_symbol-symbol_id ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    IF ls_method-tag <> 0
+        AND ls_method-tag <> zcl_qjs_value=>tag_undefined
+        AND ls_method-tag <> zcl_qjs_value=>tag_null.
+      IF is_callable_value( ls_method ) = abap_false.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: async iterator method is not callable'.
+      ENDIF.
+      result = invoke_callable( callable = ls_method this_value = value ).
+      IF result-tag <> zcl_qjs_value=>tag_object.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'TypeError: async iterator method did not return an object'.
+      ENDIF.
+      RETURN.
+    ENDIF.
+
+    DATA(ls_sync_iterator) = get_iterator( value ).
+    DATA(lo_wrapper) = create_object( ).
+    DATA(lo_next) = NEW zcl_qjs_native_function(
+      id = zcl_qjs_native_function=>id_async_from_sync_next runtime = me
+      bound_target = ls_sync_iterator ).
+    DATA(lo_return) = NEW zcl_qjs_native_function(
+      id = zcl_qjs_native_function=>id_async_from_sync_return runtime = me
+      bound_target = ls_sync_iterator ).
+    DATA lo_next_ref TYPE REF TO object.
+    DATA lo_return_ref TYPE REF TO object.
+    lo_next_ref = lo_next.
+    lo_return_ref = lo_return.
+    lo_wrapper->define_property(
+      name = 'next' value = zcl_qjs_value=>new_object( lo_next_ref ) ).
+    lo_wrapper->define_property(
+      name = 'return' value = zcl_qjs_value=>new_object( lo_return_ref ) ).
+    result = zcl_qjs_value=>new_object( lo_wrapper ).
+  ENDMETHOD.
+
+  METHOD iterator_next_value.
     DATA ls_next_method TYPE zcl_qjs_value=>ty_value.
     DATA lo_object TYPE REF TO zcl_qjs_object.
     DATA lo_properties TYPE REF TO zif_qjs_property_container.
@@ -450,16 +749,18 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         ls_next_method = lo_properties->get_property( 'next' ).
       ENDIF.
     ENDIF.
-    DATA(ls_step) = invoke_callable(
-      callable = ls_next_method this_value = iterator ).
-    IF ls_step-tag <> zcl_qjs_value=>tag_object.
+    result = invoke_callable( callable = ls_next_method this_value = iterator ).
+  ENDMETHOD.
+
+  METHOD iterator_result.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_properties TYPE REF TO zif_qjs_property_container.
+    IF value-tag <> zcl_qjs_value=>tag_object.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'TypeError: iterator result is not an object'.
     ENDIF.
-    CLEAR lo_object.
-    CLEAR lo_properties.
     TRY.
-        lo_object ?= ls_step-object_ref.
+        lo_object ?= value-object_ref.
       CATCH cx_sy_move_cast_error.
     ENDTRY.
     DATA ls_done TYPE zcl_qjs_value=>ty_value.
@@ -467,10 +768,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       ls_done = lo_object->get( 'done' ).
       result-value = lo_object->get( 'value' ).
     ELSE.
-      lo_properties = ls_step-property_ref.
+      lo_properties = value-property_ref.
       IF lo_properties IS NOT BOUND.
         TRY.
-            lo_properties ?= ls_step-object_ref.
+            lo_properties ?= value-object_ref.
           CATCH cx_sy_move_cast_error.
         ENDTRY.
       ENDIF.
@@ -482,6 +783,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       result-value = lo_properties->get_property( 'value' ).
     ENDIF.
     result-done = zcl_qjs_value=>to_boolean( ls_done ).
+  ENDMETHOD.
+
+  METHOD iterator_next.
+    result = iterator_result( iterator_next_value( iterator ) ).
   ENDMETHOD.
 
   METHOD iterator_resume.
@@ -601,6 +906,44 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'TypeError: iterator return result is not an object'.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD iterator_close_value.
+    DATA ls_return_method TYPE zcl_qjs_value=>ty_value.
+    DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_properties TYPE REF TO zif_qjs_property_container.
+    IF iterator-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: iterator is not an object'.
+    ENDIF.
+    TRY.
+        lo_object ?= iterator-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF lo_object IS BOUND.
+      ls_return_method = lo_object->get( 'return' ).
+    ELSE.
+      lo_properties = iterator-property_ref.
+      IF lo_properties IS NOT BOUND.
+        TRY.
+            lo_properties ?= iterator-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+      ENDIF.
+      IF lo_properties IS BOUND.
+        ls_return_method = lo_properties->get_property( 'return' ).
+      ENDIF.
+    ENDIF.
+    IF ls_return_method-tag = zcl_qjs_value=>tag_undefined
+        OR ls_return_method-tag = zcl_qjs_value=>tag_null.
+      DATA(lo_empty_result) = create_object( ).
+      lo_empty_result->define_property(
+        name = 'done' value = zcl_qjs_value=>new_boolean( abap_true ) ).
+      result = zcl_qjs_value=>new_object( lo_empty_result ).
+      RETURN.
+    ENDIF.
+    result = invoke_callable(
+      callable = ls_return_method this_value = iterator ).
   ENDMETHOD.
 
   METHOD to_primitive.
@@ -726,12 +1069,12 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           CATCH cx_sy_move_cast_error.
         ENDTRY.
       ENDIF.
-      IF lo_construct_prototype IS NOT BOUND.
-        lo_construct_prototype = mo_object_prototype.
-      ENDIF.
     ENDIF.
     IF lo_closure IS BOUND.
       IF new_target-tag <> 0.
+        IF lo_construct_prototype IS NOT BOUND.
+          lo_construct_prototype = mo_object_prototype.
+        ENDIF.
         result = lo_closure->construct_with_prototype(
           arguments = arguments prototype = lo_construct_prototype ).
       ELSE.
@@ -746,7 +1089,8 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           EXPORTING reason = 'TypeError: object is not constructable'.
     ENDTRY.
     result = lo_constructor->construct( runtime = me arguments = arguments ).
-    IF new_target-tag <> 0 AND result-tag = zcl_qjs_value=>tag_object.
+    IF new_target-tag <> 0 AND lo_construct_prototype IS BOUND
+        AND result-tag = zcl_qjs_value=>tag_object.
       DATA lo_result_object TYPE REF TO zcl_qjs_object.
       TRY.
           lo_result_object ?= result-object_ref.
@@ -854,6 +1198,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     result = mo_generator_prototype.
   ENDMETHOD.
 
+  METHOD set_promise_prototype.
+    mo_promise_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD get_promise_prototype.
+    result = mo_promise_prototype.
+  ENDMETHOD.
+
   METHOD set_error_prototype.
     DELETE TABLE mt_error_prototypes WITH TABLE KEY name = name.
     INSERT VALUE #( name = name prototype = prototype )
@@ -901,6 +1253,11 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         name = 'message' value = zcl_qjs_value=>new_string( message )
         writable = abap_true enumerable = abap_false configurable = abap_true ).
     ENDIF.
+    IF cause IS SUPPLIED.
+      lo_error->define_property(
+        name = 'cause' value = cause
+        writable = abap_true enumerable = abap_false configurable = abap_true ).
+    ENDIF.
     lo_error->define_property(
       name = '[[ErrorData]]' value = zcl_qjs_value=>new_undefined( )
       writable = abap_false enumerable = abap_false configurable = abap_false ).
@@ -919,6 +1276,24 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       lv_message = reason+lv_message_offset.
     ENDIF.
     result = create_error( name = lv_name message = lv_message ).
+  ENDMETHOD.
+
+  METHOD create_aggregate_error.
+    IF message IS SUPPLIED AND cause IS SUPPLIED.
+      result = create_error(
+        name = 'AggregateError' message = message cause = cause ).
+    ELSEIF message IS SUPPLIED.
+      result = create_error( name = 'AggregateError' message = message ).
+    ELSEIF cause IS SUPPLIED.
+      result = create_error( name = 'AggregateError' cause = cause ).
+    ELSE.
+      result = create_error( name = 'AggregateError' ).
+    ENDIF.
+    DATA lo_aggregate TYPE REF TO zcl_qjs_object.
+    lo_aggregate ?= result-object_ref.
+    lo_aggregate->define_property(
+      name = 'errors' value = zcl_qjs_value=>new_object( errors )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
   ENDMETHOD.
 
   METHOD allocated_object_count.
@@ -960,6 +1335,9 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     CLEAR mo_array_iterator_proto.
     CLEAR mo_string_iterator_proto.
     CLEAR mo_generator_prototype.
+    CLEAR mo_promise_prototype.
+    CLEAR mo_promise_rejection.
+    CLEAR mt_promise_jobs.
     CLEAR mo_empty_shape.
     mv_object_count = 0.
     mv_disposed = abap_true.

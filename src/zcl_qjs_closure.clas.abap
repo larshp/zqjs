@@ -35,6 +35,10 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING identity TYPE int8
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
+    METHODS get_symbol_with_receiver
+      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
     METHODS set_symbol_property
       IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
@@ -56,10 +60,12 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS register_private_accessor
       IMPORTING key TYPE zcl_qjs_value=>ty_value
         value TYPE zcl_qjs_value=>ty_value kind TYPE i.
-    METHODS set_base_class IMPORTING base TYPE REF TO zcl_qjs_closure.
+    METHODS set_base_constructor
+      IMPORTING base TYPE zcl_qjs_value=>ty_value.
     METHODS invoke_default_derived
       IMPORTING receiver TYPE zcl_qjs_value=>ty_value
         arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS initialize_instance_fields
       IMPORTING receiver TYPE zcl_qjs_value=>ty_value
@@ -86,7 +92,7 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_prototype_object TYPE REF TO zcl_qjs_object.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mt_instance_fields TYPE ty_instance_fields.
-    DATA mo_base_class TYPE REF TO zcl_qjs_closure.
+    DATA ms_base_constructor TYPE zcl_qjs_value=>ty_value.
 ENDCLASS.
 
 CLASS zcl_qjs_closure IMPLEMENTATION.
@@ -126,6 +132,27 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
   ENDMETHOD.
   METHOD get_property.
     IF mo_properties IS BOUND.
+      DATA(ls_own_property) = mo_properties->get_own_property( name ).
+      IF ls_own_property-found = abap_true.
+        result = mo_properties->get( name ).
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF ms_base_constructor-tag = zcl_qjs_value=>tag_object.
+      DATA lo_base_properties TYPE REF TO zif_qjs_property_container.
+      lo_base_properties = ms_base_constructor-property_ref.
+      IF lo_base_properties IS NOT BOUND.
+        TRY.
+            lo_base_properties ?= ms_base_constructor-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+      ENDIF.
+      IF lo_base_properties IS BOUND.
+        result = lo_base_properties->get_property( name ).
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF mo_properties IS BOUND.
       result = mo_properties->get( name ).
     ELSE.
       result = zcl_qjs_value=>new_undefined( ).
@@ -159,13 +186,65 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
   METHOD has_property.
-    IF mo_properties IS BOUND.
-      result = mo_properties->has_property( name ).
+    IF mo_properties IS BOUND AND mo_properties->has_property( name ) = abap_true.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    IF ms_base_constructor-tag = zcl_qjs_value=>tag_object.
+      DATA lo_base_closure TYPE REF TO zcl_qjs_closure.
+      DATA lo_base_native TYPE REF TO zcl_qjs_native_function.
+      TRY.
+          lo_base_closure ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_base_closure IS BOUND.
+        result = lo_base_closure->has_property( name ).
+        RETURN.
+      ENDIF.
+      TRY.
+          lo_base_native ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_base_native IS BOUND.
+        result = lo_base_native->has_property( name ).
+      ENDIF.
     ENDIF.
   ENDMETHOD.
   METHOD get_symbol_property.
+    result = get_symbol_with_receiver(
+      identity = identity receiver = zcl_qjs_value=>new_object( me ) ).
+  ENDMETHOD.
+  METHOD get_symbol_with_receiver.
+    IF mo_properties IS BOUND AND mo_properties->has_own_symbol( identity ) = abap_true.
+      result = mo_properties->reflect_get_symbol(
+        identity = identity receiver = receiver ).
+      RETURN.
+    ENDIF.
+    IF ms_base_constructor-tag = zcl_qjs_value=>tag_object.
+      DATA lo_symbol_base_closure TYPE REF TO zcl_qjs_closure.
+      DATA lo_symbol_base_native TYPE REF TO zcl_qjs_native_function.
+      TRY.
+          lo_symbol_base_closure ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_symbol_base_closure IS BOUND.
+        result = lo_symbol_base_closure->get_symbol_with_receiver(
+          identity = identity receiver = receiver ).
+        RETURN.
+      ENDIF.
+      TRY.
+          lo_symbol_base_native ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_symbol_base_native IS BOUND.
+        result = lo_symbol_base_native->get_symbol_with_receiver(
+          identity = identity receiver = receiver ).
+        RETURN.
+      ENDIF.
+    ENDIF.
     IF mo_properties IS BOUND.
-      result = mo_properties->get_symbol( identity ).
+      result = mo_properties->reflect_get_symbol(
+        identity = identity receiver = receiver ).
     ELSE.
       result = zcl_qjs_value=>new_undefined( ).
     ENDIF.
@@ -183,8 +262,29 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
   METHOD has_symbol_property.
-    IF mo_properties IS BOUND.
-      result = mo_properties->has_symbol_property( identity ).
+    IF mo_properties IS BOUND
+        AND mo_properties->has_symbol_property( identity ) = abap_true.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    IF ms_base_constructor-tag = zcl_qjs_value=>tag_object.
+      DATA lo_has_symbol_closure TYPE REF TO zcl_qjs_closure.
+      DATA lo_has_symbol_native TYPE REF TO zcl_qjs_native_function.
+      TRY.
+          lo_has_symbol_closure ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_has_symbol_closure IS BOUND.
+        result = lo_has_symbol_closure->has_symbol_property( identity ).
+        RETURN.
+      ENDIF.
+      TRY.
+          lo_has_symbol_native ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      IF lo_has_symbol_native IS BOUND.
+        result = lo_has_symbol_native->has_symbol_property( identity ).
+      ENDIF.
     ENDIF.
   ENDMETHOD.
   METHOD get_prototype_object.
@@ -217,25 +317,21 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     ls_field-accessor_kind = kind.
     APPEND ls_field TO mt_instance_fields.
   ENDMETHOD.
-  METHOD set_base_class.
-    mo_base_class = base.
+  METHOD set_base_constructor.
+    ms_base_constructor = base.
   ENDMETHOD.
   METHOD invoke_default_derived.
-    IF mo_base_class IS NOT BOUND.
+    IF ms_base_constructor-tag <> zcl_qjs_value=>tag_object.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Derived class has no base constructor'.
     ENDIF.
-    IF mo_base_class->get_function( )->is_default_derived_constructor( ) = abap_true.
-      mo_base_class->invoke_default_derived(
-        receiver = receiver arguments = arguments ).
-    ELSE.
-      IF mo_base_class->get_function( )->is_derived_class( ) = abap_false.
-        mo_base_class->initialize_instance_fields( receiver = receiver ).
-      ENDIF.
-      mo_base_class->invoke(
-        this_value = receiver arguments = arguments class_call = abap_true ).
-    ENDIF.
-    initialize_instance_fields( receiver = receiver ).
+    DATA lo_self_ref TYPE REF TO object.
+    lo_self_ref = me.
+    result = mo_runtime->construct_value(
+      constructor = ms_base_constructor
+      new_target  = zcl_qjs_value=>new_object( lo_self_ref )
+      arguments   = arguments ).
+    initialize_instance_fields( receiver = result ).
   ENDMETHOD.
   METHOD initialize_instance_fields.
     DATA lo_receiver TYPE REF TO zcl_qjs_object.
@@ -296,6 +392,13 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Closure has no active runtime'.
     ENDIF.
+    IF mo_function->is_async( ) = abap_true.
+      DATA(lo_async_task) = NEW zcl_qjs_async_task(
+        runtime = mo_runtime closure = me this_value = this_value
+        arguments = arguments ).
+      result = lo_async_task->start( ).
+      RETURN.
+    ENDIF.
     IF mo_function->is_generator( ) = abap_true.
       result = zcl_qjs_value=>new_object(
         mo_runtime->create_generator(
@@ -309,7 +412,7 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
           EXPORTING runtime = mo_runtime limits = lo_limits.
         result = lo_vm->execute(
           function = mo_function initial_closure = me initial_this = this_value
-          initial_arguments = arguments ).
+          initial_arguments = arguments initial_constructor = class_call ).
       CLEANUP.
         lo_limits->leave_nested_frame( ).
     ENDTRY.
@@ -326,8 +429,27 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'TypeError: value is not constructable'.
     ENDIF.
+    IF mo_function->is_default_derived_constructor( ) = abap_true.
+      result = invoke_default_derived(
+        receiver = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
+      IF result-tag = zcl_qjs_value=>tag_object.
+        DATA lo_derived_object TYPE REF TO zcl_qjs_object.
+        TRY.
+            lo_derived_object ?= result-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
+        IF lo_derived_object IS BOUND.
+          lo_derived_object->set_prototype( prototype ).
+        ENDIF.
+      ENDIF.
+      RETURN.
+    ENDIF.
     DATA(lo_object) = mo_runtime->create_object( prototype = prototype ).
     DATA(ls_this) = zcl_qjs_value=>new_object( lo_object ).
+    IF mo_function->is_class_constructor( ) = abap_true
+        AND mo_function->is_derived_class( ) = abap_false.
+      initialize_instance_fields( receiver = ls_this ).
+    ENDIF.
     DATA(ls_returned) = invoke(
       this_value = ls_this arguments = arguments class_call = abap_true ).
     IF ls_returned-tag = zcl_qjs_value=>tag_object.
