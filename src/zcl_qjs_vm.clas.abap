@@ -62,6 +62,7 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_limits TYPE REF TO zcl_qjs_limits.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mt_saved_stack TYPE ty_stack.
+    DATA mv_saved_stack_depth TYPE i.
     DATA mt_saved_frames TYPE ty_frames.
     DATA mv_generator_suspended TYPE abap_bool.
     DATA mv_generator_complete TYPE abap_bool.
@@ -109,12 +110,19 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
 
   METHOD execute.
     DEFINE qjs_vm_pop.
-      lv_stack_index = lines( lt_stack ).
-      IF lv_stack_index = 0.
+      IF lv_stack_depth = 0.
         stack_underflow( ).
       ENDIF.
-      READ TABLE lt_stack INDEX lv_stack_index INTO &1.
-      DELETE lt_stack INDEX lv_stack_index.
+      READ TABLE lt_stack INDEX lv_stack_depth INTO &1.
+      lv_stack_depth = lv_stack_depth - 1.
+    END-OF-DEFINITION.
+    DEFINE qjs_vm_push.
+      lv_stack_depth = lv_stack_depth + 1.
+      IF lv_stack_depth > lines( lt_stack ).
+        APPEND &1 TO lt_stack.
+      ELSE.
+        MODIFY lt_stack FROM &1 INDEX lv_stack_depth.
+      ENDIF.
     END-OF-DEFINITION.
     DATA lt_stack TYPE ty_stack.
     DATA lt_frames TYPE ty_frames.
@@ -123,6 +131,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     DATA ls_left TYPE zcl_qjs_value=>ty_value.
     DATA ls_right TYPE zcl_qjs_value=>ty_value.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
+    DATA ls_push_value TYPE zcl_qjs_value=>ty_value.
     DATA lv_frame_index TYPE i.
     DATA lo_called TYPE REF TO zcl_qjs_function.
     DATA lt_arguments TYPE ty_stack.
@@ -169,7 +178,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     DATA lv_injected_throw TYPE abap_bool.
     DATA lt_resume_finally_targets TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     DATA lv_resume_finally_index TYPE i.
-    DATA lv_stack_index TYPE i.
+    DATA lv_stack_depth TYPE i.
     FIELD-SYMBOLS <ls_active_frame> TYPE ty_frame.
 
     IF resume = abap_true.
@@ -178,23 +187,24 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           EXPORTING reason = 'Generator is not suspended'.
       ENDIF.
       lt_stack = mt_saved_stack.
+      lv_stack_depth = mv_saved_stack_depth.
       lt_frames = mt_saved_frames.
       CLEAR mt_saved_stack.
+      CLEAR mv_saved_stack_depth.
       CLEAR mt_saved_frames.
       CLEAR mv_generator_suspended.
       CLEAR mv_await_suspended.
       CLEAR mv_async_yield_star.
       IF mv_generator_delegating = abap_true.
-        APPEND resume_value TO lt_stack.
-        APPEND zcl_qjs_value=>new_int( resume_kind ) TO lt_stack.
-        mo_limits->check_operand_stack( lines( lt_stack ) ).
+        qjs_vm_push resume_value.
+        ls_push_value = zcl_qjs_value=>new_int( resume_kind ).
+        qjs_vm_push ls_push_value.
+        mo_limits->check_operand_stack( lv_stack_depth ).
       ELSEIF resume_kind = 1.
         lv_frame_index = lines( lt_frames ).
         READ TABLE lt_frames INDEX lv_frame_index INTO ls_frame.
-        WHILE lines( lt_stack ) > ls_frame-stack_base.
-          DELETE lt_stack INDEX lines( lt_stack ).
-        ENDWHILE.
-        APPEND resume_value TO lt_stack.
+        lv_stack_depth = ls_frame-stack_base.
+        qjs_vm_push resume_value.
         CLEAR ls_frame-subroutine_returns.
         CLEAR lt_resume_finally_targets.
         LOOP AT ls_frame-handlers INTO ls_handler.
@@ -222,8 +232,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       ELSEIF resume_kind = 2.
         lv_injected_throw = abap_true.
       ELSE.
-        APPEND resume_value TO lt_stack.
-        mo_limits->check_operand_stack( lines( lt_stack ) ).
+        qjs_vm_push resume_value.
+        mo_limits->check_operand_stack( lv_stack_depth ).
       ENDIF.
     ELSE.
     IF function IS NOT BOUND.
@@ -324,67 +334,68 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_pop ls_value.
         WHEN zif_qjs_opcodes=>duplicate.
           qjs_vm_pop ls_value.
-          APPEND ls_value TO lt_stack.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>duplicate_two.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_right TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_right.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>swap.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_left TO lt_stack.
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_left.
         WHEN zif_qjs_opcodes=>insert_two.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_right TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_right.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>insert_three.
           qjs_vm_pop ls_value.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_value TO lt_stack.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>permute_three.
           qjs_vm_pop ls_value.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_value TO lt_stack.
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>permute_four.
           qjs_vm_pop ls_value.
           qjs_vm_pop DATA(ls_update_value).
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
-          APPEND ls_update_value TO lt_stack.
-          APPEND ls_left TO lt_stack.
-          APPEND ls_right TO lt_stack.
-          APPEND ls_value TO lt_stack.
+          qjs_vm_push ls_update_value.
+          qjs_vm_push ls_left.
+          qjs_vm_push ls_right.
+          qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>new_object.
           lo_object = mo_runtime->create_object( ).
           ls_value = zcl_qjs_value=>new_object( lo_object ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>regexp.
           qjs_vm_pop DATA(ls_regexp_flags).
           qjs_vm_pop DATA(ls_regexp_pattern).
           DATA(lo_regexp) = mo_runtime->create_regexp(
             pattern = mo_runtime->to_string( ls_regexp_pattern )
             flags   = mo_runtime->to_string( ls_regexp_flags ) ).
-          APPEND zcl_qjs_value=>new_object( lo_regexp ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          ls_push_value = zcl_qjs_value=>new_object( lo_regexp ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>new_array.
           CLEAR lt_arguments.
           DO ls_instruction-operand TIMES.
@@ -398,8 +409,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_element_index = lv_element_index + 1.
           ENDLOOP.
           ls_value = zcl_qjs_value=>new_object( lo_object ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>rest.
           lo_object = mo_runtime->create_array( ).
           lv_element_index = 0.
@@ -410,8 +421,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_argument_index = lv_argument_index + 1.
             lv_element_index = lv_element_index + 1.
           ENDWHILE.
-          APPEND zcl_qjs_value=>new_object( lo_object ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          ls_push_value = zcl_qjs_value=>new_object( lo_object ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>append.
           qjs_vm_pop DATA(ls_append_source).
           qjs_vm_pop DATA(ls_append_position).
@@ -436,9 +448,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               index = lv_element_index value = ls_for_of_next-value ).
             lv_element_index = lv_element_index + 1.
           ENDWHILE.
-          APPEND ls_append_target TO lt_stack.
-          APPEND zcl_qjs_value=>new_int( CONV i( lv_element_index ) ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_append_target.
+          ls_push_value = zcl_qjs_value=>new_int( CONV i( lv_element_index ) ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>copy_data_properties.
           qjs_vm_pop DATA(ls_copy_exclude_value).
           qjs_vm_pop DATA(ls_copy_source_value).
@@ -513,16 +526,16 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               lv_element_index = lv_element_index + 1.
             ENDWHILE.
           ENDIF.
-          APPEND ls_copy_target_value TO lt_stack.
-          APPEND ls_copy_source_value TO lt_stack.
-          APPEND ls_copy_exclude_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_copy_target_value.
+          qjs_vm_push ls_copy_source_value.
+          qjs_vm_push ls_copy_exclude_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_in_start.
           qjs_vm_pop ls_value.
           CREATE OBJECT lo_for_in_iterator EXPORTING source = ls_value.
           ls_value = zcl_qjs_value=>new_object( lo_for_in_iterator ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_in_next.
           qjs_vm_pop ls_value.
           CLEAR lo_for_in_iterator.
@@ -536,52 +549,55 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_for_in_next-done = abap_true.
             ls_for_in_next-value = zcl_qjs_value=>new_undefined( ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          APPEND ls_for_in_next-value TO lt_stack.
-          APPEND zcl_qjs_value=>new_boolean( ls_for_in_next-done ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          qjs_vm_push ls_for_in_next-value.
+          ls_push_value = zcl_qjs_value=>new_boolean( ls_for_in_next-done ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_of_start.
           qjs_vm_pop ls_value.
           ls_value = mo_runtime->get_iterator( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_await_of_start.
           qjs_vm_pop ls_value.
           ls_value = mo_runtime->get_async_iterator( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_of_next.
           qjs_vm_pop ls_value.
           ls_for_of_next = mo_runtime->iterator_next( ls_value ).
-          APPEND ls_value TO lt_stack.
-          APPEND ls_for_of_next-value TO lt_stack.
-          APPEND zcl_qjs_value=>new_boolean( ls_for_of_next-done ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          qjs_vm_push ls_for_of_next-value.
+          ls_push_value = zcl_qjs_value=>new_boolean( ls_for_of_next-done ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>for_await_of_next.
           qjs_vm_pop ls_value.
           DATA(ls_async_iterator) = ls_value.
           ls_value = mo_runtime->iterator_next_value( ls_async_iterator ).
-          APPEND ls_async_iterator TO lt_stack.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_async_iterator.
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>iterator_get_value_done.
           qjs_vm_pop ls_value.
           ls_for_of_next = mo_runtime->iterator_result( ls_value ).
-          APPEND ls_for_of_next-value TO lt_stack.
-          APPEND zcl_qjs_value=>new_boolean( ls_for_of_next-done ) TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_for_of_next-value.
+          ls_push_value = zcl_qjs_value=>new_boolean( ls_for_of_next-done ).
+          qjs_vm_push ls_push_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>iterator_call.
           qjs_vm_pop ls_value.
           ls_value = mo_runtime->iterator_close_value( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>iterator_check_object.
           qjs_vm_pop ls_value.
           IF ls_value-tag <> zcl_qjs_value=>tag_object.
             throw_error(
               name = 'TypeError' message = 'iterator result is not an object' ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
+          qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>iterator_close.
           qjs_vm_pop ls_value.
           mo_runtime->iterator_close( ls_value ).
@@ -592,13 +608,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'cannot destructure null or undefined' ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
+          qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>get_field OR zif_qjs_opcodes=>get_field_for_call.
           qjs_vm_pop ls_value.
           lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
           IF ls_value-tag = zcl_qjs_value=>tag_string.
             IF ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call.
-              APPEND ls_value TO lt_stack.
+              qjs_vm_push ls_value.
             ENDIF.
             IF lv_atom = 'length'.
               ls_value = zcl_qjs_value=>new_int( ls_value-string_ref->length( ) ).
@@ -610,8 +626,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 ls_value = zcl_qjs_value=>new_undefined( ).
               ENDIF.
             ENDIF.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           CLEAR lo_object.
@@ -642,7 +658,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
           IF ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call.
-            APPEND ls_value TO lt_stack.
+            qjs_vm_push ls_value.
           ENDIF.
           IF lo_object IS BOUND.
             ls_value = lo_object->get( lv_atom ).
@@ -651,8 +667,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ELSE.
             ls_value = lo_property_container->get_property( lv_atom ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>put_field.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -765,8 +781,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 enumerable = lv_method_enumerable configurable = abap_true ).
             ENDIF.
           ENDIF.
-          APPEND ls_left TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_left.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_private_field
             OR zif_qjs_opcodes=>put_private_field
             OR zif_qjs_opcodes=>define_private_field.
@@ -807,7 +823,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             ls_value = lo_object->get_private_field(
               identity = ls_right-symbol_id receiver = ls_left ).
-            APPEND ls_value TO lt_stack.
+            qjs_vm_push ls_value.
           ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>put_private_field.
             IF lo_object->set_private_field(
                 identity = ls_right-symbol_id value = ls_value
@@ -821,9 +837,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               throw_error(
                 name = 'TypeError' message = 'private field already exists' ).
             ENDIF.
-            APPEND ls_left TO lt_stack.
+            qjs_vm_push ls_left.
           ENDIF.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>define_field.
           IF ls_instruction-operand2 >= 4 AND ls_instruction-operand2 <= 9.
             qjs_vm_pop ls_value.
@@ -873,8 +889,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                   name = 'TypeError' message = 'private element already exists' ).
               ENDIF.
             ENDIF.
-            APPEND ls_left TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_left.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           IF ls_instruction-operand2 = 1 OR ls_instruction-operand2 = 3.
@@ -902,8 +918,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lo_closure->register_instance_field(
               key = ls_right initializer = lo_initializer_closure
               private = xsdbool( ls_instruction-operand2 = 3 ) ).
-            APPEND ls_left TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_left.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           qjs_vm_pop ls_right.
@@ -945,8 +961,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               name = lv_atom value = ls_right writable = abap_true
               enumerable = abap_true configurable = abap_true ).
           ENDIF.
-          APPEND ls_left TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_left.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_super_value.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -975,8 +991,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_value = lo_object->reflect_get(
               name = zcl_qjs_value=>to_string( ls_right ) receiver = ls_value ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>put_super_value.
           qjs_vm_pop DATA(ls_super_value).
           qjs_vm_pop ls_right.
@@ -1017,7 +1033,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_pop ls_left.
           IF ls_left-tag = zcl_qjs_value=>tag_string.
             IF ls_instruction-opcode = zif_qjs_opcodes=>get_element_for_call.
-              APPEND ls_left TO lt_stack.
+              qjs_vm_push ls_left.
             ENDIF.
             IF ls_right-tag = zcl_qjs_value=>tag_symbol.
               lo_prototype = mo_runtime->get_string_prototype( ).
@@ -1060,8 +1076,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 ENDIF.
               ENDIF.
             ENDIF.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           CLEAR lo_object.
@@ -1114,10 +1130,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_value = lo_property_container->get_property( lv_property_name ).
           ENDIF.
           IF ls_instruction-opcode = zif_qjs_opcodes=>get_element_for_call.
-            APPEND ls_left TO lt_stack.
+            qjs_vm_push ls_left.
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>put_element.
           qjs_vm_pop ls_value.
           qjs_vm_pop ls_right.
@@ -1224,8 +1240,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_deleted = lo_property_container->delete_property( lv_property_name ).
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_deleted ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_local OR zif_qjs_opcodes=>get_lexical.
           lv_local_index = ls_instruction-operand + 1.
           READ TABLE <ls_active_frame>-locals INDEX lv_local_index INTO lo_cell.
@@ -1234,16 +1250,16 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               EXPORTING reason = 'Bytecode local index out of bounds'.
           ENDIF.
           ls_value = lo_cell->get( ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_arg.
           READ TABLE <ls_active_frame>-arguments INDEX ls_instruction-operand + 1
             INTO ls_value.
           IF sy-subrc <> 0.
             ls_value = zcl_qjs_value=>new_undefined( ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_capture.
           lv_local_index = ls_instruction-operand + 1.
           READ TABLE <ls_active_frame>-captures INDEX lv_local_index INTO lo_cell.
@@ -1252,8 +1268,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               EXPORTING reason = 'Bytecode capture index out of bounds'.
           ENDIF.
           ls_value = lo_cell->get( ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>put_capture OR zif_qjs_opcodes=>set_capture.
           lv_local_index = ls_instruction-operand + 1.
           qjs_vm_pop ls_value.
@@ -1264,8 +1280,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           lo_cell->set( ls_value ).
           IF ls_instruction-opcode = zif_qjs_opcodes=>set_capture.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
           ENDIF.
         WHEN zif_qjs_opcodes=>put_local OR zif_qjs_opcodes=>set_local
             OR zif_qjs_opcodes=>put_lexical OR zif_qjs_opcodes=>set_lexical.
@@ -1279,8 +1295,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           lo_cell->set( ls_value ).
           IF ls_instruction-opcode = zif_qjs_opcodes=>set_local
               OR ls_instruction-opcode = zif_qjs_opcodes=>set_lexical.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
           ENDIF.
         WHEN zif_qjs_opcodes=>initialize_lexical.
           lv_local_index = ls_instruction-operand + 1.
@@ -1306,8 +1322,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           MODIFY <ls_active_frame>-locals FROM lo_cell INDEX lv_local_index.
         WHEN zif_qjs_opcodes=>push_i32.
           ls_value = zcl_qjs_value=>new_int( ls_instruction-operand ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_const.
           ls_value = <ls_active_frame>-function->get_constant( ls_instruction-operand ).
           IF ls_value-tag = zcl_qjs_value=>tag_object.
@@ -1320,8 +1336,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               ls_value = lo_template_site->materialize( mo_runtime ).
             ENDIF.
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>make_closure.
           ls_value = <ls_active_frame>-function->get_constant( ls_instruction-operand ).
           TRY.
@@ -1364,29 +1380,29 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               properties = lo_properties prototype_object = lo_prototype
               runtime = mo_runtime.
           ls_value = zcl_qjs_value=>new_object( lo_closure ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>private_symbol.
           lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
           ls_value = mo_runtime->new_symbol( description = '#' && lv_atom ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_true.
           ls_value = zcl_qjs_value=>new_boolean( abap_true ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_false.
           ls_value = zcl_qjs_value=>new_boolean( abap_false ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_null.
           ls_value = zcl_qjs_value=>new_null( ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_undefined.
           ls_value = zcl_qjs_value=>new_undefined( ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>type_of.
           qjs_vm_pop ls_value.
           DATA(lv_type) = ``.
@@ -1415,13 +1431,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               ENDIF.
           ENDCASE.
           ls_value = zcl_qjs_value=>new_string( lv_type ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>bitwise_not.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_number=>bitwise_not( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>bitwise_and OR zif_qjs_opcodes=>bitwise_xor
             OR zif_qjs_opcodes=>bitwise_or.
           qjs_vm_pop ls_right.
@@ -1436,8 +1452,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           ls_value = zcl_qjs_number=>bitwise(
             left = ls_left right = ls_right operation = lv_bitwise_operation ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>shift_left OR zif_qjs_opcodes=>shift_right
             OR zif_qjs_opcodes=>shift_right_unsigned.
           qjs_vm_pop ls_right.
@@ -1452,8 +1468,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           ls_value = zcl_qjs_number=>shift(
             left = ls_left right = ls_right operation = lv_shift_operation ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>add.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1470,42 +1486,42 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                   lo_host_error->reason ).
           ENDTRY.
           ls_value = zcl_qjs_number=>add( left = ls_left right = ls_right ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>subtract.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           ls_value = zcl_qjs_number=>subtract( left = ls_left right = ls_right ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>multiply.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           ls_value = zcl_qjs_number=>multiply( left = ls_left right = ls_right ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>divide.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           ls_value = zcl_qjs_number=>divide( left = ls_left right = ls_right ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>modulo.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           ls_value = zcl_qjs_number=>modulo( left = ls_left right = ls_right ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>negate.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_number=>negate( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>unary_plus.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_number=>to_number( ls_value ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>increment OR zif_qjs_opcodes=>decrement.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_number=>to_number( ls_value ).
@@ -1516,14 +1532,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_value = zcl_qjs_number=>subtract(
               left = ls_value right = zcl_qjs_value=>new_int( 1 ) ).
           ENDIF.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>logical_not.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_value=>new_boolean(
             xsdbool( zcl_qjs_value=>to_boolean( ls_value ) = abap_false ) ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>less_than OR zif_qjs_opcodes=>less_equal
             OR zif_qjs_opcodes=>greater_than OR zif_qjs_opcodes=>greater_equal.
           qjs_vm_pop ls_right.
@@ -1545,8 +1561,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_compare ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>strict_equal OR zif_qjs_opcodes=>strict_not_equal.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1555,8 +1571,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_equal = xsdbool( lv_equal = abap_false ).
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_equal ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>instance_of.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1629,8 +1645,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_instance ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>private_in.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1656,8 +1672,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean(
             lo_object->has_private_field( ls_left-symbol_id ) ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>in_operator.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1704,8 +1720,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_has_property ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>equal OR zif_qjs_opcodes=>not_equal.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
@@ -1721,8 +1737,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_equal = xsdbool( lv_equal = abap_false ).
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_equal ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>if_false OR zif_qjs_opcodes=>if_true.
           qjs_vm_pop ls_value.
           DATA(lv_truthy) = zcl_qjs_value=>to_boolean( ls_value ).
@@ -1751,16 +1767,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 EXPORTING reason = 'Bytecode subroutine stack underflow'.
             ENDIF.
             result = <ls_active_frame>-abrupt_return_value.
-            WHILE lines( lt_stack ) > <ls_active_frame>-stack_base.
-              DELETE lt_stack INDEX lines( lt_stack ).
-            ENDWHILE.
+            lv_stack_depth = <ls_active_frame>-stack_base.
             DELETE lt_frames INDEX lv_frame_index.
             IF lines( lt_frames ) = 0.
               mv_generator_complete = abap_true.
               RETURN.
             ENDIF.
-            APPEND result TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push result.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           READ TABLE <ls_active_frame>-subroutine_returns INDEX lv_return_index
@@ -1769,11 +1783,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>catch.
           ls_handler-target = ls_instruction-operand.
           ls_handler-finally_target = ls_instruction-operand2.
-          ls_handler-stack_depth = lines( lt_stack ).
+          ls_handler-stack_depth = lv_stack_depth.
           APPEND ls_handler TO <ls_active_frame>-handlers.
           ls_value = zcl_qjs_value=>new_undefined( ).
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>leave_catch.
           qjs_vm_pop ls_value.
           qjs_vm_pop ls_right.
@@ -1783,7 +1797,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               EXPORTING reason = 'Bytecode catch stack underflow'.
           ENDIF.
           DELETE <ls_active_frame>-handlers INDEX lv_handler_index.
-          APPEND ls_value TO lt_stack.
+          qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>apply.
           qjs_vm_pop DATA(ls_apply_arguments).
           qjs_vm_pop DATA(ls_apply_callable).
@@ -1818,8 +1832,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 EXPORTING value = mo_runtime->create_error_from_reason(
                   lo_host_error->reason ).
           ENDTRY.
-          APPEND ls_value TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push ls_value.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>call OR zif_qjs_opcodes=>call_method
             OR zif_qjs_opcodes=>call_constructor.
           CLEAR lt_arguments.
@@ -1885,8 +1899,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               <ls_active_frame>-constructor_this = ls_this.
             ENDIF.
             <ls_active_frame>-closure->initialize_instance_fields( receiver = ls_this ).
-            APPEND ls_this TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_this.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           CLEAR lo_host_constructor.
@@ -1908,8 +1922,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 RAISE EXCEPTION TYPE zcx_qjs_error
                   EXPORTING reason = 'Host constructor must return an object'.
               ENDIF.
-              APPEND ls_value TO lt_stack.
-              mo_limits->check_operand_stack( lines( lt_stack ) ).
+              qjs_vm_push ls_value.
+              mo_limits->check_operand_stack( lv_stack_depth ).
               CONTINUE.
             ENDIF.
           ENDIF.
@@ -1930,8 +1944,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                   EXPORTING value = mo_runtime->create_error_from_reason(
                     lo_host_error->reason ).
             ENDTRY.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           CLEAR lo_called.
@@ -1973,8 +1987,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             lo_object = mo_runtime->create_async_generator(
               closure = lo_closure this_value = ls_this arguments = lt_arguments ).
-            APPEND zcl_qjs_value=>new_object( lo_object ) TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            ls_push_value = zcl_qjs_value=>new_object( lo_object ).
+            qjs_vm_push ls_push_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           IF lo_called->is_generator( ) = abap_true.
@@ -1984,8 +1999,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             lo_object = mo_runtime->create_generator(
               closure = lo_closure this_value = ls_this arguments = lt_arguments ).
-            APPEND zcl_qjs_value=>new_object( lo_object ) TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            ls_push_value = zcl_qjs_value=>new_object( lo_object ).
+            qjs_vm_push ls_push_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           IF lo_called->is_async( ) = abap_true.
@@ -1996,8 +2012,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             DATA(lo_async_task) = NEW zcl_qjs_async_task(
               runtime = mo_runtime closure = lo_closure this_value = ls_this
               arguments = lt_arguments ).
-            APPEND lo_async_task->start( ) TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            ls_push_value = lo_async_task->start( ).
+            qjs_vm_push ls_push_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           IF lo_closure IS BOUND
@@ -2020,8 +2037,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ELSE.
               ls_value = zcl_qjs_value=>new_undefined( ).
             ENDIF.
-            APPEND ls_value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           IF lo_closure IS BOUND
@@ -2035,7 +2052,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_called_frame-code = lo_called->get_code_reference( ).
           ls_called_frame-arguments = lt_arguments.
           ls_called_frame-pc = 1.
-          ls_called_frame-stack_base = lines( lt_stack ).
+          ls_called_frame-stack_base = lv_stack_depth.
           IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
             ls_called_frame-is_constructor = abap_true.
             ls_called_frame-constructor_this = ls_this.
@@ -2131,9 +2148,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           IF ls_iterator_resume-found = abap_true
               AND ls_iterator_resume-done = abap_false.
-            APPEND ls_yield_star_iterator TO lt_stack.
+            qjs_vm_push ls_yield_star_iterator.
             <ls_active_frame>-pc = <ls_active_frame>-pc - 1.
             mt_saved_stack = lt_stack.
+            mv_saved_stack_depth = lv_stack_depth.
             mt_saved_frames = lt_frames.
             mv_generator_delegating = abap_true.
             mv_generator_suspended = abap_true.
@@ -2146,10 +2164,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ELSE.
               ls_value = ls_yield_star_input.
             ENDIF.
-            WHILE lines( lt_stack ) > <ls_active_frame>-stack_base.
-              DELETE lt_stack INDEX lines( lt_stack ).
-            ENDWHILE.
-            APPEND ls_value TO lt_stack.
+            lv_stack_depth = <ls_active_frame>-stack_base.
+            qjs_vm_push ls_value.
             CLEAR <ls_active_frame>-subroutine_returns.
             CLEAR lt_resume_finally_targets.
             LOOP AT <ls_active_frame>-handlers INTO ls_handler.
@@ -2174,24 +2190,27 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               APPEND lv_resume_finally_target TO <ls_active_frame>-subroutine_returns.
             ENDDO.
           ELSE.
-            APPEND ls_iterator_resume-value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push ls_iterator_resume-value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
           ENDIF.
         WHEN zif_qjs_opcodes=>initial_yield.
           result = zcl_qjs_value=>new_undefined( ).
           mt_saved_stack = lt_stack.
+          mv_saved_stack_depth = lv_stack_depth.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
           RETURN.
         WHEN zif_qjs_opcodes=>yield.
           qjs_vm_pop result.
           mt_saved_stack = lt_stack.
+          mv_saved_stack_depth = lv_stack_depth.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
           RETURN.
         WHEN zif_qjs_opcodes=>async_yield_star.
           qjs_vm_pop result.
           mt_saved_stack = lt_stack.
+          mv_saved_stack_depth = lv_stack_depth.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
           mv_async_yield_star = abap_true.
@@ -2199,6 +2218,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>await.
           qjs_vm_pop result.
           mt_saved_stack = lt_stack.
+          mv_saved_stack_depth = lv_stack_depth.
           mt_saved_frames = lt_frames.
           mv_generator_suspended = abap_true.
           mv_await_suspended = abap_true.
@@ -2213,16 +2233,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             <ls_active_frame>-after_return_fields->initialize_instance_fields(
               receiver = <ls_active_frame>-after_return_receiver ).
           ENDIF.
-          WHILE lines( lt_stack ) > <ls_active_frame>-stack_base.
-            DELETE lt_stack INDEX lines( lt_stack ).
-          ENDWHILE.
+          lv_stack_depth = <ls_active_frame>-stack_base.
           DELETE lt_frames INDEX lv_frame_index.
           IF lines( lt_frames ) = 0.
             mv_generator_complete = abap_true.
             RETURN.
           ENDIF.
-          APPEND result TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push result.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>return_undefined.
           IF <ls_active_frame>-is_constructor = abap_true.
             result = <ls_active_frame>-constructor_this.
@@ -2233,16 +2251,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             <ls_active_frame>-after_return_fields->initialize_instance_fields(
               receiver = <ls_active_frame>-after_return_receiver ).
           ENDIF.
-          WHILE lines( lt_stack ) > <ls_active_frame>-stack_base.
-            DELETE lt_stack INDEX lines( lt_stack ).
-          ENDWHILE.
+          lv_stack_depth = <ls_active_frame>-stack_base.
           DELETE lt_frames INDEX lv_frame_index.
           IF lines( lt_frames ) = 0.
             mv_generator_complete = abap_true.
             RETURN.
           ENDIF.
-          APPEND result TO lt_stack.
-          mo_limits->check_operand_stack( lines( lt_stack ) ).
+          qjs_vm_push result.
+          mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>throw.
           qjs_vm_pop ls_value.
           RAISE EXCEPTION TYPE zcx_qjs_throw
@@ -2260,9 +2276,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           lv_handler_index = lines( ls_frame-handlers ).
           IF lv_handler_index > 0.
             READ TABLE ls_frame-handlers INDEX lv_handler_index INTO ls_handler.
-            WHILE lines( lt_stack ) > ls_handler-stack_depth.
-              DELETE lt_stack INDEX lines( lt_stack ).
-            ENDWHILE.
+            lv_stack_depth = ls_handler-stack_depth.
             DELETE ls_frame-handlers INDEX lv_handler_index.
             IF ls_handler-target = 0.
               IF lv_injected_throw = abap_true
@@ -2283,14 +2297,12 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             CLEAR ls_frame-abrupt_throw_pending.
             ls_frame-pc = ls_handler-target.
             MODIFY lt_frames FROM ls_frame INDEX lv_frame_index.
-            APPEND lo_throw->value TO lt_stack.
-            mo_limits->check_operand_stack( lines( lt_stack ) ).
+            qjs_vm_push lo_throw->value.
+            mo_limits->check_operand_stack( lv_stack_depth ).
             lv_handled = abap_true.
             EXIT.
           ENDIF.
-          WHILE lines( lt_stack ) > ls_frame-stack_base.
-            DELETE lt_stack INDEX lines( lt_stack ).
-          ENDWHILE.
+          lv_stack_depth = ls_frame-stack_base.
           DELETE lt_frames INDEX lv_frame_index.
         ENDWHILE.
         IF lv_handled = abap_false.
