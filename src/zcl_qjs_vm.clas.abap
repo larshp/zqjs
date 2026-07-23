@@ -1903,8 +1903,16 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
+          CLEAR lo_called.
+          CLEAR lo_closure.
+          TRY.
+              lo_closure ?= ls_value-object_ref.
+              lo_called = lo_closure->get_function( ).
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
           CLEAR lo_host_constructor.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+          IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor
+              AND lo_closure IS NOT BOUND.
             TRY.
                 lo_host_constructor ?= ls_value-object_ref.
               CATCH cx_sy_move_cast_error.
@@ -1928,10 +1936,12 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
           ENDIF.
           CLEAR lo_host_callable.
-          TRY.
-              lo_host_callable ?= ls_value-object_ref.
-            CATCH cx_sy_move_cast_error.
-          ENDTRY.
+          IF lo_closure IS NOT BOUND.
+            TRY.
+                lo_host_callable ?= ls_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+            ENDTRY.
+          ENDIF.
           IF lo_host_callable IS BOUND.
             IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
               throw_error( name = 'TypeError' message = 'value is not constructable' ).
@@ -1948,18 +1958,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
-          CLEAR lo_called.
-          CLEAR lo_closure.
-          TRY.
-              lo_closure ?= ls_value-object_ref.
-              lo_called = lo_closure->get_function( ).
-            CATCH cx_sy_move_cast_error.
-              TRY.
-                  lo_called ?= ls_value-object_ref.
-                CATCH cx_sy_move_cast_error.
-                  throw_error( name = 'TypeError' message = 'object is not callable' ).
-              ENDTRY.
-          ENDTRY.
+          IF lo_closure IS NOT BOUND.
+            TRY.
+                lo_called ?= ls_value-object_ref.
+              CATCH cx_sy_move_cast_error.
+                throw_error( name = 'TypeError' message = 'object is not callable' ).
+            ENDTRY.
+          ENDIF.
           IF lo_called->is_class_constructor( ) = abap_true
               AND ls_instruction-opcode <> zif_qjs_opcodes=>call_constructor
               AND NOT ( ls_instruction-opcode = zif_qjs_opcodes=>call_method
