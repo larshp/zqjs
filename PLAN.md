@@ -283,7 +283,7 @@ carry a **Partial** note. Verification on a representative real ABAP stack is st
 outstanding, so no dual-host exit criterion is considered complete yet.
 
 Current verified baseline: the full `npm test` pipeline is green; the generated
-QuickJS table contains 107 opcodes; abaplint covers 70 files with no findings; all
+QuickJS table contains 108 opcodes; abaplint covers 70 files with no findings; all
 current ABAP Unit suites pass; and the pinned test262 slice reports 977 pass, 3
 reasoned unsupported, and 0 fail.
 

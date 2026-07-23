@@ -49,7 +49,7 @@
     "asyncFunctions": "partial",
     "asyncGenerators": "partial",
     "modules": "deferred",
-    "regexp": "deferred",
+    "regexp": "partial",
     "stringNormalization": "unsupported",
     "bigInt": "unsupported",
     "intl": "unsupported",
@@ -72,7 +72,7 @@
         "infrastructureSkip": 0
       }
     },
-    "quickjsOpcodes": 107,
+    "quickjsOpcodes": 108,
     "normalizedOracleCases": 1
   }
 }

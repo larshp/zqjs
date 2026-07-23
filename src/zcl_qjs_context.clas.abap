@@ -81,6 +81,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_async_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_async_gen_function_proto TYPE REF TO zcl_qjs_object.
     DATA lo_promise_prototype TYPE REF TO zcl_qjs_object.
+    DATA lo_regexp_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_reference TYPE REF TO object.
     DATA lo_object_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_array_intrinsic TYPE REF TO zcl_qjs_native_function.
@@ -91,6 +92,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     DATA lo_parse_float_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_function_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_promise_intrinsic TYPE REF TO zcl_qjs_native_function.
+    DATA lo_regexp_intrinsic TYPE REF TO zcl_qjs_native_function.
     DATA lo_object_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_function_prototype TYPE REF TO zcl_qjs_object.
     DATA lo_array_prototype TYPE REF TO zcl_qjs_object.
@@ -265,6 +267,41 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     install_string_method(
       prototype = lo_string_prototype name = 'trimEnd'
       id = zcl_qjs_native_function=>id_string_trim_end length = 0 ).
+    install_string_method(
+      prototype = lo_string_prototype name = 'replace'
+      id = zcl_qjs_native_function=>id_string_replace length = 2 ).
+    install_string_method(
+      prototype = lo_string_prototype name = 'split'
+      id = zcl_qjs_native_function=>id_string_split length = 2 ).
+    install_string_method(
+      prototype = lo_string_prototype name = 'substr'
+      id = zcl_qjs_native_function=>id_string_substr length = 2 ).
+    lo_regexp_prototype = mo_runtime->create_object( lo_object_prototype ).
+    mo_runtime->set_regexp_prototype( lo_regexp_prototype ).
+    CREATE OBJECT lo_native
+      EXPORTING id = zcl_qjs_native_function=>id_regexp runtime = mo_runtime.
+    lo_regexp_intrinsic = lo_native.
+    lo_regexp_intrinsic->set_property(
+      name = 'length' value = zcl_qjs_value=>new_int( 2 ) ).
+    lo_regexp_intrinsic->set_property(
+      name = 'name' value = zcl_qjs_value=>new_string( 'RegExp' ) ).
+    lo_reference = lo_native.
+    lo_regexp_intrinsic->set_property(
+      name = 'prototype' value = zcl_qjs_value=>new_object( lo_regexp_prototype ) ).
+    set_global(
+      name = 'RegExp' value = zcl_qjs_value=>new_object( lo_reference ) ).
+    lo_regexp_prototype->define_property(
+      name = lv_constructor_property value = zcl_qjs_value=>new_object( lo_reference )
+      writable = abap_true enumerable = abap_false configurable = abap_true ).
+    install_string_method(
+      prototype = lo_regexp_prototype name = 'exec'
+      id = zcl_qjs_native_function=>id_regexp_exec length = 1 ).
+    install_string_method(
+      prototype = lo_regexp_prototype name = 'test'
+      id = zcl_qjs_native_function=>id_regexp_test length = 1 ).
+    install_string_method(
+      prototype = lo_regexp_prototype name = lv_to_string_name
+      id = zcl_qjs_native_function=>id_regexp_to_string length = 0 ).
     lo_reflect = mo_runtime->create_object( lo_object_prototype ).
     install_reflect_method(
       reflect_object = lo_reflect name = 'apply'

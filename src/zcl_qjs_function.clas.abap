@@ -65,6 +65,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS get_parameter_count RETURNING VALUE(result) TYPE i.
     METHODS get_function_length RETURNING VALUE(result) TYPE i.
     METHODS get_name RETURNING VALUE(result) TYPE string.
+    METHODS set_name IMPORTING name TYPE string.
     METHODS has_self_binding RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_this_binding RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_arguments_binding RETURNING VALUE(result) TYPE abap_bool.
@@ -173,6 +174,10 @@ CLASS zcl_qjs_function IMPLEMENTATION.
 
   METHOD get_name.
     result = mv_name.
+  ENDMETHOD.
+
+  METHOD set_name.
+    mv_name = name.
   ENDMETHOD.
 
   METHOD has_self_binding.

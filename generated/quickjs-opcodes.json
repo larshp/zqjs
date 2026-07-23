@@ -25,6 +25,7 @@
   { "upstreamName": "return", "abapName": "return", "opcode": 40, "size": 1, "pops": 1, "pushes": 0, "format": "none" },
   { "upstreamName": "return_undef", "abapName": "return_undefined", "opcode": 41, "size": 1, "pops": 0, "pushes": 0, "format": "none" },
   { "upstreamName": "throw", "abapName": "throw", "opcode": 48, "size": 1, "pops": 1, "pushes": 0, "format": "none" },
+  { "upstreamName": "regexp", "abapName": "regexp", "opcode": 52, "size": 1, "pops": 2, "pushes": 1, "format": "none" },
   { "upstreamName": "get_field", "abapName": "get_field", "opcode": 61, "size": 5, "pops": 1, "pushes": 1, "format": "atom" },
   { "upstreamName": "put_field", "abapName": "put_field", "opcode": 63, "size": 5, "pops": 2, "pushes": 0, "format": "atom" },
   { "upstreamName": "get_private_field", "abapName": "get_private_field", "opcode": 64, "size": 1, "pops": 2, "pushes": 1, "format": "none" },

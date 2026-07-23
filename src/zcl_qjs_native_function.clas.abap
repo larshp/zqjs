@@ -230,6 +230,13 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_async_from_sync_throw TYPE i VALUE 235.
     CONSTANTS id_async_generator_delegate_fulfill TYPE i VALUE 236.
     CONSTANTS id_async_generator_delegate_reject TYPE i VALUE 237.
+    CONSTANTS id_regexp TYPE i VALUE 238.
+    CONSTANTS id_regexp_exec TYPE i VALUE 239.
+    CONSTANTS id_regexp_test TYPE i VALUE 240.
+    CONSTANTS id_regexp_to_string TYPE i VALUE 241.
+    CONSTANTS id_string_replace TYPE i VALUE 242.
+    CONSTANTS id_string_split TYPE i VALUE 243.
+    CONSTANTS id_string_substr TYPE i VALUE 244.
     METHODS constructor IMPORTING id TYPE i runtime TYPE REF TO zcl_qjs_runtime
       context TYPE REF TO zcl_qjs_context OPTIONAL
       bound_target TYPE zcl_qjs_value=>ty_value OPTIONAL
@@ -315,6 +322,12 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       found TYPE abap_bool,
       value TYPE zcl_qjs_value=>ty_value,
     END OF ty_error_cause.
+    TYPES: BEGIN OF ty_regexp_match,
+      found TYPE abap_bool,
+      offset TYPE i,
+      length TYPE i,
+      value TYPE string,
+    END OF ty_regexp_match.
     DATA mv_id TYPE i.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mo_context TYPE REF TO zcl_qjs_context.
@@ -347,6 +360,15 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING options TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE ty_error_cause
       RAISING zcx_qjs_error zcx_qjs_throw.
+    METHODS regexp_object
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
+    METHODS regexp_find
+      IMPORTING regexp TYPE REF TO zcl_qjs_object text TYPE string
+        start TYPE i DEFAULT 0 sticky TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(result) TYPE ty_regexp_match
+      RAISING zcx_qjs_error.
     METHODS array_to_length
       IMPORTING value TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE int8
@@ -506,6 +528,52 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
 ENDCLASS.
 
 CLASS zcl_qjs_native_function IMPLEMENTATION.
+  METHOD regexp_object.
+    IF value-tag <> zcl_qjs_value=>tag_object.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: RegExp receiver is invalid'.
+    ENDIF.
+    TRY.
+        result ?= value-object_ref.
+      CATCH cx_sy_move_cast_error.
+    ENDTRY.
+    IF result IS NOT BOUND OR result->is_regexp( ) = abap_false.
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'TypeError: RegExp receiver is invalid'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD regexp_find.
+    DATA lv_tail TYPE string.
+    DATA lv_offset TYPE i.
+    DATA lv_length TYPE i.
+    IF start < 0 OR start > strlen( text ).
+      RETURN.
+    ENDIF.
+    lv_tail = text+start.
+    TRY.
+        DATA(lo_regex) = cl_abap_regex=>create_pcre(
+          pattern     = regexp->get_regexp_pattern( )
+          ignore_case = xsdbool( regexp->get_regexp_flags( ) CS 'i' ) ).
+        FIND FIRST OCCURRENCE OF REGEX lo_regex IN lv_tail
+          MATCH OFFSET lv_offset MATCH LENGTH lv_length.
+        IF sy-subrc <> 0.
+          RETURN.
+        ENDIF.
+      CATCH cx_sy_regex.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'SyntaxError: invalid regular expression'.
+    ENDTRY.
+    result-offset = lv_offset + start.
+    IF sticky = abap_true AND result-offset <> start.
+      CLEAR result.
+      RETURN.
+    ENDIF.
+    result-found = abap_true.
+    result-length = lv_length.
+    result-value = text+result-offset(result-length).
+  ENDMETHOD.
+
   METHOD primitive_value.
     IF value-tag <> zcl_qjs_value=>tag_object.
       result = value.
@@ -3042,6 +3110,91 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         APPEND LINES OF arguments TO lt_forwarded.
         result = mo_runtime->invoke_callable(
           callable = ms_bound_target this_value = ms_bound_this arguments = lt_forwarded ).
+      WHEN id_regexp.
+        DATA lv_regexp_pattern TYPE string.
+        DATA lv_regexp_flags TYPE string.
+        READ TABLE arguments INDEX 1 INTO DATA(ls_regexp_pattern_arg).
+        IF sy-subrc = 0 AND ls_regexp_pattern_arg-tag = zcl_qjs_value=>tag_object.
+          DATA lo_pattern_regexp TYPE REF TO zcl_qjs_object.
+          TRY.
+              lo_pattern_regexp ?= ls_regexp_pattern_arg-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_regexp_flags_arg).
+        IF lo_pattern_regexp IS BOUND
+            AND lo_pattern_regexp->is_regexp( ) = abap_true.
+          lv_regexp_pattern = lo_pattern_regexp->get_regexp_pattern( ).
+          IF sy-subrc <> 0 OR ls_regexp_flags_arg-tag = zcl_qjs_value=>tag_undefined.
+            lv_regexp_flags = lo_pattern_regexp->get_regexp_flags( ).
+          ENDIF.
+        ELSEIF sy-subrc = 0
+            AND ls_regexp_pattern_arg-tag <> zcl_qjs_value=>tag_undefined.
+          lv_regexp_pattern = string_value( ls_regexp_pattern_arg ).
+        ENDIF.
+        IF ls_regexp_flags_arg-tag <> 0
+            AND ls_regexp_flags_arg-tag <> zcl_qjs_value=>tag_undefined.
+          lv_regexp_flags = string_value( ls_regexp_flags_arg ).
+        ENDIF.
+        DATA(lo_created_regexp) = mo_runtime->create_regexp(
+          pattern = lv_regexp_pattern flags = lv_regexp_flags ).
+        result = zcl_qjs_value=>new_object( lo_created_regexp ).
+      WHEN id_regexp_test OR id_regexp_exec.
+        DATA(lo_test_regexp) = regexp_object( this_value ).
+        READ TABLE arguments INDEX 1 INTO DATA(ls_regexp_text_arg).
+        IF sy-subrc <> 0.
+          ls_regexp_text_arg = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(lv_regexp_text) = string_value( ls_regexp_text_arg ).
+        DATA(lv_regexp_global) = xsdbool(
+          lo_test_regexp->get_regexp_flags( ) CS 'g' ).
+        DATA(lv_regexp_sticky) = xsdbool(
+          lo_test_regexp->get_regexp_flags( ) CS 'y' ).
+        DATA(lv_regexp_start) = 0.
+        IF lv_regexp_global = abap_true OR lv_regexp_sticky = abap_true.
+          DATA(ls_last_index) = lo_test_regexp->get( 'lastIndex' ).
+          DATA(ls_last_integer) = string_integer( ls_last_index ).
+          lv_regexp_start = ls_last_integer-value.
+        ENDIF.
+        DATA(ls_regexp_match) = regexp_find(
+          regexp = lo_test_regexp text = lv_regexp_text start = lv_regexp_start
+          sticky = lv_regexp_sticky ).
+        IF ls_regexp_match-found = abap_false.
+          IF lv_regexp_global = abap_true OR lv_regexp_sticky = abap_true.
+            lo_test_regexp->set(
+              name = 'lastIndex' value = zcl_qjs_value=>new_int( 0 ) ).
+          ENDIF.
+          IF mv_id = id_regexp_test.
+            result = zcl_qjs_value=>new_boolean( abap_false ).
+          ELSE.
+            result = zcl_qjs_value=>new_null( ).
+          ENDIF.
+        ELSE.
+          IF lv_regexp_global = abap_true OR lv_regexp_sticky = abap_true.
+            lo_test_regexp->set(
+              name = 'lastIndex' value = zcl_qjs_value=>new_int(
+                ls_regexp_match-offset + ls_regexp_match-length ) ).
+          ENDIF.
+          IF mv_id = id_regexp_test.
+            result = zcl_qjs_value=>new_boolean( abap_true ).
+          ELSE.
+            DATA(lo_match_array) = mo_runtime->create_array( ).
+            lo_match_array->set_element(
+              index = 0 value = zcl_qjs_value=>new_string( ls_regexp_match-value ) ).
+            lo_match_array->define_property(
+              name = 'index' value = zcl_qjs_value=>new_int( ls_regexp_match-offset )
+              writable = abap_true enumerable = abap_false configurable = abap_true ).
+            lo_match_array->define_property(
+              name = 'input' value = zcl_qjs_value=>new_string( lv_regexp_text )
+              writable = abap_true enumerable = abap_false configurable = abap_true ).
+            result = zcl_qjs_value=>new_object( lo_match_array ).
+          ENDIF.
+        ENDIF.
+      WHEN id_regexp_to_string.
+        DATA(lo_string_regexp) = regexp_object( this_value ).
+        result = zcl_qjs_value=>new_string(
+          '/' && lo_string_regexp->get_regexp_pattern( ) && '/'
+            && lo_string_regexp->get_regexp_flags( ) ).
       WHEN id_number.
         IF sy-subrc = 0.
           result = zcl_qjs_number=>to_number( ls_argument ).
@@ -3286,6 +3439,148 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         lv_string_count = lv_string_end - lv_string_start.
         lv_string_result = lv_text_string+lv_string_start(lv_string_count).
         result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_substr.
+        lv_text_string = string_receiver( this_value ).
+        lv_string_length = strlen( lv_text_string ).
+        READ TABLE arguments INDEX 1 INTO ls_argument.
+        IF sy-subrc = 0.
+          ls_string_integer = string_integer( ls_argument ).
+          lv_string_start = ls_string_integer-value.
+        ELSE.
+          lv_string_start = 0.
+        ENDIF.
+        IF lv_string_start < 0.
+          lv_string_start = nmax(
+            val1 = 0 val2 = lv_string_length + lv_string_start ).
+        ELSEIF lv_string_start > lv_string_length.
+          lv_string_start = lv_string_length.
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO ls_argument.
+        IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
+          ls_string_integer = string_integer( ls_argument ).
+          lv_string_count = ls_string_integer-value.
+          IF lv_string_count < 0. lv_string_count = 0. ENDIF.
+          lv_string_count = nmin(
+            val1 = lv_string_count val2 = lv_string_length - lv_string_start ).
+        ELSE.
+          lv_string_count = lv_string_length - lv_string_start.
+        ENDIF.
+        lv_string_result = lv_text_string+lv_string_start(lv_string_count).
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_replace.
+        lv_text_string = string_receiver( this_value ).
+        READ TABLE arguments INDEX 1 INTO DATA(ls_replace_search).
+        IF sy-subrc <> 0.
+          ls_replace_search = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        READ TABLE arguments INDEX 2 INTO DATA(ls_replace_value).
+        IF sy-subrc <> 0.
+          ls_replace_value = zcl_qjs_value=>new_undefined( ).
+        ENDIF.
+        DATA(lv_replacement) = string_value( ls_replace_value ).
+        DATA lo_replace_regexp TYPE REF TO zcl_qjs_object.
+        IF ls_replace_search-tag = zcl_qjs_value=>tag_object.
+          TRY.
+              lo_replace_regexp ?= ls_replace_search-object_ref.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+          IF lo_replace_regexp IS BOUND
+              AND lo_replace_regexp->is_regexp( ) = abap_false.
+            CLEAR lo_replace_regexp.
+          ENDIF.
+        ENDIF.
+        IF lo_replace_regexp IS BOUND.
+          DATA(lv_replace_global) = xsdbool(
+            lo_replace_regexp->get_regexp_flags( ) CS 'g' ).
+          DATA(lv_replace_cursor) = 0.
+          CLEAR lv_string_result.
+          WHILE lv_replace_cursor <= strlen( lv_text_string ).
+            DATA(ls_replace_match) = regexp_find(
+              regexp = lo_replace_regexp text = lv_text_string
+              start = lv_replace_cursor ).
+            IF ls_replace_match-found = abap_false.
+              lv_string_result = lv_string_result && lv_text_string+lv_replace_cursor.
+              EXIT.
+            ENDIF.
+            lv_string_count = ls_replace_match-offset - lv_replace_cursor.
+            lv_string_result = lv_string_result
+              && lv_text_string+lv_replace_cursor(lv_string_count)
+              && lv_replacement.
+            lv_replace_cursor = ls_replace_match-offset + ls_replace_match-length.
+            IF lv_replace_global = abap_false.
+              lv_string_result = lv_string_result && lv_text_string+lv_replace_cursor.
+              EXIT.
+            ENDIF.
+            IF ls_replace_match-length = 0.
+              IF lv_replace_cursor >= strlen( lv_text_string ).
+                EXIT.
+              ENDIF.
+              lv_string_result = lv_string_result && lv_text_string+lv_replace_cursor(1).
+              lv_replace_cursor = lv_replace_cursor + 1.
+            ENDIF.
+          ENDWHILE.
+          lo_replace_regexp->set(
+            name = 'lastIndex' value = zcl_qjs_value=>new_int( 0 ) ).
+        ELSE.
+          lv_needle_string = string_value( ls_replace_search ).
+          FIND FIRST OCCURRENCE OF lv_needle_string IN lv_text_string
+            MATCH OFFSET lv_string_offset.
+          IF sy-subrc <> 0.
+            lv_string_result = lv_text_string.
+          ELSE.
+            lv_string_count = strlen( lv_needle_string ).
+            lv_string_start = lv_string_offset + lv_string_count.
+            lv_string_result = lv_text_string(lv_string_offset)
+              && lv_replacement
+              && lv_text_string+lv_string_start.
+          ENDIF.
+        ENDIF.
+        result = zcl_qjs_value=>new_string( lv_string_result ).
+      WHEN id_string_split.
+        lv_text_string = string_receiver( this_value ).
+        DATA(lo_split_result) = mo_runtime->create_array( ).
+        READ TABLE arguments INDEX 1 INTO DATA(ls_split_separator).
+        IF sy-subrc <> 0 OR ls_split_separator-tag = zcl_qjs_value=>tag_undefined.
+          lo_split_result->set_element(
+            index = 0 value = zcl_qjs_value=>new_string( lv_text_string ) ).
+        ELSE.
+          lv_needle_string = string_value( ls_split_separator ).
+          DATA(lv_split_cursor) = 0.
+          DATA(lv_split_index) = CONV int8( 0 ).
+          IF lv_needle_string IS INITIAL.
+            WHILE lv_split_cursor < strlen( lv_text_string ).
+              lv_string_result = lv_text_string+lv_split_cursor(1).
+              lo_split_result->set_element(
+                index = lv_split_index value = zcl_qjs_value=>new_string(
+                  lv_string_result ) ).
+              lv_split_cursor = lv_split_cursor + 1.
+              lv_split_index = lv_split_index + 1.
+            ENDWHILE.
+          ELSE.
+            WHILE lv_split_cursor <= strlen( lv_text_string ).
+              DATA(lv_split_tail) = lv_text_string+lv_split_cursor.
+              FIND FIRST OCCURRENCE OF lv_needle_string IN lv_split_tail
+                MATCH OFFSET lv_string_offset.
+              IF sy-subrc <> 0.
+                lv_string_result = lv_text_string+lv_split_cursor.
+                lo_split_result->set_element(
+                  index = lv_split_index value = zcl_qjs_value=>new_string(
+                    lv_string_result ) ).
+                EXIT.
+              ENDIF.
+              lv_string_count = lv_string_offset.
+              lv_string_result =
+                lv_text_string+lv_split_cursor(lv_string_count).
+              lo_split_result->set_element(
+                index = lv_split_index value = zcl_qjs_value=>new_string(
+                  lv_string_result ) ).
+              lv_split_cursor = lv_split_cursor + lv_string_offset
+                + strlen( lv_needle_string ).
+              lv_split_index = lv_split_index + 1.
+            ENDWHILE.
+          ENDIF.
+        ENDIF.
+        result = zcl_qjs_value=>new_object( lo_split_result ).
       WHEN id_string_concat.
         lv_string_result = string_receiver( this_value ).
         LOOP AT arguments INTO ls_argument.
@@ -7006,7 +7301,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     CASE mv_id.
       WHEN id_object OR id_array OR id_error OR id_type_error OR id_range_error
           OR id_syntax_error OR id_reference_error OR id_uri_error OR id_eval_error
-          OR id_function.
+          OR id_function OR id_regexp.
         result = zif_qjs_callable~call(
           this_value = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
       WHEN id_aggregate_error.

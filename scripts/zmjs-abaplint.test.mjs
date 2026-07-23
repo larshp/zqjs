@@ -36,17 +36,25 @@ if (JSON.stringify(messages) !== JSON.stringify(expectedMessages)) {
 
 console.log(`zmjs abaplint testcase runtime (Node reference): ${elapsedMs.toFixed(1)} ms`);
 
-// zqjs cannot execute this fixture yet because it contains RegExp literals;
-// keep that compatibility boundary visible until the RegExp phase lands.
 await import("../output/init.mjs");
 const { zcl_qjs } = await import("../output/zcl_qjs.clas.mjs");
 const probeStarted = process.hrtime.bigint();
-try {
-  await zcl_qjs.compile({ source: fixture });
-  throw new Error("zqjs unexpectedly compiled the RegExp-dependent fixture");
-} catch (error) {
-  const reason = error?.reason?.value ?? String(error);
-  if (reason !== "Unexpected character in JavaScript source") throw error;
+const zqjsSource = `
+var __zqjsMessages = [];
+var console = { log: function(value) { __zqjsMessages.push(String(value)); } };
+${fixture}
+__zqjsMessages.join("\\n");
+`;
+const zqjsResult = await zcl_qjs.eval({
+  source: zqjsSource,
+  max_steps: 100_000_000,
+  max_objects: 250_000,
+  max_frames: 64,
+  max_operand_stack: 65_536
+});
+const zqjsMessages = (await zqjsResult.get().string_ref.get().as_string()).get();
+if (zqjsMessages !== expectedMessages.join("\n")) {
+  throw new Error(`unexpected zqjs abaplint output: ${JSON.stringify(zqjsMessages)}`);
 }
 const probeMs = Number(process.hrtime.bigint() - probeStarted) / 1_000_000;
-console.log(`zmjs abaplint zqjs capability probe: RegExp unsupported (${probeMs.toFixed(1)} ms)`);
+console.log(`zmjs abaplint testcase runtime (zqjs): ${probeMs.toFixed(1)} ms`);

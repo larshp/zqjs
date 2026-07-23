@@ -88,6 +88,8 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS token_yield TYPE i VALUE 85.
     CONSTANTS token_arrow TYPE i VALUE 86.
     CONSTANTS token_void TYPE i VALUE 87.
+    CONSTANTS token_regexp TYPE i VALUE 88.
+    CONSTANTS token_optional_chain TYPE i VALUE 89.
 
     TYPES:
       BEGIN OF ty_token,
@@ -120,6 +122,7 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_offset TYPE i.
     DATA mv_had_line_terminator TYPE abap_bool.
     DATA mt_template_depths TYPE ty_template_depths.
+    DATA mv_regexp_allowed TYPE abap_bool VALUE abap_true.
 
     METHODS skip_whitespace RAISING zcx_qjs_error.
     METHODS decode_hex_escape
@@ -138,9 +141,74 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING first TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE ty_token
       RAISING zcx_qjs_error.
+    METHODS scan_regexp
+      RETURNING VALUE(result) TYPE ty_token
+      RAISING zcx_qjs_error.
+    METHODS update_regexp_context IMPORTING kind TYPE i.
 ENDCLASS.
 
 CLASS zcl_qjs_lexer IMPLEMENTATION.
+  METHOD update_regexp_context.
+    mv_regexp_allowed = abap_true.
+    IF kind = token_number OR kind = token_identifier OR kind = token_string
+        OR kind = token_true OR kind = token_false OR kind = token_null
+        OR kind = token_undefined OR kind = token_this
+        OR kind = token_private_identifier OR kind = token_rparen
+        OR kind = token_rbracket OR kind = token_increment
+        OR kind = token_decrement OR kind = token_template_tail
+        OR kind = token_regexp.
+      mv_regexp_allowed = abap_false.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD scan_regexp.
+    DATA lv_char TYPE string.
+    DATA lv_escaped TYPE abap_bool.
+    DATA lv_in_class TYPE abap_bool.
+    result-kind = token_regexp.
+    result-offset = mv_offset.
+    result-line_terminator_before = mv_had_line_terminator.
+    mv_offset = mv_offset + 1.
+    WHILE mv_offset < strlen( mv_source ).
+      lv_char = mv_source+mv_offset(1).
+      IF lv_char = cl_abap_char_utilities=>newline
+          OR lv_char = cl_abap_char_utilities=>cr_lf+0(1).
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Unterminated regular expression literal'.
+      ENDIF.
+      IF lv_escaped = abap_true.
+        result-text = result-text && `\` && lv_char.
+        lv_escaped = abap_false.
+        mv_offset = mv_offset + 1.
+        CONTINUE.
+      ENDIF.
+      IF lv_char = `\`.
+        lv_escaped = abap_true.
+        mv_offset = mv_offset + 1.
+        CONTINUE.
+      ENDIF.
+      IF lv_char = '['.
+        lv_in_class = abap_true.
+      ELSEIF lv_char = ']' AND lv_in_class = abap_true.
+        lv_in_class = abap_false.
+      ELSEIF lv_char = '/' AND lv_in_class = abap_false.
+        mv_offset = mv_offset + 1.
+        WHILE mv_offset < strlen( mv_source )
+            AND mv_source+mv_offset(1)
+              CO 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.
+          result-raw = result-raw && mv_source+mv_offset(1).
+          mv_offset = mv_offset + 1.
+        ENDWHILE.
+        update_regexp_context( result-kind ).
+        RETURN.
+      ENDIF.
+      result-text = result-text && lv_char.
+      mv_offset = mv_offset + 1.
+    ENDWHILE.
+    RAISE EXCEPTION TYPE zcx_qjs_error
+      EXPORTING reason = 'Unterminated regular expression literal'.
+  ENDMETHOD.
+
   METHOD decode_hex_escape.
     DATA(lv_code) = hex_escape_value( digits ).
     TRY.
@@ -369,6 +437,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
     result-line_terminator_before = mv_had_line_terminator.
     IF mv_offset >= strlen( mv_source ).
       result-kind = token_eof.
+      update_regexp_context( result-kind ).
       RETURN.
     ENDIF.
 
@@ -403,7 +472,10 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
           result-kind = token_star.
         ENDIF.
       WHEN '/'.
-        IF lv_next_offset < strlen( mv_source ) AND mv_source+lv_next_offset(1) = '='.
+        IF mv_regexp_allowed = abap_true.
+          result = scan_regexp( ).
+          RETURN.
+        ELSEIF lv_next_offset < strlen( mv_source ) AND mv_source+lv_next_offset(1) = '='.
           result-kind = token_divide_assign.
           mv_offset = mv_offset + 1.
         ELSE.
@@ -443,6 +515,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             DELETE mt_template_depths INDEX lv_template_index.
             mv_offset = mv_offset + 1.
             result = scan_template_part( ).
+            update_regexp_context( result-kind ).
             RETURN.
           ENDIF.
           <template_depth> = <template_depth> - 1.
@@ -461,7 +534,13 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
       WHEN ':'.
         result-kind = token_colon.
       WHEN '?'.
-        result-kind = token_question.
+        IF lv_next_offset < strlen( mv_source )
+            AND mv_source+lv_next_offset(1) = '.'.
+          result-kind = token_optional_chain.
+          mv_offset = mv_offset + 1.
+        ELSE.
+          result-kind = token_question.
+        ENDIF.
       WHEN '#'.
         mv_offset = mv_offset + 1.
         IF mv_offset >= strlen( mv_source )
@@ -480,10 +559,12 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
           mv_offset = mv_offset + 1.
         ENDWHILE.
         result-kind = token_private_identifier.
+        update_regexp_context( result-kind ).
         RETURN.
       WHEN '`'.
         mv_offset = mv_offset + 1.
         result = scan_template_part( first = abap_true ).
+        update_regexp_context( result-kind ).
         RETURN.
       WHEN '<'.
         result-kind = token_lt.
@@ -634,6 +715,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
               CATCH cx_sy_conversion_error cx_sy_arithmetic_error.
             ENDTRY.
           ENDIF.
+          update_regexp_context( result-kind ).
           RETURN.
         ELSEIF lv_char CO 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$'.
           WHILE mv_offset < strlen( mv_source ).
@@ -677,6 +759,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             WHEN 'super'. result-kind = token_super.
             WHEN OTHERS. result-kind = token_identifier.
           ENDCASE.
+          update_regexp_context( result-kind ).
           RETURN.
         ELSEIF lv_char = `"` OR lv_char = `'`.
           lv_quote = lv_char.
@@ -687,6 +770,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             mv_offset = mv_offset + 1.
             IF lv_char = lv_quote.
               result-kind = token_string.
+              update_regexp_context( result-kind ).
               RETURN.
             ENDIF.
             IF lv_char = `\`.
@@ -756,6 +840,7 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
             reason = 'Unexpected character in JavaScript source'.
     ENDCASE.
     mv_offset = mv_offset + 1.
+    update_regexp_context( result-kind ).
   ENDMETHOD.
 
   METHOD get_offset.
@@ -763,10 +848,29 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD set_offset.
+    DATA lv_context_offset TYPE i.
+    DATA lv_previous TYPE string.
     IF offset < 0 OR offset > strlen( mv_source ).
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Lexer offset is out of bounds'.
     ENDIF.
     mv_offset = offset.
+    mv_regexp_allowed = abap_true.
+    lv_context_offset = offset - 1.
+    WHILE lv_context_offset >= 0.
+      lv_previous = mv_source+lv_context_offset(1).
+      IF lv_previous NA ` ` && cl_abap_char_utilities=>horizontal_tab
+          && cl_abap_char_utilities=>newline
+          && cl_abap_char_utilities=>cr_lf.
+        EXIT.
+      ENDIF.
+      lv_context_offset = lv_context_offset - 1.
+    ENDWHILE.
+    IF lv_context_offset >= 0
+        AND ( lv_previous CO 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$'
+          OR lv_previous = `)` OR lv_previous = `]` OR lv_previous = `'`
+          OR lv_previous = `"` OR lv_previous = '`' ).
+      mv_regexp_allowed = abap_false.
+    ENDIF.
   ENDMETHOD.
 ENDCLASS.

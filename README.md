@@ -18,7 +18,7 @@ The current implementation contains a growing embedded-language profile:
   closures;
 - ordinary and async arrow functions with concise/block bodies, default/rest parameters,
   non-constructibility, and lexical `this`/`arguments` capture;
-- 107 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
+- 108 verified QuickJS-aligned opcode IDs, constant/local slots, patched jumps, a
   disassembler, and an iterative VM with explicit frames;
 - shape-backed ordinary objects, data and accessor property descriptors,
   prototypes, constructors, `this`, `instanceof`, object/array literals,

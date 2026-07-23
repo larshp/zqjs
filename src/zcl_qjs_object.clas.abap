@@ -13,6 +13,10 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       is_array TYPE abap_bool DEFAULT abap_false
       shape TYPE REF TO zcl_qjs_shape OPTIONAL
       runtime TYPE REF TO zcl_qjs_runtime OPTIONAL.
+    METHODS set_regexp_metadata IMPORTING pattern TYPE string flags TYPE string.
+    METHODS is_regexp RETURNING VALUE(result) TYPE abap_bool.
+    METHODS get_regexp_pattern RETURNING VALUE(result) TYPE string.
+    METHODS get_regexp_flags RETURNING VALUE(result) TYPE string.
     TYPES: BEGIN OF ty_own_property,
       found TYPE abap_bool,
       accessor TYPE abap_bool,
@@ -301,6 +305,9 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_promise_rejection_notified TYPE abap_bool.
     DATA mv_length TYPE int8.
     DATA mv_length_writable TYPE abap_bool VALUE abap_true.
+    DATA mv_is_regexp TYPE abap_bool.
+    DATA mv_regexp_pattern TYPE string.
+    DATA mv_regexp_flags TYPE string.
     DATA mo_shape TYPE REF TO zcl_qjs_shape.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     METHODS get_with_receiver
@@ -334,6 +341,24 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
 ENDCLASS.
 
 CLASS zcl_qjs_object IMPLEMENTATION.
+  METHOD set_regexp_metadata.
+    mv_is_regexp = abap_true.
+    mv_regexp_pattern = pattern.
+    mv_regexp_flags = flags.
+  ENDMETHOD.
+
+  METHOD is_regexp.
+    result = mv_is_regexp.
+  ENDMETHOD.
+
+  METHOD get_regexp_pattern.
+    result = mv_regexp_pattern.
+  ENDMETHOD.
+
+  METHOD get_regexp_flags.
+    result = mv_regexp_flags.
+  ENDMETHOD.
+
   METHOD raise_error.
     DATA ls_error TYPE zcl_qjs_value=>ty_value.
     IF mo_runtime IS BOUND.

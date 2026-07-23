@@ -24,6 +24,8 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS constructor
       IMPORTING
         max_steps TYPE int8 DEFAULT 100000
+        max_frames TYPE i DEFAULT 256
+        max_operand_stack TYPE i DEFAULT 4096
         max_atoms TYPE i DEFAULT 4096
         max_objects TYPE i DEFAULT 10000
         max_jobs TYPE i DEFAULT 1024
@@ -75,6 +77,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_promise
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
+      RAISING zcx_qjs_error.
+    METHODS create_regexp
+      IMPORTING pattern TYPE string flags TYPE string OPTIONAL
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS enqueue_promise_job
@@ -225,6 +231,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING prototype TYPE REF TO zcl_qjs_object.
     METHODS get_promise_prototype
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
+    METHODS set_regexp_prototype
+      IMPORTING prototype TYPE REF TO zcl_qjs_object.
+    METHODS get_regexp_prototype
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_error_prototype
       IMPORTING name TYPE string prototype TYPE REF TO zcl_qjs_object.
     METHODS get_error_prototype
@@ -303,6 +313,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_async_generator_prototype TYPE REF TO zcl_qjs_object.
     DATA mo_promise_prototype TYPE REF TO zcl_qjs_object.
+    DATA mo_regexp_prototype TYPE REF TO zcl_qjs_object.
     TYPES: BEGIN OF ty_promise_job,
       kind TYPE i,
       settled_promise TYPE REF TO zcl_qjs_object,
@@ -332,12 +343,60 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         EXPORTING reason = 'Object and job queue limits must be positive'.
     ENDIF.
     CREATE OBJECT mo_limits
-      EXPORTING max_steps = max_steps cancellation = cancellation.
+      EXPORTING max_steps = max_steps max_frames = max_frames
+        max_operand_stack = max_operand_stack cancellation = cancellation.
     CREATE OBJECT mo_atoms EXPORTING max_atoms = max_atoms.
     CREATE OBJECT mo_empty_shape.
     mv_max_objects = max_objects.
     mv_max_jobs = max_jobs.
     mo_promise_rejection = promise_rejection.
+  ENDMETHOD.
+
+  METHOD create_regexp.
+    DATA lv_index TYPE i.
+    DATA lv_flag TYPE string.
+    DATA lv_seen TYPE string.
+    WHILE lv_index < strlen( flags ).
+      lv_flag = flags+lv_index(1).
+      IF NOT lv_flag CO 'gimsuy'.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'SyntaxError: invalid regular expression flag'.
+      ENDIF.
+      IF lv_seen CS lv_flag.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'SyntaxError: duplicate regular expression flag'.
+      ENDIF.
+      lv_seen = lv_seen && lv_flag.
+      lv_index = lv_index + 1.
+    ENDWHILE.
+    TRY.
+        DATA(lo_regex) = cl_abap_regex=>create_pcre(
+          pattern = pattern ignore_case = xsdbool( flags CS 'i' ) ).
+        DATA(lo_matcher) = lo_regex->create_matcher( text = '' ).
+      CATCH cx_sy_regex.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'SyntaxError: invalid regular expression'.
+    ENDTRY.
+    result = create_object( prototype = mo_regexp_prototype ).
+    result->set_regexp_metadata( pattern = pattern flags = flags ).
+    result->define_property(
+      name = 'lastIndex' value = zcl_qjs_value=>new_int( 0 )
+      writable = abap_true enumerable = abap_false configurable = abap_false ).
+    result->define_property(
+      name = 'source' value = zcl_qjs_value=>new_string( pattern )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    result->define_property(
+      name = 'flags' value = zcl_qjs_value=>new_string( flags )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    result->define_property(
+      name = 'global' value = zcl_qjs_value=>new_boolean( xsdbool( flags CS 'g' ) )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    result->define_property(
+      name = 'ignoreCase' value = zcl_qjs_value=>new_boolean( xsdbool( flags CS 'i' ) )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
+    result->define_property(
+      name = 'multiline' value = zcl_qjs_value=>new_boolean( xsdbool( flags CS 'm' ) )
+      writable = abap_false enumerable = abap_false configurable = abap_false ).
   ENDMETHOD.
 
   METHOD assert_active.
@@ -1260,6 +1319,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
 
   METHOD get_promise_prototype.
     result = mo_promise_prototype.
+  ENDMETHOD.
+
+  METHOD set_regexp_prototype.
+    mo_regexp_prototype = prototype.
+  ENDMETHOD.
+
+  METHOD get_regexp_prototype.
+    result = mo_regexp_prototype.
   ENDMETHOD.
 
   METHOD set_error_prototype.

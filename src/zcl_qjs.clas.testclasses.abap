@@ -225,6 +225,7 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
     METHODS function_intrinsics FOR TESTING RAISING cx_root.
     METHODS object_collection_methods FOR TESTING RAISING cx_root.
     METHODS array_prototype_methods FOR TESTING RAISING cx_root.
+    METHODS zmjs_abaplint_features FOR TESTING RAISING cx_root.
 ENDCLASS.
 
 CLASS ltcl_qjs IMPLEMENTATION.
@@ -4421,6 +4422,21 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var object = {}; Object.is(NaN, NaN) && !Object.is(0, -0)'
       && ' && Object.is(-0, -0) && Object.is(object, object)'
       && ' && !Object.is({}, {}) && Object.is() && !Object.is(1, "1");' ).
+    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+  ENDMETHOD.
+
+  METHOD zmjs_abaplint_features.
+    DATA(ls_result) = zcl_qjs=>eval(
+      'var Token = class {}; var token = new Token();'
+      && ' var holder = { Ctor: function(value) { this.value = value; } };'
+      && ' var made = new holder.Ctor(7); var total = 0;'
+      && ' for (let index = 0; index < 3; index++) { total += index; }'
+      && ' var missing = null?.value;'
+      && ' Token.name === "Token" && token.constructor.name === "Token"'
+      && ' && /^a+$/i.test("AAA") && "a-a".replace(/-/g, " ") === "a a"'
+      && ' && "a.b".split(".").join("|") === "a|b"'
+      && ' && "abc".substr(1, 2) === "bc" && made.value === 7'
+      && ' && total === 3 && missing === undefined;' ).
     cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
   ENDMETHOD.
 

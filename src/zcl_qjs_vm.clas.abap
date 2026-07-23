@@ -374,6 +374,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = zcl_qjs_value=>new_object( lo_object ).
           APPEND ls_value TO lt_stack.
           mo_limits->check_operand_stack( lines( lt_stack ) ).
+        WHEN zif_qjs_opcodes=>regexp.
+          DATA(ls_regexp_flags) = pop( CHANGING stack = lt_stack ).
+          DATA(ls_regexp_pattern) = pop( CHANGING stack = lt_stack ).
+          DATA(lo_regexp) = mo_runtime->create_regexp(
+            pattern = mo_runtime->to_string( ls_regexp_pattern )
+            flags   = mo_runtime->to_string( ls_regexp_flags ) ).
+          APPEND zcl_qjs_value=>new_object( lo_regexp ) TO lt_stack.
+          mo_limits->check_operand_stack( lines( lt_stack ) ).
         WHEN zif_qjs_opcodes=>new_array.
           CLEAR lt_arguments.
           DO ls_instruction-operand TIMES.
