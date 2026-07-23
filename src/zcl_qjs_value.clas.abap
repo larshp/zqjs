@@ -19,13 +19,9 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
       BEGIN OF ty_value,
         tag         TYPE i,
         int_value   TYPE i,
-        number_kind TYPE i,
         float_value TYPE f,
-        bool_value  TYPE abap_bool,
         string_ref  TYPE REF TO zcl_qjs_string,
         object_ref  TYPE REF TO object,
-        property_ref TYPE REF TO zif_qjs_property_container,
-        symbol_id   TYPE int8,
       END OF ty_value.
 
     CLASS-METHODS new_int
@@ -53,6 +49,9 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
         value         TYPE abap_bool
       RETURNING
         VALUE(result) TYPE ty_value.
+    CLASS-METHODS as_boolean
+      IMPORTING value TYPE ty_value
+      RETURNING VALUE(result) TYPE abap_bool.
 
     CLASS-METHODS new_null
       RETURNING
@@ -70,7 +69,7 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     CLASS-METHODS new_symbol
       IMPORTING
-        identity      TYPE int8
+        identity      TYPE i
       RETURNING
         VALUE(result) TYPE ty_value
       RAISING
@@ -124,7 +123,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
   METHOD new_finite.
     CLEAR result.
     result-tag = tag_number.
-    result-number_kind = number_finite.
+    result-int_value = number_finite.
     result-float_value = value.
   ENDMETHOD.
 
@@ -139,13 +138,19 @@ CLASS zcl_qjs_value IMPLEMENTATION.
     ENDIF.
     CLEAR result.
     result-tag = tag_number.
-    result-number_kind = kind.
+    result-int_value = kind.
   ENDMETHOD.
 
   METHOD new_boolean.
     CLEAR result.
     result-tag = tag_bool.
-    result-bool_value = value.
+    IF value = abap_true.
+      result-int_value = 1.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD as_boolean.
+    result = xsdbool( value-int_value <> 0 ).
   ENDMETHOD.
 
   METHOD new_null.
@@ -171,7 +176,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
     ENDIF.
     CLEAR result.
     result-tag = tag_symbol.
-    result-symbol_id = identity.
+    result-int_value = identity.
   ENDMETHOD.
 
   METHOD new_object.
@@ -194,7 +199,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
   METHOD as_finite_number.
     IF value-tag = tag_int.
       result = value-int_value.
-    ELSEIF value-tag = tag_number AND value-number_kind = number_finite.
+    ELSEIF value-tag = tag_number AND value-int_value = number_finite.
       result = value-float_value.
     ELSE.
       RAISE EXCEPTION TYPE zcx_qjs_error
@@ -214,13 +219,13 @@ CLASS zcl_qjs_value IMPLEMENTATION.
         WHEN tag_undefined OR tag_null.
           result = abap_true.
         WHEN tag_bool.
-          IF left-bool_value = right-bool_value. result = abap_true. ENDIF.
+          IF left-int_value = right-int_value. result = abap_true. ENDIF.
         WHEN tag_string.
-          result = left-string_ref->equals( right-string_ref ).
+          result = xsdbool( left-string_ref->as_string( ) = right-string_ref->as_string( ) ).
         WHEN tag_object.
           IF left-object_ref = right-object_ref. result = abap_true. ENDIF.
         WHEN tag_symbol.
-          IF left-symbol_id = right-symbol_id. result = abap_true. ENDIF.
+          IF left-int_value = right-int_value. result = abap_true. ENDIF.
       ENDCASE.
     ENDIF.
   ENDMETHOD.
@@ -254,17 +259,17 @@ CLASS zcl_qjs_value IMPLEMENTATION.
     result = abap_false.
     CASE value-tag.
       WHEN tag_bool.
-        result = value-bool_value.
+        result = xsdbool( value-int_value <> 0 ).
       WHEN tag_int.
         IF value-int_value <> 0. result = abap_true. ENDIF.
       WHEN tag_number.
-        IF value-number_kind = number_pos_inf OR value-number_kind = number_neg_inf.
+        IF value-int_value = number_pos_inf OR value-int_value = number_neg_inf.
           result = abap_true.
-        ELSEIF value-number_kind = number_finite AND value-float_value <> 0.
+        ELSEIF value-int_value = number_finite AND value-float_value <> 0.
           result = abap_true.
         ENDIF.
       WHEN tag_string.
-        IF value-string_ref IS BOUND AND value-string_ref->length( ) > 0.
+        IF value-string_ref->as_string( ) IS NOT INITIAL.
           result = abap_true.
         ENDIF.
       WHEN tag_object OR tag_symbol.
@@ -277,12 +282,12 @@ CLASS zcl_qjs_value IMPLEMENTATION.
       WHEN tag_undefined. result = 'undefined'.
       WHEN tag_null. result = 'null'.
       WHEN tag_bool.
-        IF value-bool_value = abap_true. result = 'true'. ELSE. result = 'false'. ENDIF.
+        IF value-int_value <> 0. result = 'true'. ELSE. result = 'false'. ENDIF.
       WHEN tag_int.
         result = value-int_value.
         CONDENSE result NO-GAPS.
       WHEN tag_number.
-        CASE value-number_kind.
+        CASE value-int_value.
           WHEN number_nan. result = 'NaN'.
           WHEN number_pos_inf. result = 'Infinity'.
           WHEN number_neg_inf. result = '-Infinity'.

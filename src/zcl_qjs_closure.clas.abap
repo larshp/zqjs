@@ -12,13 +12,15 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_instance_fields TYPE STANDARD TABLE OF ty_instance_field
       WITH DEFAULT KEY.
     METHODS constructor
-      IMPORTING function TYPE REF TO zcl_qjs_function captures TYPE ty_cells OPTIONAL
+      IMPORTING function TYPE REF TO zcl_qjs_function
+        captures TYPE REF TO ty_cells OPTIONAL
         properties TYPE REF TO zcl_qjs_object OPTIONAL
         prototype_object TYPE REF TO zcl_qjs_object OPTIONAL
         runtime TYPE REF TO zcl_qjs_runtime OPTIONAL
       RAISING zcx_qjs_error.
     METHODS get_function RETURNING VALUE(result) TYPE REF TO zcl_qjs_function.
     METHODS get_captures RETURNING VALUE(result) TYPE ty_cells.
+    METHODS get_captures_reference RETURNING VALUE(result) TYPE REF TO ty_cells.
     METHODS get_property
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -32,21 +34,21 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_symbol_property
-      IMPORTING identity TYPE int8
+      IMPORTING identity TYPE i
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS get_symbol_with_receiver
-      IMPORTING identity TYPE int8 receiver TYPE zcl_qjs_value=>ty_value
+      IMPORTING identity TYPE i receiver TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS set_symbol_property
-      IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+      IMPORTING identity TYPE i value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS delete_symbol_property
-      IMPORTING identity TYPE int8
+      IMPORTING identity TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_symbol_property
-      IMPORTING identity TYPE int8
+      IMPORTING identity TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_prototype_object RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS get_property_storage RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
@@ -87,11 +89,11 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     DATA mo_function TYPE REF TO zcl_qjs_function.
-    DATA mt_captures TYPE ty_cells.
+    DATA mr_captures TYPE REF TO ty_cells.
     DATA mo_properties TYPE REF TO zcl_qjs_object.
     DATA mo_prototype_object TYPE REF TO zcl_qjs_object.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
-    DATA mt_instance_fields TYPE ty_instance_fields.
+    DATA mt_instance_fields TYPE REF TO ty_instance_fields.
     DATA ms_base_constructor TYPE zcl_qjs_value=>ty_value.
 ENDCLASS.
 
@@ -99,7 +101,11 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
   METHOD constructor.
     DATA lv_constructor_property TYPE string VALUE 'constructor'.
     mo_function = function.
-    mt_captures = captures.
+    IF captures IS BOUND.
+      mr_captures = captures.
+    ELSE.
+      CREATE DATA mr_captures.
+    ENDIF.
     mo_properties = properties.
     mo_prototype_object = prototype_object.
     mo_runtime = runtime.
@@ -128,7 +134,10 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     result = mo_function.
   ENDMETHOD.
   METHOD get_captures.
-    result = mt_captures.
+    result = mr_captures->*.
+  ENDMETHOD.
+  METHOD get_captures_reference.
+    result = mr_captures.
   ENDMETHOD.
   METHOD get_property.
     IF mo_properties IS BOUND.
@@ -140,13 +149,10 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     ENDIF.
     IF ms_base_constructor-tag = zcl_qjs_value=>tag_object.
       DATA lo_base_properties TYPE REF TO zif_qjs_property_container.
-      lo_base_properties = ms_base_constructor-property_ref.
-      IF lo_base_properties IS NOT BOUND.
-        TRY.
-            lo_base_properties ?= ms_base_constructor-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_base_properties ?= ms_base_constructor-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_base_properties IS BOUND.
         result = lo_base_properties->get_property( name ).
         RETURN.
@@ -294,28 +300,37 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     result = mo_properties.
   ENDMETHOD.
   METHOD register_instance_field.
+    IF mt_instance_fields IS NOT BOUND.
+      CREATE DATA mt_instance_fields.
+    ENDIF.
     DATA ls_field TYPE ty_instance_field.
     ls_field-key = key.
     ls_field-initializer = initializer.
     ls_field-private = private.
-    APPEND ls_field TO mt_instance_fields.
+    APPEND ls_field TO mt_instance_fields->*.
   ENDMETHOD.
   METHOD register_private_method.
+    IF mt_instance_fields IS NOT BOUND.
+      CREATE DATA mt_instance_fields.
+    ENDIF.
     DATA ls_field TYPE ty_instance_field.
     ls_field-key = key.
     ls_field-private = abap_true.
     ls_field-direct = abap_true.
     ls_field-value = value.
-    APPEND ls_field TO mt_instance_fields.
+    APPEND ls_field TO mt_instance_fields->*.
   ENDMETHOD.
   METHOD register_private_accessor.
+    IF mt_instance_fields IS NOT BOUND.
+      CREATE DATA mt_instance_fields.
+    ENDIF.
     DATA ls_field TYPE ty_instance_field.
     ls_field-key = key.
     ls_field-private = abap_true.
     ls_field-direct = abap_true.
     ls_field-value = value.
     ls_field-accessor_kind = kind.
-    APPEND ls_field TO mt_instance_fields.
+    APPEND ls_field TO mt_instance_fields->*.
   ENDMETHOD.
   METHOD set_base_constructor.
     ms_base_constructor = base.
@@ -346,7 +361,10 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Class field receiver is not ordinary'.
     ENDTRY.
-    LOOP AT mt_instance_fields INTO DATA(ls_field).
+    IF mt_instance_fields IS NOT BOUND.
+      RETURN.
+    ENDIF.
+    LOOP AT mt_instance_fields->* INTO DATA(ls_field).
       DATA(ls_value) = ls_field-value.
       IF ls_field-direct = abap_false.
         ls_value = ls_field-initializer->invoke( this_value = receiver ).
@@ -354,15 +372,15 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
       IF ls_field-private = abap_true.
         IF ls_field-accessor_kind = 1.
           lv_private_added = lo_receiver->add_private_accessor(
-            identity = ls_field-key-symbol_id getter = ls_value
+            identity = ls_field-key-int_value getter = ls_value
             setter = zcl_qjs_value=>new_undefined( ) ).
         ELSEIF ls_field-accessor_kind = 2.
           lv_private_added = lo_receiver->add_private_accessor(
-            identity = ls_field-key-symbol_id
+            identity = ls_field-key-int_value
             getter = zcl_qjs_value=>new_undefined( ) setter = ls_value ).
         ELSE.
           lv_private_added = lo_receiver->add_private_field(
-            identity = ls_field-key-symbol_id value = ls_value
+            identity = ls_field-key-int_value value = ls_value
             writable = xsdbool( ls_field-direct = abap_false ) ).
         ENDIF.
         IF lv_private_added = abap_false.
@@ -371,7 +389,7 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
         ENDIF.
       ELSEIF ls_field-key-tag = zcl_qjs_value=>tag_symbol.
         lo_receiver->define_symbol_property(
-          identity = ls_field-key-symbol_id value = ls_value writable = abap_true
+          identity = ls_field-key-int_value value = ls_value writable = abap_true
           enumerable = abap_true configurable = abap_true ).
       ELSE.
         lo_receiver->define_property(

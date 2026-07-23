@@ -87,6 +87,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS get_captures RETURNING VALUE(result) TYPE ty_captures.
+    METHODS get_captures_reference RETURNING VALUE(result) TYPE REF TO ty_captures.
     METHODS get_local_spec
       IMPORTING index TYPE i
       RETURNING VALUE(result) TYPE ty_local_spec
@@ -234,6 +235,10 @@ CLASS zcl_qjs_function IMPLEMENTATION.
 
   METHOD get_captures.
     result = mt_captures.
+  ENDMETHOD.
+
+  METHOD get_captures_reference.
+    GET REFERENCE OF mt_captures INTO result.
   ENDMETHOD.
 
   METHOD get_local_spec.

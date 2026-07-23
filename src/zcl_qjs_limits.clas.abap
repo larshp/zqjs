@@ -1,5 +1,9 @@
 CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
+    TYPES: BEGIN OF ty_step_state,
+      maximum TYPE int8,
+      used TYPE int8,
+    END OF ty_step_state.
     METHODS constructor
       IMPORTING
         max_steps           TYPE int8 DEFAULT 100000
@@ -27,6 +31,9 @@ CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS remaining_steps
       RETURNING
         VALUE(result) TYPE int8.
+    METHODS step_state_reference
+      RETURNING VALUE(result) TYPE REF TO ty_step_state.
+    METHODS has_cancellation RETURNING VALUE(result) TYPE abap_bool.
 
     METHODS check_operand_stack IMPORTING current TYPE i RAISING zcx_qjs_error.
     METHODS check_frame_stack IMPORTING current TYPE i RAISING zcx_qjs_error.
@@ -37,8 +44,7 @@ CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS check_bytecode_length IMPORTING current TYPE i RAISING zcx_qjs_error.
 
   PRIVATE SECTION.
-    DATA mv_max_steps TYPE int8.
-    DATA mv_used_steps TYPE int8.
+    DATA ms_step_state TYPE ty_step_state.
     DATA mv_max_operand_stack TYPE i.
     DATA mv_max_frames TYPE i.
     DATA mv_nested_frames TYPE i.
@@ -57,8 +63,8 @@ CLASS zcl_qjs_limits IMPLEMENTATION.
         EXPORTING
           reason = 'JavaScript limits must be positive'.
     ENDIF.
-    mv_max_steps = max_steps.
-    mv_used_steps = 0.
+    ms_step_state-maximum = max_steps.
+    ms_step_state-used = 0.
     mv_max_operand_stack = max_operand_stack.
     mv_max_frames = max_frames.
     mv_max_parser_depth = max_parser_depth.
@@ -78,25 +84,33 @@ CLASS zcl_qjs_limits IMPLEMENTATION.
         EXPORTING
           reason = 'Consumed step count cannot be negative'.
     ENDIF.
-    IF mv_used_steps > mv_max_steps - amount.
+    IF ms_step_state-used > ms_step_state-maximum - amount.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING
           reason = 'JavaScript instruction budget exhausted'.
     ENDIF.
-    mv_used_steps = mv_used_steps + amount.
+    ms_step_state-used = ms_step_state-used + amount.
   ENDMETHOD.
 
   METHOD reset.
-    mv_used_steps = 0.
+    ms_step_state-used = 0.
     mv_nested_frames = 0.
   ENDMETHOD.
 
   METHOD used_steps.
-    result = mv_used_steps.
+    result = ms_step_state-used.
   ENDMETHOD.
 
   METHOD remaining_steps.
-    result = mv_max_steps - mv_used_steps.
+    result = ms_step_state-maximum - ms_step_state-used.
+  ENDMETHOD.
+
+  METHOD step_state_reference.
+    GET REFERENCE OF ms_step_state INTO result.
+  ENDMETHOD.
+
+  METHOD has_cancellation.
+    result = xsdbool( mo_cancellation IS BOUND ).
   ENDMETHOD.
 
   METHOD check_operand_stack.

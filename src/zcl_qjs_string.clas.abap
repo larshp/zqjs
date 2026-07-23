@@ -5,6 +5,10 @@ CLASS zcl_qjs_string DEFINITION PUBLIC FINAL CREATE PRIVATE.
         value         TYPE string
       RETURNING
         VALUE(result) TYPE REF TO zcl_qjs_string.
+    CLASS-METHODS code_unit_value
+      IMPORTING value TYPE string index TYPE i
+      RETURNING VALUE(result) TYPE i
+      RAISING zcx_qjs_error.
 
     METHODS length
       RETURNING
@@ -51,6 +55,22 @@ CLASS zcl_qjs_string DEFINITION PUBLIC FINAL CREATE PRIVATE.
 ENDCLASS.
 
 CLASS zcl_qjs_string IMPLEMENTATION.
+  METHOD code_unit_value.
+    IF index < 0 OR index >= strlen( value ).
+      RAISE EXCEPTION TYPE zcx_qjs_error
+        EXPORTING reason = 'String code-unit index out of bounds'.
+    ENDIF.
+    DATA lv_hex TYPE x LENGTH 2.
+    DATA(lv_character) = value+index(1).
+    TRY.
+        lv_hex = cl_abap_conv_out_ce=>uccp( lv_character ).
+      CATCH cx_sy_conversion_codepage cx_sy_codepage_converter_init
+          cx_parameter_invalid_range.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Invalid UTF-16 code unit'.
+    ENDTRY.
+    result = lv_hex.
+  ENDMETHOD.
   METHOD constructor.
     mv_value = value.
   ENDMETHOD.

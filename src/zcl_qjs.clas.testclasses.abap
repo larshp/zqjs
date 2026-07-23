@@ -244,7 +244,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var objectArrow = value => ({ value: value });'
       && ' sumArrow(1, undefined, 3) === 6 && sumArrow.length === 1'
       && ' && nestedArrow(4)(5) === 9 && objectArrow(7).value === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'function ArrowOwner(value) { this.value = value;'
@@ -253,14 +253,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var arrowOwner = new ArrowOwner(12); var detachedRead = arrowOwner.read;'
       && ' detachedRead.call({ value: 1 }) === 12'
       && ' && arrowOwner.first.call(null) === 12; ' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var topArrow = () => this; var arrowConstructThrows = false;'
       && ' try { new topArrow(); } catch (error) {'
       && ' arrowConstructThrows = error instanceof TypeError; }'
       && ' topArrow() === globalThis && arrowConstructThrows;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncArrowValue = 0; var asyncArrow = async value => await value + 1;'
@@ -307,10 +307,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' asyncPromise.then(function(value) { asyncValue = value; });'
       && ' asyncPromise instanceof Promise && asyncOrder === "start"'
       && ' && asyncValue === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval(
       'asyncOrder === "start:resume" && asyncValue === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var immediateValue = 0; async function immediate() { return 7; }'
@@ -346,7 +346,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var asyncConstructThrows = false; try { new asyncExpression(1); }'
       && ' catch (error) { asyncConstructThrows = error instanceof TypeError; }'
       && ' expressionValue === 12 && asyncConstructThrows;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var assimilated = 0; async function returnsPromise() {'
@@ -374,7 +374,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var thrownPromise = throwsImmediately();'
       && ' thrownPromise.catch(function(value) { thrownValue = value; });'
       && ' thrownPromise instanceof Promise && thrownValue === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval( 'thrownValue;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 19 ).
@@ -422,9 +422,9 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' for await (var value of closableValues()) { break; } }'
       && ' closeAsyncLoop(); asyncLoopClosed;' ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-bool_value exp = abap_false ).
+      act = zcl_qjs_value=>as_boolean( ls_result ) exp = abap_false ).
     ls_result = lo_context->eval( 'asyncLoopClosed;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncCloseOrder = ""; var closeIterable = {};'
@@ -469,11 +469,11 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' asyncGeneratorResults += step.value + ":" + step.done; });'
       && ' asyncValuesIterator[Symbol.asyncIterator]() === asyncValuesIterator'
       && ' && asyncGeneratorLog === "start";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval(
       'asyncGeneratorLog === "start:4"'
       && ' && asyncGeneratorResults === "1:false;2:false;3:true";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncGeneratorCaught = ""; async function* catchesAwait() {'
@@ -509,14 +509,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = lo_context->eval(
       'abruptResults === "1:false;5:false;9:true"'
       && ' && asyncGeneratorAbrupt === "finally:awaited";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncGeneratorConstructThrows = false;'
       && ' try { new asyncValues(); } catch (error) {'
       && ' asyncGeneratorConstructThrows = error instanceof TypeError; }'
       && ' asyncGeneratorConstructThrows;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncParamLog = ""; async function* asyncParams('
@@ -524,7 +524,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' asyncParamLog += ":body"; yield value; }'
       && ' var asyncParamIterator = asyncParams();'
       && ' asyncParamLog === "param";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     lo_context->eval( 'asyncParamIterator.next();' ).
     ls_result = lo_context->eval( 'asyncParamLog;' ).
     cl_abap_unit_assert=>assert_equals(
@@ -582,7 +582,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' objectAsyncValue += value; });'
       && ' namedAsync.async() === 9 && asyncProperty.async === 11'
       && ' && objectAsyncValue === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval( 'objectAsyncValue;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 19 ).
@@ -592,7 +592,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { new asyncMethods.add(1); } catch (error) {'
       && ' asyncMethodConstructThrows = error instanceof TypeError; }'
       && ' asyncMethodConstructThrows;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var asyncGeneratorMethodValue = 0;'
@@ -628,19 +628,19 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && aggregateDescriptor.writable === true'
       && ' && aggregateDescriptor.enumerable === false'
       && ' && aggregateDescriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var globalCell = 1; var first = this.globalCell === 1;'
       && ' this.globalCell = 2; var second = globalCell === 2;'
       && ' globalCell = 3; first && second && this.globalCell === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'let lexicalGlobal = 4; const constantGlobal = 5;'
       && ' !Object.hasOwn(globalThis, "lexicalGlobal")'
       && ' && !Object.hasOwn(globalThis, "constantGlobal");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     lo_context->set_global(
       name = 'hostGlobal' value = zcl_qjs_value=>new_int( 6 ) ).
@@ -648,7 +648,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'this.hostGlobal = 7; hostGlobal === 7'
       && ' && Object.getOwnPropertyDescriptor('
       && ' globalThis, "hostGlobal").enumerable === false;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number(
         lo_context->get_global( 'hostGlobal' ) )
@@ -811,7 +811,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' Promise.prototype.catch.call(genericCatch, 7) === 17'
       && ' && Promise.prototype.finally.call(genericFinally, 8) === 0'
       && ' && Promise.prototype.finally.call(genericFinally, cleanup) === 23;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var samePromise = Promise.resolve(1);'
@@ -822,7 +822,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Promise.prototype.finally.length === 1'
       && ' && Object.prototype.toString.call(samePromise) === "[object Promise]"'
       && ' && Promise.resolve(samePromise) === samePromise;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var speciesDescriptor = Object.getOwnPropertyDescriptor('
@@ -834,7 +834,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && speciesDescriptor.set === undefined'
       && ' && speciesDescriptor.enumerable === false'
       && ' && speciesDescriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var subclassValue = 0; class PromiseSubclass extends Promise {}'
@@ -853,7 +853,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && PromiseSubclass[Symbol.species] === PromiseSubclass'
       && ' && explicitPromise instanceof ExplicitPromise'
       && ' && explicitPromise instanceof Promise && explicitPromise.marker === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval( 'subclassValue;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = 14 ).
@@ -921,9 +921,9 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = lo_context->eval(
       'var invalidAll = false; Promise.all(1).catch(function(error) {'
       && ' invalidAll = error.name === "TypeError"; }); invalidAll;' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval( 'invalidAll;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var settledResult = ""; Promise.allSettled(['
@@ -988,7 +988,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && !aggregate.propertyIsEnumerable("errors")'
       && ' && AggregateError.length === 2 && AggregateError.name === "AggregateError"'
       && ' && Promise.allSettled.length === 1 && Promise.any.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var capabilityCalls = 0; var customResolved; var customRejected;'
@@ -1001,7 +1001,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && rejectedCustom instanceof CustomPromise'
       && ' && resolvedCustom.custom && rejectedCustom.custom'
       && ' && customResolved === 31 && customRejected === "nope";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var nonConstructorRejected = false; var duplicateRejected = false;'
@@ -1013,7 +1013,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { Promise.resolve.call(DuplicateCapability, 1); } catch (error) {'
       && ' duplicateRejected = error instanceof TypeError; }'
       && ' nonConstructorRejected && duplicateRejected;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var combinatorCapabilities = 0;'
@@ -1033,13 +1033,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && customSettled instanceof CustomCombinator'
       && ' && customRace instanceof CustomCombinator'
       && ' && customAny instanceof CustomCombinator;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval(
       'customAll.value.join("") === "23"'
       && ' && customSettled.value[0].status === "rejected"'
       && ' && customSettled.value[0].reason === "x"'
       && ' && customRace.value === 4 && customAny.value === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var speciesReads = 0; function CustomSpecies(executor) {'
@@ -1053,9 +1053,9 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var speciesResult = speciesSource.then(function(value) {'
       && ' return value + 1; });'
       && ' speciesReads === 1 && speciesResult instanceof CustomSpecies;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = lo_context->eval( 'speciesResult.value === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = lo_context->eval(
       'var nullSpeciesSource = Promise.resolve(1); var nullSpecies = {};'
@@ -1073,7 +1073,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' invalidConstructor = error instanceof TypeError; }'
       && ' defaultSpeciesResult instanceof Promise'
       && ' && invalidSpecies && invalidConstructor;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD eval_precedence.
@@ -1110,18 +1110,18 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_one = zcl_qjs_value=>new_int( 1 ).
     ls_pos_inf = zcl_qjs_number=>divide( left = ls_one right = ls_zero ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_pos_inf-number_kind
+      act = ls_pos_inf-int_value
       exp = zcl_qjs_value=>number_pos_inf ).
 
     ls_neg_inf = zcl_qjs_number=>negate( ls_pos_inf ).
     ls_nan = zcl_qjs_number=>add( left = ls_pos_inf right = ls_neg_inf ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_nan-number_kind
+      act = ls_nan-int_value
       exp = zcl_qjs_value=>number_nan ).
 
     ls_nan = zcl_qjs_number=>divide( left = ls_zero right = ls_zero ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_nan-number_kind
+      act = ls_nan-int_value
       exp = zcl_qjs_value=>number_nan ).
   ENDMETHOD.
 
@@ -1131,12 +1131,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
     DATA ls_divided TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval( '-0' ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-number_kind
+      act = ls_result-int_value
       exp = zcl_qjs_value=>number_neg_zero ).
     ls_one = zcl_qjs_value=>new_int( 1 ).
     ls_divided = zcl_qjs_number=>divide( left = ls_one right = ls_result ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_divided-number_kind
+      act = ls_divided-int_value
       exp = zcl_qjs_value=>number_neg_inf ).
   ENDMETHOD.
 
@@ -1269,31 +1269,31 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_value = zcl_qjs_value=>new_string( '-0' ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_number-number_kind
+      act = ls_number-int_value
       exp = zcl_qjs_value=>number_neg_zero ).
 
     ls_value = zcl_qjs_value=>new_string( '+Infinity' ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_number-number_kind
+      act = ls_number-int_value
       exp = zcl_qjs_value=>number_pos_inf ).
 
     ls_value = zcl_qjs_value=>new_string( '-Infinity' ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_number-number_kind
+      act = ls_number-int_value
       exp = zcl_qjs_value=>number_neg_inf ).
 
     ls_value = zcl_qjs_value=>new_string( '-0x1' ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_number-number_kind
+      act = ls_number-int_value
       exp = zcl_qjs_value=>number_nan ).
 
     ls_value = zcl_qjs_value=>new_undefined( ).
     ls_number = zcl_qjs_number=>to_number( ls_value ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_number-number_kind
+      act = ls_number-int_value
       exp = zcl_qjs_value=>number_nan ).
 
     ls_value = zcl_qjs_value=>new_finite( CONV f( 4294967297 ) ).
@@ -1392,7 +1392,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_first = lo_runtime->new_symbol( 'x' ).
     ls_second = lo_runtime->new_symbol( 'x' ).
     cl_abap_unit_assert=>assert_differs(
-      act = ls_first-symbol_id exp = ls_second-symbol_id ).
+      act = ls_first-int_value exp = ls_second-int_value ).
     cl_abap_unit_assert=>assert_equals(
       act = lo_runtime->symbol_description( ls_first ) exp = 'x' ).
     lo_context->dispose( ).
@@ -1487,40 +1487,40 @@ CLASS ltcl_qjs IMPLEMENTATION.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval( '1 + 2 * 3 === 7' ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-bool_value exp = abap_true ).
+      act = zcl_qjs_value=>as_boolean( ls_result ) exp = abap_true ).
     ls_result = zcl_qjs=>eval( '3 < 2' ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-bool_value exp = abap_false ).
+      act = zcl_qjs_value=>as_boolean( ls_result ) exp = abap_false ).
     ls_result = zcl_qjs=>eval( '3 >= 3' ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-bool_value exp = abap_true ).
+      act = zcl_qjs_value=>as_boolean( ls_result ) exp = abap_true ).
     ls_result = zcl_qjs=>eval( `"x" !== "y"` ).
     cl_abap_unit_assert=>assert_equals(
-      act = ls_result-bool_value exp = abap_true ).
+      act = zcl_qjs_value=>as_boolean( ls_result ) exp = abap_true ).
     ls_result = zcl_qjs=>eval(
       'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
       && ' object.own = 2; var symbol = Symbol("key"); object[symbol] = 3;'
       && ' "own" in object && "inherited" in object'
       && ' && !("missing" in object) && symbol in object'
       && ' && "prototype" in Object;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var caught = false; try { "x" in 1; }'
       && ' catch (error) { caught = error instanceof TypeError; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
   ENDMETHOD.
 
   METHOD primitive_literals.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval( 'true === true' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'null !== undefined' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'false' ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-tag exp = zcl_qjs_value=>tag_bool ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD if_statements.
@@ -1555,7 +1555,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 3 ) ).
     ls_result = zcl_qjs=>eval( 'var x; x === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD while_loops.
@@ -1604,7 +1604,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var symbol = Symbol("ignored"); object[symbol] = 6;'
       && ' var keys = ""; for (var key in object) { keys = keys + key + ","; }'
       && ' keys === "own,duplicate,inherited,";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { shadowed: 1 }; var object = Object.create(prototype);'
@@ -1612,34 +1612,34 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' { value: 2, enumerable: false });'
       && ' var count = 0; for (var key in object) { count = count + 1; }'
       && ' count === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = { a: 1, b: 2, c: 3 }; var keys = "";'
       && ' for (var key in object) {'
       && ' keys = keys + key; if (key === "a") delete object.b; }'
       && ' keys === "ac";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = { a: 1, b: 2, c: 3 }; var keys = "";'
       && ' for (var key in object) {'
       && ' if (key === "a") continue; keys = keys + key;'
       && ' if (key === "b") break; } keys === "b";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var count = 0, key; for (key in null) { count = count + 1; }'
       && ' for (key in undefined) { count = count + 1; }'
       && ' var keys = ""; for (key in "ab") { keys = keys + key; }'
       && ' count === 0 && keys === "01";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var keys = ""; for (let key in { a: 1, b: 2 }) { keys = keys + key; }'
       && ' for (const key in { c: 3 }) { keys = keys + key; }'
       && ' keys === "abc";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var functions = {}; var object = Object.create(null);'
@@ -1648,7 +1648,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' functions[key] = function() { return key; }; }'
       && ' functions.a() === "a" && functions.b() === "b"'
       && ' && functions.c() === "c";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD for_of_iteration.
@@ -1657,7 +1657,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var total = 0; for (var value of [1, 2, 3]) total = total + value;'
       && ' var text = ""; for (var character of "ab") text = text + character;'
       && ' total === 6 && text === "ab";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var map = new Map([["a", 1], ["b", 2]]); var mapped = "";'
@@ -1665,7 +1665,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var set = new Set([3, 4]); var summed = 0;'
       && ' for (var item of set) summed = summed + item;'
       && ' mapped === "a1b2" && summed === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var iterable = {}; iterable[Symbol.iterator] = function() {'
@@ -1679,13 +1679,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (!done) { done = true; return { value: ["key", 9], done: false }; }'
       && ' return { done: true }; } }; }; var map = new Map(mapSource);'
       && ' total === 3 && set.size === 2 && map.get("key") === 9;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var functions = []; for (let value of [1, 2]) {'
       && ' functions.push(function() { return value; }); }'
       && ' functions[0]() === 1 && functions[1]() === 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var closed = 0; function iterable() { var source = {};'
@@ -1698,7 +1698,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' for (var third of iterable()) { throw 9; }'
       && ' } catch (error) { thrown = error === 9; }'
       && ' closed === 3 && returned === 7 && thrown;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var closeLog = ""; function closingIterable(id, value) {'
@@ -1776,7 +1776,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'var named = function inner() {}; named.name === "inner"'
       && ' && named.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var calls = 0; function count() { calls++; return 3; }'
@@ -1786,7 +1786,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && defaults(5, 6, 7) === 18 && calls === 1'
       && ' && expression() === 42 && expression(9) === 9'
       && ' && defaults.length === 1 && expression.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var described = function(value = 42) {};'
@@ -1798,7 +1798,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && !Object.prototype.propertyIsEnumerable.call(described, "length")'
       && ' && delete described.length'
       && ' && !Object.prototype.hasOwnProperty.call(described, "length");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function collect(first, ...rest) {'
@@ -1806,7 +1806,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var expression = function(...items) { return items.length; };'
       && ' collect(10, 20, 9) === 41 && collect.length === 1'
       && ' && expression(1, 2, 3) === 3 && expression.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD ordinary_objects.
@@ -1877,14 +1877,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.prototype.toString.call({}) === "[object Object]"'
       && ' && Object.prototype.toString.call(null) === "[object Null]"'
       && ' && Object.prototype.toString.call(1) === "[object Number]";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var tagged = {}; tagged[Symbol.toStringTag] = "Tagged";'
       && ' Object.prototype.toString.call(tagged) === "[object Tagged]"'
       && ' && Object.prototype.toString.length === 0'
       && ' && Object.prototype.toString.name === "toString";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; var object = Object.create(prototype);'
@@ -1902,34 +1902,34 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.prototype.valueOf.name === "valueOf"'
       && ' && Object.prototype.propertyIsEnumerable.name === "propertyIsEnumerable"'
       && ' && Object.prototype.isPrototypeOf.name === "isPrototypeOf";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Parent() {} function Child() {} var prototype = new Parent();'
       && ' Child.prototype = prototype; var child = new Child();'
       && ' prototype.isPrototypeOf(child);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Parent() {} function Child() {} var prototype = new Parent();'
       && ' Child.prototype = prototype; var child = new Child();'
       && ' Parent.prototype.isPrototypeOf(child);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Parent() {} function Child() {} var prototype = new Parent();'
       && ' Child.prototype = prototype; var child = new Child();'
       && ' !Number.isPrototypeOf(child);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval( 'var o = {}; o === o;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var key = "answer"; var symbol = Symbol("computed");'
       && ' var object = { [key]: 42, [symbol]: 7 };'
       && ' object.answer === 42 && object[symbol] === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var symbol = Symbol("spread"); var source = { first: 1 };'
@@ -1940,7 +1940,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' target.before === 0 && target.first === 4'
       && ' && target[symbol] === 2 && target.hidden === undefined'
       && ' && target[0] === "x" && target[1] === "y";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD destructuring_bindings.
@@ -1949,12 +1949,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'var [first, , third = 3, ...tail] = [1, 2, undefined, 4, 5];'
       && ' first === 1 && third === 3 && tail.join("") === "45";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var [outer, { value: inner = 7 }] = [1, { value: undefined }];'
       && ' outer === 1 && inner === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var symbol = Symbol("binding"); var source = { x: 1, y: 2 };'
@@ -1964,7 +1964,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' alias === 1 && symbolic === 3 && missing === 4'
       && ' && rest.y === 2 && rest.x === undefined'
       && ' && rest[symbol] === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var closed = false; var iterable = {};'
@@ -1973,7 +1973,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' return { value: index, done: false }; },'
       && ' return: function() { closed = true; return { done: true }; } }; };'
       && ' var [only] = iterable; only === 1 && closed;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var a = 0; var b = 0; var rest; var result;'
@@ -1983,7 +1983,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' a === 1 && b === 2 && rest.join("") === "34"'
       && ' && result[0] === 1 && c === 5 && others.d === 6'
       && ' && objectResult === source;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function read([a = 1, { b }], { c, ...rest } = { c: 3, d: 4 }, last) {'
@@ -1993,7 +1993,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' read([undefined, { b: 2 }], undefined, 5) === 15'
       && ' && read.length === 1'
       && ' && expression({ value: 6 }, [7]) === 13;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var total = 0; for (var [x, y] of [[1, 2], [3, 4]]) {'
@@ -2004,13 +2004,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' initials = initials + initial; }'
       && ' total === 10 && readers[0]() === 5 && readers[1]() === 6'
       && ' && initials === "ab";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = 0; try { throw { code: 7, detail: 8 }; }'
       && ' catch ({ code, ...extra }) { caught = code + extra.detail; }'
       && ' caught === 15;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var target = { nested: {} }; var key = "second";'
@@ -2018,13 +2018,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' ({ value: target.nested.answer } = { value: 3 });'
       && ' target.first === 1 && target.second === 2 && target.fallback === 4'
       && ' && target.nested.answer === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Box(left, right) { this.total = left + right; }'
       && ' var values = [4, 5]; var box = new Box(...values);'
       && ' box instanceof Box && box.total === 9;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD tagged_templates.
@@ -2042,7 +2042,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && descriptor.writable === false'
       && ' && descriptor.enumerable === false'
       && ' && descriptor.configurable === false;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD class_syntax.
@@ -2057,7 +2057,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' point instanceof Point && point.sum() === 7'
       && ' && Point.prototype.sum !== undefined'
       && ' && empty instanceof Empty;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class Base {'
@@ -2072,7 +2072,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var child = new Child(6);'
       && ' child instanceof Child && child instanceof Base'
       && ' && child.total() === 7 && Child.kind() === "base";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class DescriptorClass {'
@@ -2089,7 +2089,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && staticMethod.writable === true'
       && ' && staticMethod.enumerable === false'
       && ' && staticMethod.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var OuterName = 7;'
@@ -2109,7 +2109,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && derived.read() === 9'
       && ' && derived instanceof Derived'
       && ' && derived instanceof Anonymous;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class AccessorClass {'
@@ -2139,7 +2139,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && !("prototype" in methodDescriptor.value) && rejected'
       && ' && descriptor.enumerable === false'
       && ' && descriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var methodKey = "computed"; var accessorKey = Symbol("accessor");'
@@ -2160,7 +2160,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && typeof descriptor.set === "function"'
       && ' && descriptor.enumerable === false'
       && ' && descriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class StrictClass {}'
@@ -2172,7 +2172,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { StrictClass.call({}); }'
       && ' catch (error) { viaCall = error instanceof TypeError; }'
       && ' direct && member && viaCall && new StrictClass() instanceof StrictClass;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var instanceSymbol = Symbol("instance");'
@@ -2208,7 +2208,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && SuperChild.call() === "child!"'
       && ' && SuperChild.symbolCall() === "child?"'
       && ' && SuperBase._label === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var fieldOuter = 3; var fieldOrder = [];'
@@ -2233,7 +2233,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && descriptor.writable === true'
       && ' && descriptor.enumerable === true'
       && ' && descriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var instanceOuter = 2; var instanceOrder = [];'
@@ -2265,7 +2265,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && childDescriptor.writable === true'
       && ' && childDescriptor.enumerable === true'
       && ' && childDescriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var defaultOrder = [];'
@@ -2285,7 +2285,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && defaultGrand.child === 10 && defaultGrand.grand === 11'
       && ' && defaultOrder.join(",")'
       && ' === "base-field,base-body,child-field,grand-field";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var fieldThrowCaught = false;'
@@ -2295,7 +2295,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' catch (error) {'
       && ' fieldThrowCaught = error instanceof TypeError; }'
       && ' fieldThrowCaught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var computedOrder = [];'
@@ -2319,7 +2319,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && instanceFieldDescriptor.writable === true'
       && ' && instanceFieldDescriptor.enumerable === true'
       && ' && instanceFieldDescriptor.configurable === true;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var staticBlockOrder = [];'
@@ -2340,7 +2340,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' StaticBlocks.blockValue === 9 && StaticBlocks.finalValue === 12'
       && ' && staticBlockOrder.join(",")'
       && ' === "field-first,block-one,field-middle,block-two";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class PrivateFields {'
@@ -2379,7 +2379,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && !PrivateFields.hasCount(OtherPrivate)'
       && ' && Object.keys(privateItem).length === 0'
       && ' && Object.getOwnPropertySymbols(privateItem).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class PrivateMethods {'
@@ -2408,7 +2408,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && privateMethodBrandRejected && privateMethodWriteRejected'
       && ' && Object.keys(privateMethods).length === 0'
       && ' && Object.getOwnPropertySymbols(privateMethods).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class PrivateAccessors {'
@@ -2440,7 +2440,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && PrivateAccessors.write(8) === 8'
       && ' && privateReadOnlyRejected && privateWriteOnlyRejected'
       && ' && Object.keys(privateAccessors).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     TRY.
         zcl_qjs=>eval( 'class BadPrivate { #value; #value() {} }' ).
@@ -2735,7 +2735,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && catchThrowRethrown && catchThrowDone.done'
       && ' && expressionResult.value === 6 && !expressionResult.done'
       && ' && closureFirst.value === 1 && closureSecond.value === 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD generator_intrinsics.
@@ -2783,7 +2783,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.getPrototypeOf(first) === Object.prototype'
       && ' && Object.prototype.hasOwnProperty.call(first, "value")'
       && ' && Object.prototype.hasOwnProperty.call(first, "done");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD string_operators.
@@ -2792,7 +2792,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = 'answer=42' ).
     ls_result = zcl_qjs=>eval( `"a" < "b"` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( `"2" + true` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = '2true' ).
@@ -2805,19 +2805,19 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.getPrototypeOf(new String("abc")) === String.prototype'
       && ' && new String("abc").valueOf() === "abc"'
       && ' && String.prototype.toString() === "";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '"abc".length === 3 && "abc"[0] === "a" && "abc"["1"] === "b"'
       && ' && "abc"[3] === undefined && new String("abc")[2] === "c"'
       && ' && Object.keys(new String("abc")).join("") === "012";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '"abc".charAt(1) === "b" && "abc".charAt(-1) === ""'
       && ' && "abc".charCodeAt(0) === 97 && "abc".charCodeAt(9) !== "abc".charCodeAt(9)'
       && ' && "abc".at(-1) === "c" && "abc".at(3) === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '"bananas".indexOf("na") === 2 && "bananas".indexOf("na", 3) === 4'
@@ -2825,7 +2825,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && "bananas".includes("ana") && !"bananas".includes("xyz")'
       && ' && "bananas".startsWith("ban") && "bananas".startsWith("ana", 1)'
       && ' && "bananas".endsWith("nas") && "bananas".endsWith("ana", 4);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '"abcdef".slice(1, 4) === "bcd" && "abcdef".slice(-3) === "def"'
@@ -2834,14 +2834,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && "  Ab C  ".trim() === "Ab C"'
       && ' && "  x ".trimStart() === "x " && " x  ".trimEnd() === " x"'
       && ' && "AbC".toLowerCase() === "abc" && "AbC".toUpperCase() === "ABC";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'String.prototype.indexOf.length === 1'
       && ' && String.prototype.substring.length === 2'
       && ' && String.prototype.repeat.name === "repeat"'
       && ' && Object.keys(String.prototype).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var wrong = false, range = false;'
@@ -2849,7 +2849,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' catch (error) { wrong = error instanceof TypeError; }'
       && ' try { "x".repeat(-1); }'
       && ' catch (error) { range = error instanceof RangeError; } wrong && range;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD reflect_intrinsic.
@@ -2861,7 +2861,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Reflect.defineProperty.length === 3 && Reflect.set.length === 3'
       && ' && Reflect.ownKeys.name === "ownKeys"'
       && ' && Object.keys(Reflect).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var receiver = { base: 40 }; var target = {};'
@@ -2871,7 +2871,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' Reflect.get(target, "value", receiver) === 42'
       && ' && Reflect.set(target, "value", 9, receiver)'
       && ' && receiver.stored === 9;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; var symbol = Symbol("key");'
@@ -2884,7 +2884,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Reflect.deleteProperty(object, "fixed") === false'
       && ' && Reflect.deleteProperty(object, symbol)'
       && ' && !Reflect.has(object, symbol);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
@@ -2895,7 +2895,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Reflect.getPrototypeOf(object) === prototype'
       && ' && Reflect.setPrototypeOf(object, null)'
       && ' && Reflect.getPrototypeOf(object) === null;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; Reflect.isExtensible(object)'
@@ -2904,7 +2904,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Reflect.defineProperty(object, "late", { value: 1 }) === false'
       && ' && Reflect.set(object, "late", 1) === false'
       && ' && Reflect.setPrototypeOf(object, {}) === false;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function sum(left, right) { return this.base + left + right; }'
@@ -2913,7 +2913,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var box = Reflect.construct(Box, [2, 3], Other);'
       && ' Reflect.apply(sum, { base: 10 }, [4, 5]) === 19'
       && ' && box.total === 5 && Object.getPrototypeOf(box) === Other.prototype;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = 0;'
@@ -2923,7 +2923,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (error instanceof TypeError) { caught = caught + 1; } }'
       && ' try { Reflect.construct(function() {}, 1); } catch (error) {'
       && ' if (error instanceof TypeError) { caught = caught + 1; } } caught === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD map_set_intrinsics.
@@ -2934,7 +2934,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && map.has(0) && map.set("next", 4) === map'
       && ' && map.get("next") === 4 && map instanceof Map'
       && ' && Object.prototype.toString.call(map) === "[object Map]";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var map = new Map([["a", 1], ["b", 2]]); var iterator = map.entries();'
@@ -2943,14 +2943,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' first.value[0] === "a" && first.value[1] === 1'
       && ' && second.value[0] === "c" && second.value[1] === 3'
       && ' && done.done && iterator[Symbol.iterator]() === iterator;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var map = new Map([["a", 1], ["b", 2]]); var seen = "";'
       && ' map.forEach(function(value, key, owner) {'
       && ' seen = seen + key + value; if (key === "a") owner.set("c", 3); });'
       && ' seen === "a1b2c3";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var set = new Set([1, 2, 2, NaN, NaN]); var entries = set.entries();'
@@ -2961,7 +2961,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Set.prototype[Symbol.iterator] === Set.prototype.values'
       && ' && values.next().value === 1 && set instanceof Set'
       && ' && Object.prototype.toString.call(set) === "[object Set]";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = 0; try { Map(); } catch (error) {'
@@ -2970,7 +2970,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (error instanceof TypeError) caught = caught + 1; }'
       && ' try { new Map([1]); } catch (error) {'
       && ' if (error instanceof TypeError) caught = caught + 1; } caught === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD object_constructor.
@@ -2982,7 +2982,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 3 ) ).
     ls_result = zcl_qjs=>eval(
       'var left = new Object(); var right = new Object(); left !== right;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD thrown_values.
@@ -3055,11 +3055,11 @@ CLASS ltcl_qjs IMPLEMENTATION.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval(
       'var observed = value === undefined; var value = 1; observed;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'if (false) { var hidden = 1; } hidden === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function outer() { function read() { return later; }'
@@ -3172,22 +3172,22 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 2 ) ).
 
     ls_result = zcl_qjs=>eval( `!!"value"` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'null == undefined' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( `"42" == 42` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'false == 0' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'false === 0' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function fail() { throw 1; } false && fail();' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'function fail() { throw 1; } true || fail();' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( `0 || "fallback"` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = 'fallback' ).
@@ -3224,7 +3224,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var values = [, 1, ,]; values.length === 3'
       && ' && !Object.hasOwn(values, "0") && values[1] === 1'
       && ' && !Object.hasOwn(values, "2");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [0, ...[1, 2], 3];'
@@ -3232,14 +3232,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' values.length === 4 && values[0] === 0 && values[3] === 3'
       && ' && sparse.length === 3 && !Object.hasOwn(sparse, "0")'
       && ' && sparse[1] === 4 && sparse[2] === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function sum(a, b, c) { return a + b + c; }'
       && ' var receiver = { base: 10, add: function(a, b) {'
       && ' return this.base + a + b; } };'
       && ' sum(...[1, 2], 3) === 6 && receiver.add(...[4, 5]) === 19;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD comments_and_asi.
@@ -3391,10 +3391,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 42 ) ).
     ls_result = zcl_qjs=>eval(
       'function Point() {} var point = new Point(); point instanceof Point;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'function Point() {} var object = {}; object instanceof Point;' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD property_delete.
@@ -3402,15 +3402,15 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'var object = { kept: 1, removed: 2 }; delete object.removed;'
       && ' object.removed === undefined && object.kept === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var key = "value"; var object = { value: 3 }; delete object[key];'
       && ' object.value === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval( 'var object = {}; delete object.missing;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD cooperative_cancellation.
@@ -3436,11 +3436,11 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 43 ) ).
     ls_result = zcl_qjs=>eval( 'String(42) === "42";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'Boolean(0);' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'isNaN("not a number");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'Array(3).length;' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 3 ) ).
@@ -3455,9 +3455,9 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && typeof 1 === "number" && typeof "x" === "string"'
       && ' && typeof Object === "function" && typeof {} === "object"'
       && ' && typeof missingGlobal === "undefined";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'isNaN(NaN) && Infinity > 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(-3) + Math.floor(1.9) + Math.ceil(1.1)'
       && ' + Math.max(2, 7, 4) + Math.min(6, 3, 5);' ).
@@ -3469,18 +3469,17 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && 1 / Math.max(-0, 0) === Infinity'
       && ' && 1 / Math.min(0, -0) === -Infinity'
       && ' && isNaN(Math.max(1, NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'Array;' ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-tag exp = zcl_qjs_value=>tag_object ).
     cl_abap_unit_assert=>assert_bound( ls_result-object_ref ).
-    cl_abap_unit_assert=>assert_bound( ls_result-property_ref ).
     ls_result = zcl_qjs=>eval( 'Array.isArray([]);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'Array.isArray({});' ).
-    cl_abap_unit_assert=>assert_false( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_false( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( 'Array.isArray([]) && !Array.isArray({});' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var keys = Object.keys({ first: 1, second: 2 }); keys.length;' ).
     cl_abap_unit_assert=>assert_equals(
@@ -3491,7 +3490,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var second = false ? 10 : true ? 20 : 30;'
       && ' first === 1 && second === 20 && calls === 1'
       && ' && (false || true ? 3 : 4) === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD bitwise_operators.
@@ -3529,7 +3528,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 133 ) ).
     ls_result = zcl_qjs=>eval( 'var value = "4"; value++; value === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var object = { x: 2, nested: { y: 4 } }; var old = object.x++;'
       && ' var current = ++object.nested.y; object.x += 5;'
@@ -3569,7 +3568,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       'var caught = false; try { let first = second, second = 1; }'
       && ' catch (error) { caught = true; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var sum = 0; for (var index = 0, value = 1; index < 3; index++)'
       && ' { sum += value; value++; } sum;' ).
@@ -3614,7 +3613,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && descriptor.get === readValue && descriptor.set === writeValue'
       && ' && descriptor.enumerable && descriptor.configurable'
       && ' && Object.keys(object).length === 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; Object.defineProperty(object, "fixed",'
@@ -3623,7 +3622,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' object.fixed === 7 && descriptor.value === 7 && !descriptor.writable'
       && ' && !descriptor.enumerable && !descriptor.configurable'
       && ' && Object.keys(object).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; Object.defineProperty(object, "fixed",'
@@ -3631,7 +3630,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { object.fixed = 2; } catch (error) { caught = error; }'
       && ' caught.toString() === "TypeError: property is not writable"'
       && ' && object.fixed === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function inheritedRead() { return this._value + 1; }'
@@ -3644,7 +3643,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' before === 9 && child.value === 13 && prototype._value === undefined'
       && ' && child.inherited === 6 && prototype.inherited === 4'
       && ' && Object.getPrototypeOf(child) === prototype;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var first = { marker: 1 }; var second = {};'
@@ -3652,7 +3651,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var bare = Object.create(null);'
       && ' second.marker === 1 && Object.getPrototypeOf(second) === first'
       && ' && Object.getPrototypeOf(bare) === null;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { inherited: 1 };'
@@ -3666,20 +3665,20 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' object.inherited === 1 && object.hidden === 2 && object.shown === 3'
       && ' && object.fourth === 4 && object.fifth === 5'
       && ' && Object.keys(object).length === 2 && names.length === 4;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var ordered = { b: 1, a: 2 }; var keys = Object.keys(ordered);'
       && ' keys[0] === "b" && keys[1] === "a"'
       && ' && JSON.stringify(ordered) === "{\"b\":1,\"a\":2}";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var indexed = {}; indexed[10] = "ten"; indexed.b = 1;'
       && ' indexed[2] = "two"; indexed.a = 2; var keys = Object.keys(indexed);'
       && ' keys[0] === "2" && keys[1] === "10"'
       && ' && keys[2] === "b" && keys[3] === "a";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function read() { return this._value; }'
@@ -3697,13 +3696,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' object.accessor === 7 && accessor.get === read && accessor.set === write'
       && ' && !accessor.enumerable && accessor.configurable'
       && ' && data.value === 8 && !data.writable && !data.configurable;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; object[true] = 1; object[null] = 2;'
       && ' object[false] = 4; delete object[false];'
       && ' object[true] + object[null] === 3 && object[false] === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught; try { var object = {}; Object.defineProperty(object, "value",'
@@ -3754,7 +3753,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ` data.name === "Ada" && data.items.length === 3`
       && ` && data.items[0] === 1 && data.items[1] === true`
       && ` && data.items[2] === null;` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval( `JSON.parse('"\\u0041"');` ).
     cl_abap_unit_assert=>assert_equals(
@@ -3779,12 +3778,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ` decoded.a === "x" && decoded.b === 2 && decoded.nan === null`
       && ` && decoded.items[0] === 1 && decoded.items[1] === null`
       && ` && decoded.skip === undefined;` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       `JSON.stringify(undefined) === undefined`
       && ` && JSON.stringify([NaN, Infinity, -Infinity]) === "[null,null,null]";` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       `var cycle = {}; cycle.self = cycle; var caught;`
@@ -3799,7 +3798,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ` try { JSON.parse('[01]'); } catch (error) { rejected = rejected + 1; }`
       && ` try { JSON.parse("{'a':1}"); } catch (error) {`
       && ` rejected = rejected + 1; } rejected === 3;` ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     CREATE OBJECT lo_runtime.
     lv_whitespace_json = cl_abap_char_utilities=>horizontal_tab
@@ -3861,14 +3860,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var error = new TypeError("bad value");'
       && ' error.name === "TypeError" && error.message === "bad value"'
       && ' && Object.keys(error).length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Object.prototype.toString.call(new Error()) === "[object Error]"'
       && ' && Error.prototype.toString.call({}) === "Error"'
       && ' && Error.prototype.toString.call({ message: "42" }) === "Error: 42"'
       && ' && Error.prototype.toString.call({ name: "24" }) === "24";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var error = new TypeError("bad value"); var empty = new TypeError();'
@@ -3883,37 +3882,37 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Error.length === 1 && TypeError.length === 1'
       && ' && Error.name === "Error" && TypeError.name === "TypeError"'
       && ' && Error.prototype.toString.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = false; try { var object = null; object.value; }'
       && ' catch (error) { caught = error instanceof TypeError'
       && ' && error instanceof Error && error.constructor === TypeError; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = false; try { Object.prototype.valueOf.call(undefined); }'
       && ' catch (error) { caught = error.constructor === TypeError'
       && ' && error instanceof TypeError && error.name === "TypeError"; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = false; try {'
       && ' Object.prototype.isPrototypeOf.call(null, function() {}); }'
       && ' catch (error) { caught = error.constructor === TypeError'
       && ' && error instanceof TypeError && error.name === "TypeError"; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var names = Error().name + RangeError().name + SyntaxError().name'
       && ' + ReferenceError().name;'
       && ' names === "ErrorRangeErrorSyntaxErrorReferenceError";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught; try { throw new Error("boom"); } catch (error) {'
       && ' caught = error.toString(); } caught === "Error: boom";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = 0; try { var value = 1; value(); } catch (error) {'
@@ -3922,7 +3921,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' if (error.name === "TypeError") caught = caught + 1; }'
       && ' try { 1 instanceof 2; } catch (error) {'
       && ' if (error.name === "TypeError") caught = caught + 1; } caught === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var cause = { code: 7 }; var error = new Error("outer", { cause: cause });'
@@ -3942,7 +3941,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && evalCause instanceof EvalError && evalCause instanceof Error'
       && ' && EvalError.prototype.constructor === EvalError'
       && ' && Object.getPrototypeOf(EvalError.prototype) === Error.prototype;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var causeReads = 0; var thrownCause = false; var options = {};'
@@ -3951,7 +3950,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { new URIError("bad", options); } catch (error) {'
       && ' thrownCause = error === "cause-failure"; }'
       && ' causeReads === 1 && thrownCause;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sequence = ""; var message = { toString: function() {'
@@ -3965,7 +3964,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' sequence === "mcin" && aggregate.message === "many"'
       && ' && aggregate.cause === 4 && aggregate.errors.length === 0'
       && ' && !aggregate.propertyIsEnumerable("cause");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'class AggregateSubclass extends AggregateError {}'
@@ -3984,7 +3983,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && explicitTypeError instanceof TypeError'
       && ' && explicitTypeError.message === "bad" && explicitTypeError.marker === 5'
       && ' && Object.getPrototypeOf(reflected) === AggregateError.prototype;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD symbol_intrinsic.
@@ -3993,7 +3992,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var first = Symbol("item"); var second = Symbol("item");'
       && ' typeof Symbol === "function" && typeof first === "symbol"'
       && ' && first !== second;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var shared = Symbol.for("shared");'
@@ -4001,7 +4000,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Symbol.keyFor(shared) === "shared"'
       && ' && Symbol.keyFor(Symbol("local")) === undefined'
       && ' && Symbol.keyFor(Symbol.for("")) === "";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = 0; try { Symbol.keyFor("not a symbol"); }'
@@ -4009,7 +4008,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { new Symbol("item"); }'
       && ' catch (error) { if (error.name === "TypeError") caught = caught + 1; }'
       && ' caught === 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'typeof Symbol.iterator === "symbol"'
@@ -4019,7 +4018,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Symbol.keyFor(Symbol.toPrimitive) === undefined'
       && ' && String(Symbol("item")) === "Symbol(item)"'
       && ' && String(Symbol()) === "Symbol()";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD symbol_keyed_properties.
@@ -4032,7 +4031,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.getOwnPropertySymbols(object).length === 1'
       && ' && Object.getOwnPropertySymbols(object)[0] === key'
       && ' && Object.hasOwn(object, key);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var key = Symbol("descriptor"); var object = {};'
@@ -4042,7 +4041,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' descriptor.value === 5 && descriptor.writable'
       && ' && !descriptor.enumerable && descriptor.configurable'
       && ' && delete object[key] && object[key] === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var key = Symbol("copy"); var source = {}; source[key] = 9;'
@@ -4050,14 +4049,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var prototype = {}; prototype[key] = 3;'
       && ' var child = Object.create(prototype); child[key] = 4;'
       && ' copy[key] === 9 && child[key] === 4 && prototype[key] === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var key = Symbol("create"); var descriptors = {};'
       && ' descriptors[key] = { value: 12, enumerable: true };'
       && ' var object = Object.create(null, descriptors);'
       && ' object[key] === 12 && Object.hasOwn(object, key);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD global_numeric_functions.
@@ -4066,18 +4065,18 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'parseInt("  -0xFtail") === -15 && parseInt("11", 2) === 3'
       && ' && parseInt("z", 36) === 35 && isNaN(parseInt("10", 1))'
       && ' && 1 / parseInt("-0") === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'parseFloat("  -1.25e2tail") === -125'
       && ' && parseFloat(".5") === 0.5 && parseFloat("1e") === 1'
       && ' && parseFloat("Infinity-and-beyond") === Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'isFinite("42") && isFinite(null) && !isFinite("not numeric")'
       && ' && !isFinite(Infinity) && !isFinite(NaN);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD number_static_methods.
@@ -4086,7 +4085,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'Number.isNaN(NaN) && !Number.isNaN("NaN")'
       && ' && Number.isFinite(1) && Number.isFinite(-0)'
       && ' && !Number.isFinite("1") && !Number.isFinite(Infinity);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Number.isInteger(1) && Number.isInteger(-0) && Number.isInteger(1e21)'
@@ -4094,14 +4093,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Number.isSafeInteger(Number.MAX_SAFE_INTEGER)'
       && ' && Number.isSafeInteger(Number.MIN_SAFE_INTEGER)'
       && ' && !Number.isSafeInteger(Number.MAX_SAFE_INTEGER + 1);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Number.parseInt === parseInt && Number.parseFloat === parseFloat'
       && ' && Number.NaN !== Number.NaN'
       && ' && Number.POSITIVE_INFINITY === Infinity'
       && ' && Number.NEGATIVE_INFINITY === -Infinity && Number.EPSILON > 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_unary_methods.
@@ -4110,24 +4109,24 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'Math.trunc(3.9) === 3 && Math.trunc(-3.9) === -3'
       && ' && 1 / Math.trunc(-0.1) === -Infinity'
       && ' && Math.trunc(Infinity) === Infinity && isNaN(Math.trunc(NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Math.round(1.49) === 1 && Math.round(1.5) === 2'
       && ' && Math.round(-1.5) === -1 && 1 / Math.round(-0.5) === -Infinity'
       && ' && 1 / Math.ceil(-0.1) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Math.sign(-8) === -1 && Math.sign(8) === 1 && Math.sign(0) === 0'
       && ' && 1 / Math.sign(-0) === -Infinity && isNaN(Math.sign(NaN))'
       && ' && Math.sqrt(9) === 3 && Math.sqrt(Infinity) === Infinity'
       && ' && isNaN(Math.sqrt(-1)) && 1 / Math.sqrt(-0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '+Infinity === Infinity && +"42" === 42 && 1 / +(-0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_constants.
@@ -4139,11 +4138,11 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.PI === 3.141592653589793'
       && ' && Math.SQRT1_2 === 0.7071067811865476'
       && ' && Math.SQRT2 === 1.4142135623730951;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var d = Object.getOwnPropertyDescriptor(Math, "PI");'
       && ' d.value === Math.PI && !d.writable && !d.enumerable && !d.configurable;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_log_methods.
@@ -4151,22 +4150,22 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'Math.exp(0) === 1 && Math.exp(-0) === 1'
       && ' && Math.exp(Infinity) === Infinity && Math.exp(-Infinity) === 0'
       && ' && isNaN(Math.exp(NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(Math.exp(1) - Math.E) < 1e-15'
       && ' && Math.abs(Math.log(Math.E) - 1) < 1e-15'
       && ' && Math.exp(710) === Infinity && Math.exp(-746) === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.log(1) === 0 && Math.log(Infinity) === Infinity'
       && ' && Math.log(0) === -Infinity && Math.log(-0) === -Infinity'
       && ' && isNaN(Math.log(-1)) && isNaN(Math.log(NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(Math.log10(1000) - 3) < 1e-14 && Math.log10(1) === 0'
       && ' && Math.abs(Math.log2(8) - 3) < 1e-14 && Math.log2(1) === 0'
       && ' && Math.log10(0) === -Infinity && Math.log2(0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_trig_methods.
@@ -4174,16 +4173,16 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'Math.sin(0) === 0 && 1 / Math.sin(-0) === -Infinity'
       && ' && Math.cos(0) === 1 && Math.cos(-0) === 1'
       && ' && Math.tan(0) === 0 && 1 / Math.tan(-0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'isNaN(Math.sin(Infinity)) && isNaN(Math.cos(-Infinity))'
       && ' && isNaN(Math.tan(NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(Math.sin(Math.PI / 2) - 1) < 1e-14'
       && ' && Math.abs(Math.cos(Math.PI) + 1) < 1e-14'
       && ' && Math.abs(Math.tan(Math.PI / 4) - 1) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_pow_method.
@@ -4191,24 +4190,24 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'Math.pow(2, 10) === 1024 && Math.pow(2, -3) === 0.125'
       && ' && Math.pow(-2, 3) === -8 && Math.pow(-2, 2) === 4'
       && ' && Math.abs(Math.pow(9, 0.5) - 3) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.pow(NaN, 0) === 1 && isNaN(Math.pow(NaN, 2))'
       && ' && isNaN(Math.pow(-2, 0.5)) && isNaN(Math.pow(1, Infinity))'
       && ' && Math.pow(2, Infinity) === Infinity'
       && ' && Math.pow(0.5, -Infinity) === Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       '1 / Math.pow(-0, 3) === -Infinity'
       && ' && 1 / Math.pow(-0, 2) === Infinity'
       && ' && Math.pow(-0, -3) === -Infinity'
       && ' && Math.pow(-Infinity, 3) === -Infinity'
       && ' && 1 / Math.pow(-Infinity, -3) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.pow(2, 1024) === Infinity && Math.pow(2, -1075) === 0'
       && ' && Math.pow(0.5, -1075) === Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_precise_methods.
@@ -4217,20 +4216,20 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.abs(Math.cbrt(-8) + 2) < 1e-14'
       && ' && Math.cbrt(Infinity) === Infinity'
       && ' && 1 / Math.cbrt(-0) === -Infinity && isNaN(Math.cbrt(NaN));' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(Math.expm1(1) - (Math.E - 1)) < 1e-15'
       && ' && Math.abs(Math.expm1(1e-10) - 1.00000000005e-10) < 1e-24'
       && ' && Math.expm1(-Infinity) === -1'
       && ' && Math.expm1(Infinity) === Infinity'
       && ' && 1 / Math.expm1(-0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.abs(Math.log1p(Math.E - 1) - 1) < 1e-14'
       && ' && Math.abs(Math.log1p(1e-10) - 9.9999999995e-11) < 1e-24'
       && ' && Math.log1p(-1) === -Infinity && isNaN(Math.log1p(-2))'
       && ' && 1 / Math.log1p(-0) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_inverse_trig.
@@ -4239,26 +4238,26 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.abs(Math.atan(1) - Math.PI / 4) < 1e-14'
       && ' && Math.atan(Infinity) === Math.PI / 2'
       && ' && Math.atan(-Infinity) === -Math.PI / 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.asin(0) === 0 && 1 / Math.asin(-0) === -Infinity'
       && ' && Math.asin(1) === Math.PI / 2 && Math.asin(-1) === -Math.PI / 2'
       && ' && isNaN(Math.asin(2)) && Math.acos(1) === 0'
       && ' && Math.acos(-1) === Math.PI && Math.acos(0) === Math.PI / 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.atan2(0, 0) === 0 && 1 / Math.atan2(-0, 0) === -Infinity'
       && ' && Math.atan2(0, -0) === Math.PI'
       && ' && Math.atan2(-0, -0) === -Math.PI'
       && ' && Math.atan2(1, 0) === Math.PI / 2'
       && ' && Math.atan2(-1, 0) === -Math.PI / 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.atan2(Infinity, Infinity) === Math.PI / 4'
       && ' && Math.atan2(Infinity, -Infinity) === 3 * Math.PI / 4'
       && ' && Math.atan2(-Infinity, -Infinity) === -3 * Math.PI / 4'
       && ' && Math.abs(Math.atan2(1, -1) - 3 * Math.PI / 4) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_hyperbolic.
@@ -4267,36 +4266,36 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.sinh(Infinity) === Infinity'
       && ' && Math.sinh(-Infinity) === -Infinity'
       && ' && Math.abs(Math.sinh(1) - (Math.E - 1 / Math.E) / 2) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.cosh(0) === 1 && Math.cosh(-0) === 1'
       && ' && Math.cosh(Infinity) === Infinity'
       && ' && Math.cosh(-Infinity) === Infinity'
       && ' && Math.abs(Math.cosh(1) - (Math.E + 1 / Math.E) / 2) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.tanh(0) === 0 && 1 / Math.tanh(-0) === -Infinity'
       && ' && Math.tanh(Infinity) === 1 && Math.tanh(-Infinity) === -1'
       && ' && Math.abs(Math.tanh(1)'
       && ' - (Math.E * Math.E - 1) / (Math.E * Math.E + 1)) < 1e-14;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.asinh(0) === 0 && 1 / Math.asinh(-0) === -Infinity'
       && ' && Math.asinh(Infinity) === Infinity'
       && ' && Math.asinh(-Infinity) === -Infinity'
       && ' && Math.abs(Math.asinh(Math.sinh(1)) - 1) < 1e-13;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.acosh(1) === 0 && Math.acosh(Infinity) === Infinity'
       && ' && isNaN(Math.acosh(0.5))'
       && ' && Math.abs(Math.acosh(Math.cosh(1)) - 1) < 1e-13;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.atanh(0) === 0 && 1 / Math.atanh(-0) === -Infinity'
       && ' && Math.atanh(1) === Infinity && Math.atanh(-1) === -Infinity'
       && ' && isNaN(Math.atanh(2))'
       && ' && Math.abs(Math.atanh(Math.tanh(0.5)) - 0.5) < 1e-13;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_integer_utilities.
@@ -4305,7 +4304,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.clz32(0x100) === 23 && Math.clz32(-1) === 0'
       && ' && Math.clz32(3.9) === 30 && Math.clz32(NaN) === 32'
       && ' && Math.clz32(Infinity) === 32;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.imul(2, 4) === 8 && Math.imul(-1, 8) === -8'
       && ' && Math.imul(0xffffffff, 5) === -5'
@@ -4313,7 +4312,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.imul(0x7fffffff, 2) === -2'
       && ' && Math.imul(0x80000000, 2) === 0'
       && ' && Math.imul(0x12345678, 0x9abcdef0) === 606937216;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_width_and_hypot.
@@ -4324,7 +4323,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && isNaN(Math.hypot(NaN, 3))'
       && ' && Math.abs(Math.hypot(3e200, 4e200) / 5e200 - 1) < 1e-15'
       && ' && Math.hypot("3", "4") === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.fround(Infinity) === Infinity && isNaN(Math.fround(NaN))'
       && ' && 1 / Math.fround(-0) === -Infinity'
@@ -4332,7 +4331,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.fround(4294967295) === 4294967296'
       && ' && Math.fround(1.0000000596046448) === 1'
       && ' && Math.fround(1.0000001788139343) === 1.000000238418579;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'Math.f16round(0.1) === 0.0999755859375'
       && ' && Math.f16round(1.00048828125) === 1'
@@ -4340,7 +4339,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Math.f16round(65504) === 65504'
       && ' && Math.f16round(65520) === Infinity'
       && ' && 1 / Math.f16round(-2.9802322387695312e-8) === -Infinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD math_random.
@@ -4352,7 +4351,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && '   if (value < 0 || value >= 1) valid = false;'
       && '   if (value !== first) changed = true;'
       && ' } valid && changed;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD uri_globals.
@@ -4362,7 +4361,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && encodeURIComponent(";/?:@&=+$,#")'
       && ' === "%3B%2F%3F%3A%40%26%3D%2B%24%2C%23"'
       && ' && encodeURI() === "undefined" && encodeURIComponent(123) === "123";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'decodeURI("%3B%2f%3F%3a%40%26%3D%2b%24%2C%23")'
       && ' === "%3B%2f%3F%3a%40%26%3D%2b%24%2C%23"'
@@ -4371,7 +4370,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && encodeURIComponent(decodeURIComponent("%E2%82%AC")) === "%E2%82%AC"'
       && ' && encodeURIComponent(decodeURIComponent("%F0%9F%98%80"))'
       && ' === "%F0%9F%98%80";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval(
       'var malformed = ["%", "%C0%AF", "%ED%A0%80", "%F4%90%80%80", "%E2%82"];'
       && ' var valid = true; for (var i = 0; i < malformed.length; i++) {'
@@ -4379,7 +4378,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && '   catch (error) { if (error.name !== "URIError") valid = false; }'
       && ' } var constructed = new URIError("bad");'
       && ' valid && constructed.name === "URIError" && constructed.message === "bad";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD function_intrinsics.
@@ -4389,39 +4388,39 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && add.apply({ base: 2 }, [3, 4]) === 9'
       && ' && add.apply({ base: 3 }, { "0": 4, "1": 5, length: 2 }) === 12'
       && ' && Function.prototype.call.call(add, { base: 4 }, 5, 6) === 15;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function add(a, b) { return this.base + a + b; }'
       && ' var bound = add.bind({ base: 10 }, 20);'
       && ' bound(30) === 60 && bound.call({ base: 99 }, 30) === 60'
       && ' && Function.prototype.constructor === Function;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sum = Function("a", "b", "return a + b;");'
       && ' var empty = Function();'
       && ' sum(7, 8) === 15 && empty() === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var globalValue = 7;'
       && ' function make() { var globalValue = 99;'
       && '   return Function("return globalValue;"); }'
       && ' make()() === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Point(x, y) { this.x = x; this.y = y; }'
       && ' var BoundPoint = Point.bind({ x: 99 }, 4);'
       && ' var point = new BoundPoint(5);'
       && ' point.x === 4 && point.y === 5 && point instanceof Point;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var valid = false; try { Function.prototype.call.call({}, null); }'
       && ' catch (error) { valid = error.name === "TypeError"; } valid;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD object_collection_methods.
@@ -4432,7 +4431,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var returned = Object.assign(target, source, null, undefined);'
       && ' returned === target && target.a === 3 && target.b === 2'
       && ' && !Object.hasOwn(target, "hidden");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
@@ -4443,13 +4442,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && entries[1][0] === "first" && entries[1][1] === 3'
       && ' && Object.hasOwn(object, "first")'
       && ' && !Object.hasOwn(object, "inherited");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = {}; Object.is(NaN, NaN) && !Object.is(0, -0)'
       && ' && Object.is(-0, -0) && Object.is(object, object)'
       && ' && !Object.is({}, {}) && Object.is() && !Object.is(1, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD zmjs_abaplint_features.
@@ -4464,7 +4463,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && "a.b".split(".").join("|") === "a|b"'
       && ' && "abc".substr(1, 2) === "bc" && made.value === 7'
       && ' && total === 3 && missing === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD array_prototype_methods.
@@ -4473,14 +4472,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       'var values = [1, 2]; var length = values.push(3, 4);'
       && ' length === 4 && values.length === 4 && values[2] === 3'
       && ' && values[3] === 4;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [7, 8]; var last = values.pop();'
       && ' last === 8 && values.length === 1'
       && ' && !Object.hasOwn(values, "1") && values.pop() === 7'
       && ' && values.pop() === undefined && values.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var object = { length: 1 }; object[0] = "first";'
@@ -4488,7 +4487,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var value = Array.prototype.pop.call(object);'
       && ' length === 2 && value === "second" && object.length === 1'
       && ' && !Object.hasOwn(object, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'Array.isArray(Array.prototype)'
@@ -4497,7 +4496,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.push.name === "push"'
       && ' && Array.prototype.pop.length === 0'
       && ' && Array.prototype.pop.name === "pop";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3]; values.length = 1;'
@@ -4506,7 +4505,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' catch (error) { rangeError = error.name === "RangeError"; }'
       && ' values.length === 1 && !Object.hasOwn(values, "1")'
       && ' && !Object.hasOwn(values, "2") && rangeError;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function joinObject() { var object = { length: 2 };'
@@ -4514,7 +4513,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' return Array.prototype.join.call(object, "|"); }'
       && ' [1, null, undefined, 4].join("-") === "1---4"'
       && ' && Array(3).join() === ",," && joinObject() === "a|b";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 1, NaN];'
@@ -4523,7 +4522,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array(1).indexOf(undefined) === -1'
       && ' && values.includes(NaN) && Array(1).includes(undefined)'
       && ' && values.includes(2, -3) && !values.includes(2, 2);' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { first: 0 }; prototype[0] = "inherited";'
@@ -4534,7 +4533,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.join.length === 1'
       && ' && Array.prototype.indexOf.length === 1'
       && ' && Array.prototype.includes.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3]; var first = values.shift();'
@@ -4542,14 +4541,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' first === 1 && length === 4 && values.length === 4'
       && ' && values[0] === -1 && values[1] === 0'
       && ' && values[2] === 2 && values[3] === 3;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = Array(3); sparse[2] = "last";'
       && ' sparse.shift() === undefined && sparse.length === 2'
       && ' && !Object.hasOwn(sparse, "0") && sparse[1] === "last"'
       && ' && [].shift() === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "inherited";'
@@ -4560,7 +4559,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && object[0] === "new" && object[1] === "inherited"'
       && ' && Array.prototype.shift.length === 0'
       && ' && Array.prototype.unshift.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = []; values.length = 4294967295; var rangeError = false;'
@@ -4568,27 +4567,27 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' catch (error) { rangeError = error.name === "RangeError"; }'
       && ' rangeError && values.length === 4294967295'
       && ' && values[4294967295] === "edge";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3, 4]; var returned = values.reverse();'
       && ' returned === values && values[0] === 4 && values[1] === 3'
       && ' && values[2] === 2 && values[3] === 1'
       && ' && Array.prototype.reverse.length === 0;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = Array(3); sparse[0] = "first"; sparse.reverse();'
       && ' !Object.hasOwn(sparse, "0") && !Object.hasOwn(sparse, "1")'
       && ' && sparse[2] === "first" && sparse.length === 3; ' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = "inherited";'
       && ' var object = Object.create(prototype); object[1] = "own"; object.length = 2;'
       && ' Array.prototype.reverse.call(object) === object'
       && ' && object[0] === "own" && object[1] === "inherited";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 1, NaN];'
@@ -4599,13 +4598,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && values.lastIndexOf(NaN) === -1'
       && ' && Array(2).lastIndexOf(undefined) === -1'
       && ' && Array.prototype.lastIndexOf.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "inherited";'
       && ' var object = Object.create(prototype); object.length = 3;'
       && ' Array.prototype.lastIndexOf.call(object, "inherited") === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = ["first", "middle", "last"];'
@@ -4615,14 +4614,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && values.at(Infinity) === undefined'
       && ' && Array.prototype.at.length === 1'
       && ' && Array.prototype.at.name === "at";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "inherited";'
       && ' var object = Object.create(prototype); object.length = "3";'
       && ' Array.prototype.at.call(object, -2) === "inherited"'
       && ' && Array.prototype.at.call(object, 0) === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [0, 1, 2, 3]; var copy = values.slice(1, -1);'
@@ -4632,13 +4631,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && values.slice(Infinity).length === 0'
       && ' && Array.prototype.slice.length === 2'
       && ' && Array.prototype.slice.name === "slice";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = [, "own", ,]; var copy = sparse.slice();'
       && ' copy.length === 3 && !Object.hasOwn(copy, "0")'
       && ' && copy[1] === "own" && !Object.hasOwn(copy, "2");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "inherited";'
@@ -4646,7 +4645,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var copy = Array.prototype.slice.call(object, 0, 2);'
       && ' copy.length === 2 && !Object.hasOwn(copy, "0")'
       && ' && Object.hasOwn(copy, "1") && copy[1] === "inherited";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var total = 0; var indexes = ""; var values = [2, 3, 4];'
@@ -4656,7 +4655,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var returned = values.forEach(visit);'
       && ' returned === undefined && total === 9 && indexes === "012"'
       && ' && Array.prototype.forEach.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var receiver = { factor: 3 }; function multiply(value) {'
@@ -4664,7 +4663,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var mapped = [1, 2].map(multiply, receiver);'
       && ' mapped.length === 2 && mapped[0] === 3 && mapped[1] === 6'
       && ' && mapped !== receiver && Array.prototype.map.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function double(value) { return value * 2; }'
@@ -4675,14 +4674,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && mapped[1] === 4 && !Object.hasOwn(mapped, "2")'
       && ' && mapped[3] === 8 && filtered.length === 1'
       && ' && filtered[0] === 4 && Array.prototype.filter.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = 5;'
       && ' var object = Object.create(prototype); object.length = 3; var total = 0;'
       && ' function add(value) { total = total + value; }'
       && ' Array.prototype.forEach.call(object, add); total === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var someCalls = 0; var everyCalls = 0; var receiver = { limit: 2 };'
@@ -4692,7 +4691,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && someCalls === 2 && everyCalls === 2'
       && ' && Array.prototype.some.length === 1'
       && ' && Array.prototype.every.length === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var calls = 0; function missing(value) {'
@@ -4702,7 +4701,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var findCalls = calls; calls = 0; var index = sparse.findIndex(missing);'
       && ' !someResult && someCalls === 0 && found === undefined'
       && ' && findCalls === 1 && index === 0 && calls === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function isThree(value) { return value === 3; }'
@@ -4712,7 +4711,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.findIndex.length === 1'
       && ' && Array.prototype.find.name === "find"'
       && ' && Array.prototype.findIndex.name === "findIndex";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = 3;'
@@ -4720,7 +4719,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' function isThree(value) { return value === 3; }'
       && ' Array.prototype.some.call(object, isThree)'
       && ' && Array.prototype.findIndex.call(object, isThree) === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function add(accumulator, value) { return accumulator + value; }'
@@ -4729,7 +4728,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && [].reduce(add, 7) === 7'
       && ' && Array.prototype.reduce.length === 1'
       && ' && Array.prototype.reduce.name === "reduce";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function append(accumulator, value, index, array) {'
@@ -4739,14 +4738,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && ["a", "b", "c"].reduceRight(append, "") === "c2b1a0"'
       && ' && Array.prototype.reduceRight.length === 1'
       && ' && Array.prototype.reduceRight.name === "reduceRight";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var calls = 0; function add(accumulator, value) {'
       && ' calls++; return accumulator + value; }'
       && ' var sparse = [, , 3, , 5]; var value = sparse.reduce(add);'
       && ' value === 8 && calls === 1; ' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = 4;'
@@ -4754,13 +4753,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' function add(accumulator, value) { return accumulator + value; }'
       && ' Array.prototype.reduce.call(object, add, 1) === 11'
       && ' && Array.prototype.reduceRight.call(object, add) === 10;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = false; function add(a, b) { return a + b; }'
       && ' try { Array(3).reduce(add); }'
       && ' catch (error) { caught = error.name === "TypeError"; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3, 4]; var returned = values.fill(9, 1, -1);'
@@ -4768,7 +4767,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && values[2] === 9 && values[3] === 4'
       && ' && Array.prototype.fill.length === 1'
       && ' && Array.prototype.fill.name === "fill";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = Array(3); sparse.fill("x", 1, undefined);'
@@ -4778,7 +4777,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.hasOwn(sparse, "1") && Object.hasOwn(sparse, "2")'
       && ' && sparse[1] === "x" && sparse[2] === "x"'
       && ' && returned === object && object[1] === 7 && object[2] === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3, 4, 5]; var returned = values.copyWithin(1, 3);'
@@ -4787,7 +4786,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && overlap.join(",") === "1,1,2,3,4"'
       && ' && Array.prototype.copyWithin.length === 2'
       && ' && Array.prototype.copyWithin.name === "copyWithin";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = [1, , 3, 4]; sparse.copyWithin(2, 0, 2);'
@@ -4797,14 +4796,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' sparse[2] === 1 && !Object.hasOwn(sparse, "3")'
       && ' && returned === object && Object.hasOwn(object, "1")'
       && ' && object[1] === "inherited";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var source = [1]; var result = source.concat([2, 3], 4);'
       && ' result.join(",") === "1,2,3,4" && source.join(",") === "1"'
       && ' && result !== source && Array.prototype.concat.length === 1'
       && ' && Array.prototype.concat.name === "concat";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = []; prototype[0] = "inherited";'
@@ -4813,7 +4812,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' result.length === 5 && Object.hasOwn(result, "0")'
       && ' && result[0] === "inherited" && result[1] === 2 && result[2] === 3'
       && ' && !Object.hasOwn(result, "3") && result[4] === 5;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var receiver = { 0: "a", length: 1 };'
@@ -4822,7 +4821,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var nestedResult = [].concat(nested);'
       && ' generic.length === 2 && generic[0] === receiver && generic[1] === "b"'
       && ' && nestedResult.length === 1 && nestedResult[0] === nested;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = "inherited";'
@@ -4831,7 +4830,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var result = ["start"].concat(spread);'
       && ' result.length === 3 && result[0] === "start"'
       && ' && result[1] === "inherited" && result[2] === "own";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3, 4]; var deleted = values.splice(1, 2, 9);'
@@ -4840,7 +4839,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && grown.join(",") === "1,2,3,4"'
       && ' && Array.prototype.splice.length === 2'
       && ' && Array.prototype.splice.name === "splice";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var untouched = [1, 2]; var none = untouched.splice();'
@@ -4849,14 +4848,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' none.length === 0 && untouched.join(",") === "1,2"'
       && ' && explicitNone.length === 0 && explicit.join(",") === "1,2"'
       && ' && removed.join(",") === "2,3" && tail.join(",") === "1";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = [, 1, , 3]; var deleted = sparse.splice(1, 2);'
       && ' sparse.length === 2 && !Object.hasOwn(sparse, "0")'
       && ' && sparse[1] === 3 && deleted.length === 2'
       && ' && deleted[0] === 1 && !Object.hasOwn(deleted, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "inherited";'
@@ -4867,12 +4866,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && object[1] === "inserted" && object[2] === "tail"'
       && ' && !Object.hasOwn(object, "3") && deleted.length === 2'
       && ' && deleted[0] === "inherited" && !Object.hasOwn(deleted, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [0, 1, 2]; var deleted = values.splice(-2, -1, 9);'
       && ' deleted.length === 0 && values.join(",") === "0,9,1,2";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [10, 2, 1]; var returned = values.sort();'
@@ -4882,7 +4881,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && numbers.join(",") === "1,2,10"'
       && ' && Array.prototype.sort.length === 1'
       && ' && Array.prototype.sort.name === "sort";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function byKey(left, right) { return left.key - right.key; }'
@@ -4890,14 +4889,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' { key: 1, id: "c" }]; values.sort(byKey);'
       && ' values[0].id === "b" && values[1].id === "a"'
       && ' && values[2].id === "c";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [undefined, 3, , 1]; values.sort();'
       && ' values.length === 4 && values[0] === 1 && values[1] === 3'
       && ' && Object.hasOwn(values, "2") && values[2] === undefined'
       && ' && !Object.hasOwn(values, "3");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "b";'
@@ -4907,14 +4906,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' returned === object && object.length === 4'
       && ' && object[0] === "a" && object[1] === "b" && object[2] === "c"'
       && ' && Object.hasOwn(object, "1") && !Object.hasOwn(object, "3");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var stable = [3, 2, 1]; function equal() { return NaN; } stable.sort(equal);'
       && ' var caught = false; try { stable.sort(1); }'
       && ' catch (error) { caught = error.name === "TypeError"; }'
       && ' stable.join(",") === "3,2,1" && caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var order = ""; var receiver = { target: 2 };'
@@ -4927,7 +4926,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.findLastIndex.length === 1'
       && ' && Array.prototype.findLast.name === "findLast"'
       && ' && Array.prototype.findLastIndex.name === "findLastIndex";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var calls = 0; function missing(value) { calls++; return value === undefined; }'
@@ -4935,7 +4934,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var findCalls = calls; calls = 0;'
       && ' var index = sparse.findLastIndex(missing);'
       && ' found === undefined && findCalls === 1 && index === 2 && calls === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[2] = 7;'
@@ -4944,7 +4943,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' return value === 7 && index === 2 && array === object; }'
       && ' Array.prototype.findLast.call(object, isSeven) === 7'
       && ' && Array.prototype.findLastIndex.call(object, isSeven) === 2;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var nested = [1, [2, [3]], 4]; var once = nested.flat();'
@@ -4955,20 +4954,20 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && defaulted.length === once.length'
       && ' && Array.prototype.flat.length === 0'
       && ' && Array.prototype.flat.name === "flat";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var inner = [1]; var sparse = [, inner, 2]; var copied = sparse.flat(0);'
       && ' var deep = [1, [2, [3]]].flat(Infinity);'
       && ' copied.length === 2 && copied[0] === inner && copied[1] === 2'
       && ' && deep.join(",") === "1,2,3";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = [1, 2];'
       && ' var object = Object.create(prototype); object[1] = 3; object.length = 2;'
       && ' Array.prototype.flat.call(object).join(",") === "1,2,3";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = [, 2]; var receiver = { factor: 3 }; var calls = 0;'
@@ -4980,12 +4979,12 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && nested.length === 1 && Array.isArray(nested[0])'
       && ' && nested[0][0] === 1 && Array.prototype.flatMap.length === 1'
       && ' && Array.prototype.flatMap.name === "flatMap";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caught = false; try { [1].flatMap(1); }'
       && ' catch (error) { caught = error.name === "TypeError"; } caught;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = Array.of(1, undefined, 3); var empty = Array.of();'
@@ -4993,14 +4992,14 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.hasOwn(values, "1") && values[1] === undefined'
       && ' && values[2] === 3 && Array.isArray(empty) && empty.length === 0'
       && ' && Array.of.length === 0 && Array.of.name === "of";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Collection(length) { this.constructedLength = length; }'
       && ' var result = Array.of.call(Collection, "a", "b");'
       && ' result instanceof Collection && result.constructedLength === 2'
       && ' && result.length === 2 && result[0] === "a" && result[1] === "b";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'function Collection(length) { this.constructedLength = length; }'
@@ -5011,7 +5010,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && boundResult.length === 2 && boundResult[0] === 4'
       && ' && Array.isArray(fallback) && fallback.length === 2'
       && ' && fallback[0] === 6 && fallback[1] === 7;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3]; values.toString() === "1,2,3"'
@@ -5020,7 +5019,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.toString.call({ length: 0, join: function() {'
       && ' if (this.length === 0) return "generic"; return "bad";'
       && ' } }) === "generic";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2]; values.join = function() {'
@@ -5028,21 +5027,21 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' var fallback = [1, 2]; fallback.join = 1;'
       && ' values.toString() === "custom"'
       && ' && fallback.toString() === "[object Array]";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var calls = 0; var values = [];'
       && ' Object.defineProperty(values, "join", { get: function() {'
       && ' calls++; return function() { return "dynamic"; }; } });'
       && ' values.toString() === "dynamic" && calls === 1;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3]; var reversed = values.toReversed();'
       && ' reversed.join(",") === "3,2,1" && values.join(",") === "1,2,3"'
       && ' && reversed !== values && Array.prototype.toReversed.length === 0'
       && ' && Array.prototype.toReversed.name === "toReversed";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var sparse = Array(3); sparse[1] = 1; var reversed = sparse.toReversed();'
@@ -5050,7 +5049,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Object.hasOwn(reversed, "1") && Object.hasOwn(reversed, "2")'
       && ' && reversed[0] === undefined && reversed[1] === 1'
       && ' && reversed[2] === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = "a";'
@@ -5059,7 +5058,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' reversed.length === 3 && reversed[0] === "c"'
       && ' && reversed[1] === undefined && reversed[2] === "a"'
       && ' && Object.hasOwn(reversed, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3]; var changed = values.with(-1, 9);'
@@ -5068,23 +5067,23 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && fractional.join(",") === "1,8,3" && changed !== values'
       && ' && Array.prototype.with.length === 2'
       && ' && Array.prototype.with.name === "with";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '[0, 4, 16].with("1", 3).join(",") === "0,3,16";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '[0, 4, 16].with("-1", 5).join(",") === "0,4,5";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '[0, 4, 16].with(NaN, 2).join(",") === "2,4,16";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       '[0, 4, 16].with("dog", "cat").join(",") === "cat,4,16";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = "inherited";'
@@ -5093,7 +5092,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' changed.length === 2 && changed[0] === "inherited"'
       && ' && changed[1] === "new" && Object.hasOwn(changed, "0")'
       && ' && Object.hasOwn(changed, "1");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var caughtHigh = false; var caughtLow = false; var caughtInfinity = false;'
@@ -5104,7 +5103,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' try { [1, 2, 3].with(Infinity, 0); } catch (error) {'
       && ' caughtInfinity = error.name === "RangeError"; }'
       && ' caughtHigh && caughtLow && caughtInfinity;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [3, 1, 2]; var sorted = values.toSorted();'
@@ -5113,7 +5112,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && values.join(",") === "3,1,2" && sorted !== values'
       && ' && Array.prototype.toSorted.length === 1'
       && ' && Array.prototype.toSorted.name === "toSorted";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = { inherited: 1 }; var object = Object.create(prototype);'
@@ -5122,7 +5121,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && object.hasOwnProperty(key)'
       && ' && Object.prototype.hasOwnProperty.length === 1'
       && ' && Object.prototype.hasOwnProperty.name === "hasOwnProperty";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[1] = "a";'
@@ -5131,7 +5130,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' sorted.length === 4 && sorted[0] === "a" && sorted[1] === "b"'
       && ' && sorted[2] === undefined && sorted[3] === undefined'
       && ' && Object.hasOwn(sorted, "2") && Object.hasOwn(sorted, "3");' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var values = [1, 2, 3, 4]; var changed = values.toSpliced(1, 2, "a", "b");'
@@ -5140,7 +5139,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && Array.prototype.toSpliced.name === "toSpliced"'
       && ' && values.toSpliced().join(",") === "1,2,3,4"'
       && ' && values.toSpliced(2).join(",") === "1,2";' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
       'var prototype = {}; prototype[0] = "inherited";'
@@ -5149,6 +5148,6 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' changed.length === 3 && changed[0] === "inherited"'
       && ' && changed[1] === "new" && changed[2] === "tail"'
       && ' && Object.hasOwn(changed, "0") && object[1] === undefined;' ).
-    cl_abap_unit_assert=>assert_true( ls_result-bool_value ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 ENDCLASS.

@@ -10,13 +10,13 @@ INTERFACE zif_qjs_property_container PUBLIC.
     IMPORTING name TYPE string
     RETURNING VALUE(result) TYPE abap_bool.
   METHODS get_symbol_property
-    IMPORTING identity TYPE int8
+    IMPORTING identity TYPE i
     RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS set_symbol_property
-    IMPORTING identity TYPE int8 value TYPE zcl_qjs_value=>ty_value
+    IMPORTING identity TYPE i value TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS delete_symbol_property
-    IMPORTING identity TYPE int8
+    IMPORTING identity TYPE i
     RETURNING VALUE(result) TYPE abap_bool.
 ENDINTERFACE.

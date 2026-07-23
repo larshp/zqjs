@@ -9,10 +9,10 @@ CLASS zcl_qjs_cell DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set IMPORTING value TYPE zcl_qjs_value=>ty_value.
     METHODS initialize IMPORTING value TYPE zcl_qjs_value=>ty_value.
     METHODS reset_uninitialized.
-  PRIVATE SECTION.
     DATA ms_value TYPE zcl_qjs_value=>ty_value.
     DATA mv_initialized TYPE abap_bool.
     DATA mv_mutable TYPE abap_bool.
+  PRIVATE SECTION.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     METHODS error_value
       IMPORTING name TYPE string message TYPE string

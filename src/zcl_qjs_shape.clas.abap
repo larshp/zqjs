@@ -38,7 +38,7 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
     END OF ty_transition.
     TYPES ty_transitions TYPE HASHED TABLE OF ty_transition WITH UNIQUE KEY key.
     DATA mt_descriptors TYPE ty_descriptors.
-    DATA mt_transitions TYPE ty_transitions.
+    DATA mr_transitions TYPE REF TO ty_transitions.
 ENDCLASS.
 
 CLASS zcl_qjs_shape IMPLEMENTATION.
@@ -89,10 +89,12 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
     ELSE.
       lv_key = lv_key && `0`.
     ENDIF.
-    READ TABLE mt_transitions WITH TABLE KEY key = lv_key INTO ls_transition.
-    IF sy-subrc = 0.
-      result = ls_transition-shape.
-      RETURN.
+    IF mr_transitions IS BOUND.
+      READ TABLE mr_transitions->* WITH TABLE KEY key = lv_key INTO ls_transition.
+      IF sy-subrc = 0.
+        result = ls_transition-shape.
+        RETURN.
+      ENDIF.
     ENDIF.
     lt_descriptors = mt_descriptors.
     DELETE TABLE lt_descriptors WITH TABLE KEY name = name.
@@ -116,7 +118,8 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
     CREATE OBJECT result EXPORTING descriptors = lt_descriptors.
     ls_transition-key = lv_key.
     ls_transition-shape = result.
-    INSERT ls_transition INTO TABLE mt_transitions.
+    IF mr_transitions IS NOT BOUND. CREATE DATA mr_transitions. ENDIF.
+    INSERT ls_transition INTO TABLE mr_transitions->*.
   ENDMETHOD.
 
   METHOD without.

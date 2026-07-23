@@ -37,7 +37,7 @@ CLASS zcl_qjs_for_in_iterator IMPLEMENTATION.
     DATA lv_name TYPE string.
 
     IF source-tag = zcl_qjs_value=>tag_string.
-      DO source-string_ref->length( ) TIMES.
+      DO strlen( source-string_ref->as_string( ) ) TIMES.
         lv_string_index = sy-index - 1.
         lv_name = lv_string_index.
         CONDENSE lv_name NO-GAPS.

@@ -366,7 +366,7 @@ CLASS zcl_qjs_json IMPLEMENTATION.
     ENDIF.
     IF lv_negative = abap_true
         AND result-tag = zcl_qjs_value=>tag_number
-        AND result-number_kind = zcl_qjs_value=>number_finite
+        AND result-int_value = zcl_qjs_value=>number_finite
         AND result-float_value = 0.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_neg_zero ).
     ELSEIF lv_negative = abap_true.
@@ -440,7 +440,7 @@ CLASS zcl_qjs_json IMPLEMENTATION.
       WHEN zcl_qjs_value=>tag_null.
         result-text = 'null'.
       WHEN zcl_qjs_value=>tag_bool.
-        IF value-bool_value = abap_true.
+        IF value-int_value <> 0.
           result-text = 'true'.
         ELSE.
           result-text = 'false'.
@@ -448,9 +448,9 @@ CLASS zcl_qjs_json IMPLEMENTATION.
       WHEN zcl_qjs_value=>tag_int.
         result-text = zcl_qjs_value=>to_string( value ).
       WHEN zcl_qjs_value=>tag_number.
-        IF value-number_kind = zcl_qjs_value=>number_nan
-            OR value-number_kind = zcl_qjs_value=>number_pos_inf
-            OR value-number_kind = zcl_qjs_value=>number_neg_inf.
+        IF value-int_value = zcl_qjs_value=>number_nan
+            OR value-int_value = zcl_qjs_value=>number_pos_inf
+            OR value-int_value = zcl_qjs_value=>number_neg_inf.
           result-text = 'null'.
         ELSE.
           result-text = zcl_qjs_value=>to_string( value ).

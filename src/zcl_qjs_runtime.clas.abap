@@ -64,6 +64,10 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS create_array
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
+    METHODS create_iterator_result
+      IMPORTING done TYPE abap_bool value TYPE zcl_qjs_value=>ty_value
+      RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
+      RAISING zcx_qjs_error.
     METHODS create_generator
       IMPORTING closure TYPE REF TO zcl_qjs_closure
         this_value TYPE zcl_qjs_value=>ty_value
@@ -268,14 +272,14 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_symbol,
-      identity TYPE int8,
+      identity TYPE i,
       description TYPE string,
     END OF ty_symbol.
     TYPES ty_symbols TYPE HASHED TABLE OF ty_symbol WITH UNIQUE KEY identity.
     TYPES:
       BEGIN OF ty_symbol_registry,
         key TYPE string,
-        identity TYPE int8,
+        identity TYPE i,
       END OF ty_symbol_registry.
     TYPES ty_symbol_registry_tab TYPE SORTED TABLE OF ty_symbol_registry
       WITH UNIQUE KEY key.
@@ -293,7 +297,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mt_symbols TYPE ty_symbols.
     DATA mt_symbol_registry TYPE ty_symbol_registry_tab.
     DATA mt_well_known_symbols TYPE ty_well_known_symbols.
-    DATA mv_next_symbol TYPE int8 VALUE 1.
+    DATA mv_next_symbol TYPE i VALUE 1.
     DATA mv_disposed TYPE abap_bool.
     DATA mv_max_objects TYPE i.
     DATA mv_object_count TYPE i.
@@ -433,7 +437,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Value is not a Symbol'.
     ENDIF.
-    READ TABLE mt_symbols WITH TABLE KEY identity = symbol-symbol_id INTO ls_symbol.
+    READ TABLE mt_symbols WITH TABLE KEY identity = symbol-int_value INTO ls_symbol.
     IF sy-subrc <> 0.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Symbol belongs to another runtime'.
@@ -451,7 +455,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     ENDIF.
     result = new_symbol( description = key ).
     ls_registry-key = key.
-    ls_registry-identity = result-symbol_id.
+    ls_registry-identity = result-int_value.
     INSERT ls_registry INTO TABLE mt_symbol_registry.
   ENDMETHOD.
 
@@ -459,7 +463,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     assert_active( ).
     DATA(lv_description) = symbol_description( symbol ).
     LOOP AT mt_symbol_registry INTO DATA(ls_registry)
-        WHERE identity = symbol-symbol_id.
+        WHERE identity = symbol-int_value.
       result-found = abap_true.
       result-key = ls_registry-key.
       RETURN.
@@ -477,7 +481,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     ENDIF.
     result = new_symbol( description = 'Symbol.' && name ).
     ls_symbol-key = name.
-    ls_symbol-identity = result-symbol_id.
+    ls_symbol-identity = result-int_value.
     INSERT ls_symbol INTO TABLE mt_well_known_symbols.
   ENDMETHOD.
 
@@ -507,6 +511,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       EXPORTING is_array = abap_true prototype = mo_array_prototype
         shape = mo_empty_shape runtime = me.
     mv_object_count = mv_object_count + 1.
+  ENDMETHOD.
+
+  METHOD create_iterator_result.
+    DATA(lo_result) = create_object( ).
+    lo_result->define_property(
+      name = 'done' value = zcl_qjs_value=>new_boolean( done ) ).
+    lo_result->define_property( name = 'value' value = value ).
+    result = zcl_qjs_value=>new_object( lo_result ).
   ENDMETHOD.
 
   METHOD create_generator.
@@ -706,21 +718,22 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'TypeError: value is not callable'.
     ENDIF.
-    TRY.
+    IF callable-object_ref IS INSTANCE OF zcl_qjs_closure.
         lo_closure ?= callable-object_ref.
-      CATCH cx_sy_move_cast_error.
-    ENDTRY.
-    IF lo_closure IS BOUND.
       result = lo_closure->invoke(
         this_value = this_value arguments = arguments ).
       RETURN.
     ENDIF.
-    TRY.
+    IF callable-object_ref IS INSTANCE OF zcl_qjs_native_function.
+      lo_callable ?= callable-object_ref.
+    ELSE.
+      TRY.
         lo_callable ?= callable-object_ref.
-      CATCH cx_sy_move_cast_error.
-        RAISE EXCEPTION TYPE zcx_qjs_error
-          EXPORTING reason = 'TypeError: object is not callable'.
-    ENDTRY.
+        CATCH cx_sy_move_cast_error.
+          RAISE EXCEPTION TYPE zcx_qjs_error
+            EXPORTING reason = 'TypeError: object is not callable'.
+      ENDTRY.
+    ENDIF.
     result = lo_callable->call(
       this_value = this_value arguments = arguments ).
   ENDMETHOD.
@@ -733,26 +746,22 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF value-tag = zcl_qjs_value=>tag_string.
       IF mo_string_prototype IS BOUND.
         ls_method = mo_string_prototype->get_symbol(
-          ls_iterator_symbol-symbol_id ).
+          ls_iterator_symbol-int_value ).
       ENDIF.
     ELSEIF value-tag = zcl_qjs_value=>tag_object.
-      TRY.
+      IF value-object_ref IS INSTANCE OF zcl_qjs_object.
           lo_object ?= value-object_ref.
-        CATCH cx_sy_move_cast_error.
-      ENDTRY.
+      ENDIF.
       IF lo_object IS BOUND.
-        ls_method = lo_object->get_symbol( ls_iterator_symbol-symbol_id ).
+        ls_method = lo_object->get_symbol( ls_iterator_symbol-int_value ).
       ELSE.
-        lo_properties = value-property_ref.
-        IF lo_properties IS NOT BOUND.
-          TRY.
-              lo_properties ?= value-object_ref.
-            CATCH cx_sy_move_cast_error.
-          ENDTRY.
-        ENDIF.
+        TRY.
+            lo_properties ?= value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
         IF lo_properties IS BOUND.
           ls_method = lo_properties->get_symbol_property(
-            ls_iterator_symbol-symbol_id ).
+            ls_iterator_symbol-int_value ).
         ENDIF.
       ENDIF.
     ENDIF.
@@ -778,18 +787,15 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         CATCH cx_sy_move_cast_error.
       ENDTRY.
       IF lo_object IS BOUND.
-        ls_method = lo_object->get_symbol( ls_async_symbol-symbol_id ).
+        ls_method = lo_object->get_symbol( ls_async_symbol-int_value ).
       ELSE.
-        lo_properties = value-property_ref.
-        IF lo_properties IS NOT BOUND.
-          TRY.
-              lo_properties ?= value-object_ref.
-            CATCH cx_sy_move_cast_error.
-          ENDTRY.
-        ENDIF.
+        TRY.
+            lo_properties ?= value-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
         IF lo_properties IS BOUND.
           ls_method = lo_properties->get_symbol_property(
-            ls_async_symbol-symbol_id ).
+            ls_async_symbol-int_value ).
         ENDIF.
       ENDIF.
     ENDIF.
@@ -856,13 +862,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF lo_object IS BOUND.
       result = lo_object->get( name ).
     ELSE.
-      lo_properties = iterator-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= iterator-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= iterator-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_properties IS BOUND.
         result = lo_properties->get_property( name ).
       ENDIF.
@@ -871,6 +874,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
 
   METHOD iterator_result.
     DATA lo_object TYPE REF TO zcl_qjs_object.
+    DATA lo_iterator_result TYPE REF TO zcl_qjs_iterator_result.
     DATA lo_properties TYPE REF TO zif_qjs_property_container.
     IF value-tag <> zcl_qjs_value=>tag_object.
       RAISE EXCEPTION TYPE zcx_qjs_error
@@ -884,14 +888,15 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF lo_object IS BOUND.
       ls_done = lo_object->get( 'done' ).
       result-value = lo_object->get( 'value' ).
+    ELSEIF value-object_ref IS INSTANCE OF zcl_qjs_iterator_result.
+      lo_iterator_result ?= value-object_ref.
+      ls_done = lo_iterator_result->zif_qjs_property_container~get_property( 'done' ).
+      result-value = lo_iterator_result->zif_qjs_property_container~get_property( 'value' ).
     ELSE.
-      lo_properties = value-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= value-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_properties IS NOT BOUND.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: iterator result is unsupported'.
@@ -946,13 +951,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF lo_object IS BOUND.
       ls_method = lo_object->get( lv_method_name ).
     ELSE.
-      lo_properties = iterator-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= iterator-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= iterator-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_properties IS BOUND.
         ls_method = lo_properties->get_property( lv_method_name ).
       ENDIF.
@@ -984,13 +986,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF lo_object IS BOUND.
       ls_return_method = lo_object->get( 'return' ).
     ELSE.
-      lo_properties = iterator-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= iterator-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= iterator-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_properties IS BOUND.
         ls_return_method = lo_properties->get_property( 'return' ).
       ENDIF.
@@ -1022,13 +1021,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     IF lo_object IS BOUND.
       ls_return_method = lo_object->get( 'return' ).
     ELSE.
-      lo_properties = iterator-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= iterator-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= iterator-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
       IF lo_properties IS BOUND.
         ls_return_method = lo_properties->get_property( 'return' ).
       ENDIF.
@@ -1053,24 +1049,16 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     DATA lo_closure TYPE REF TO zcl_qjs_closure.
     DATA lo_object TYPE REF TO zcl_qjs_object.
     DATA lo_properties TYPE REF TO zif_qjs_property_container.
-    TRY.
+    IF value-object_ref IS INSTANCE OF zcl_qjs_closure.
         lo_closure ?= value-object_ref.
-      CATCH cx_sy_move_cast_error.
-    ENDTRY.
-    IF lo_closure IS NOT BOUND.
-      TRY.
+    ELSEIF value-object_ref IS INSTANCE OF zcl_qjs_object.
           lo_object ?= value-object_ref.
-        CATCH cx_sy_move_cast_error.
-      ENDTRY.
     ENDIF.
     IF lo_closure IS NOT BOUND AND lo_object IS NOT BOUND.
-      lo_properties = value-property_ref.
-      IF lo_properties IS NOT BOUND.
-        TRY.
-            lo_properties ?= value-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-      ENDIF.
+      TRY.
+          lo_properties ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
     ENDIF.
     DATA lv_first_name TYPE string.
     DATA lv_second_name TYPE string.
@@ -1101,14 +1089,14 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       DATA lo_callable TYPE REF TO zif_qjs_callable.
       DATA lo_method_closure TYPE REF TO zcl_qjs_closure.
       IF ls_method-tag = zcl_qjs_value=>tag_object.
-        TRY.
+        IF ls_method-object_ref IS INSTANCE OF zcl_qjs_closure.
             lo_method_closure ?= ls_method-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
-        TRY.
+        ELSE.
+          TRY.
             lo_callable ?= ls_method-object_ref.
-          CATCH cx_sy_move_cast_error.
-        ENDTRY.
+            CATCH cx_sy_move_cast_error.
+          ENDTRY.
+        ENDIF.
       ENDIF.
       IF lo_method_closure IS BOUND OR lo_callable IS BOUND.
         result = invoke_callable( callable = ls_method this_value = value ).
@@ -1151,13 +1139,10 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       IF lo_new_target_closure IS BOUND.
         ls_prototype_value = lo_new_target_closure->get_property( 'prototype' ).
       ELSE.
-        lo_new_target_properties = new_target-property_ref.
-        IF lo_new_target_properties IS NOT BOUND.
-          TRY.
-              lo_new_target_properties ?= new_target-object_ref.
-            CATCH cx_sy_move_cast_error.
-          ENDTRY.
-        ENDIF.
+        TRY.
+            lo_new_target_properties ?= new_target-object_ref.
+          CATCH cx_sy_move_cast_error.
+        ENDTRY.
         IF lo_new_target_properties IS BOUND.
           ls_prototype_value = lo_new_target_properties->get_property( 'prototype' ).
         ENDIF.

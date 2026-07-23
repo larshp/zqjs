@@ -134,6 +134,7 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_regexp_allowed TYPE abap_bool VALUE abap_true.
     DATA mr_tokens TYPE REF TO ty_tokens.
     DATA mo_cache TYPE REF TO zcl_qjs_lexer.
+    DATA mv_prepared TYPE abap_bool.
 
     METHODS skip_whitespace RAISING zcx_qjs_error.
     METHODS decode_hex_escape
@@ -453,13 +454,13 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
   METHOD scan_next.
     DATA lv_char TYPE c LENGTH 1.
     DATA lv_string_char TYPE string.
-    DATA lv_value TYPE int8.
     DATA lv_quote TYPE c LENGTH 1.
     DATA lv_next_offset TYPE i.
     DATA lv_start TYPE i.
     DATA lv_has_dot TYPE abap_bool.
     DATA lv_has_exponent TYPE abap_bool.
     DATA lv_is_radix TYPE abap_bool.
+    DATA lv_value TYPE int8.
     DATA lv_template_index TYPE i.
     DATA lv_chunk_length TYPE i.
     FIELD-SYMBOLS <template_depth> TYPE i.
@@ -898,9 +899,10 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
       RETURN.
     ENDIF.
     WHILE lines( mr_tokens->* ) < index.
-      READ TABLE mr_tokens->* INDEX lines( mr_tokens->* ) INTO DATA(ls_last).
-      IF sy-subrc = 0 AND ls_last-kind = token_eof.
-        result = ls_last.
+      READ TABLE mr_tokens->* INDEX lines( mr_tokens->* )
+        ASSIGNING FIELD-SYMBOL(<ls_last>).
+      IF sy-subrc = 0 AND <ls_last>-kind = token_eof.
+        result = <ls_last>.
         RETURN.
       ENDIF.
       DATA(ls_token) = scan_next( ).
@@ -920,17 +922,17 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
         EXPORTING reason = 'Lexer offset is out of bounds'.
     ENDIF.
     lv_high = lines( mr_tokens->* ).
-    READ TABLE mr_tokens->* INDEX lv_high INTO DATA(ls_eof).
-    IF offset > ls_eof-offset.
+    READ TABLE mr_tokens->* INDEX lv_high ASSIGNING FIELD-SYMBOL(<ls_eof>).
+    IF offset > <ls_eof>-offset.
       RAISE EXCEPTION TYPE zcx_qjs_error
         EXPORTING reason = 'Lexer offset is out of bounds'.
     ENDIF.
     result = lv_high.
     WHILE lv_low <= lv_high.
       lv_middle = ( lv_low + lv_high ) DIV 2.
-      READ TABLE mr_tokens->* INDEX lv_middle INTO DATA(ls_token).
-      IF ls_token-end_offset > offset OR ls_token-offset >= offset
-          OR ls_token-kind = token_eof.
+      READ TABLE mr_tokens->* INDEX lv_middle ASSIGNING FIELD-SYMBOL(<ls_token>).
+      IF <ls_token>-end_offset > offset OR <ls_token>-offset >= offset
+          OR <ls_token>-kind = token_eof.
         result = lv_middle.
         lv_high = lv_middle - 1.
       ELSE.
@@ -953,9 +955,13 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
       mo_cache->prepare( ).
       RETURN.
     ENDIF.
+    IF mv_prepared = abap_true.
+      RETURN.
+    ENDIF.
     WHILE abap_true = abap_true.
       DATA(ls_token) = cached_token( lines( mr_tokens->* ) + 1 ).
       IF ls_token-kind = token_eof.
+        mv_prepared = abap_true.
         RETURN.
       ENDIF.
     ENDWHILE.

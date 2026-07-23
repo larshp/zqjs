@@ -12,8 +12,8 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
 
     METHODS to_function
-      RETURNING
-        VALUE(result) TYPE REF TO zcl_qjs_function.
+      RETURNING VALUE(result) TYPE REF TO zcl_qjs_function
+      RAISING zcx_qjs_error.
 
     METHODS emit_constant
       IMPORTING value TYPE zcl_qjs_value=>ty_value
@@ -52,6 +52,9 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE i.
     METHODS allocate_capture
+      IMPORTING source_kind TYPE i source_index TYPE i
+      RETURNING VALUE(result) TYPE i.
+    METHODS append_capture
       IMPORTING source_kind TYPE i source_index TYPE i
       RETURNING VALUE(result) TYPE i.
 
@@ -231,5 +234,11 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
     ls_capture_index-source_index = source_index.
     ls_capture_index-index = result.
     INSERT ls_capture_index INTO TABLE mt_capture_indices.
+  ENDMETHOD.
+
+  METHOD append_capture.
+    result = lines( mt_captures ).
+    APPEND VALUE zcl_qjs_function=>ty_capture(
+      source_kind = source_kind source_index = source_index ) TO mt_captures.
   ENDMETHOD.
 ENDCLASS.

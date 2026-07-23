@@ -150,7 +150,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'name' value = zcl_qjs_value=>new_string( 'Function' ) ).
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     lo_function_intrinsic->set_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_function_prototype ) ).
     set_global( name = 'Function' value = ls_native_value ).
@@ -192,7 +191,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_number_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'Number' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_string
       runtime                            = mo_runtime.
@@ -203,7 +201,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       name = 'name' value = zcl_qjs_value=>new_string( 'String' ) ).
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     lo_string_intrinsic->set_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_string_prototype ) ).
     set_global( name = 'String' value = ls_native_value ).
@@ -344,7 +341,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       id = zcl_qjs_native_function=>id_reflect_set_prototype length = 2 ).
     DATA(ls_reflect_tag) = mo_runtime->well_known_symbol( 'toStringTag' ).
     lo_reflect->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id
+      identity = ls_reflect_tag-int_value
       value = zcl_qjs_value=>new_string( 'Reflect' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     set_global( name = 'Reflect' value = zcl_qjs_value=>new_object( lo_reflect ) ).
@@ -382,11 +379,11 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     DATA(ls_to_string_tag) = mo_runtime->well_known_symbol( 'toStringTag' ).
     lo_generator_function_proto->define_symbol_property(
-      identity = ls_to_string_tag-symbol_id
+      identity = ls_to_string_tag-int_value
       value = zcl_qjs_value=>new_string( 'GeneratorFunction' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_generator_prototype->define_symbol_property(
-      identity = ls_to_string_tag-symbol_id
+      identity = ls_to_string_tag-int_value
       value = zcl_qjs_value=>new_string( 'Generator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_async_gen_function_proto->define_property(
@@ -398,11 +395,11 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       value = zcl_qjs_value=>new_object( lo_async_gen_function_proto )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_async_gen_function_proto->define_symbol_property(
-      identity = ls_to_string_tag-symbol_id
+      identity = ls_to_string_tag-int_value
       value = zcl_qjs_value=>new_string( 'AsyncGeneratorFunction' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_async_generator_prototype->define_symbol_property(
-      identity = ls_to_string_tag-symbol_id
+      identity = ls_to_string_tag-int_value
       value = zcl_qjs_value=>new_string( 'AsyncGenerator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
 
@@ -436,12 +433,12 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_reference = lo_native.
     lo_promise_intrinsic->define_symbol_accessor(
-      identity = ls_promise_species_symbol-symbol_id
+      identity = ls_promise_species_symbol-int_value
       getter = zcl_qjs_value=>new_object( lo_reference )
       setter = zcl_qjs_value=>new_undefined( )
       enumerable = abap_false configurable = abap_true ).
     lo_promise_prototype->define_symbol_property(
-      identity = ls_to_string_tag-symbol_id
+      identity = ls_to_string_tag-int_value
       value = zcl_qjs_value=>new_string( 'Promise' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     install_collection_method(
@@ -683,19 +680,19 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_reference = lo_native.
     DATA(ls_iterator_self) = zcl_qjs_value=>new_object( lo_reference ).
     lo_map_iterator_proto->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      identity = ls_iterator_symbol-int_value value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_set_iterator_proto->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      identity = ls_iterator_symbol-int_value value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_array_iterator_proto->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      identity = ls_iterator_symbol-int_value value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_string_iterator_proto->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      identity = ls_iterator_symbol-int_value value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_generator_prototype->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_iterator_self
+      identity = ls_iterator_symbol-int_value value = ls_iterator_self
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     DATA(ls_async_iterator_symbol) = mo_runtime->well_known_symbol( 'asyncIterator' ).
     CREATE OBJECT lo_native
@@ -708,15 +705,15 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_reference = lo_native.
     lo_async_iterator_prototype->define_symbol_property(
-      identity = ls_async_iterator_symbol-symbol_id
+      identity = ls_async_iterator_symbol-int_value
       value = zcl_qjs_value=>new_object( lo_reference )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     DATA(ls_map_entries) = lo_map_prototype->get_own_property( 'entries' ).
     lo_map_prototype->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_map_entries-value
+      identity = ls_iterator_symbol-int_value value = ls_map_entries-value
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     lo_set_prototype->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_set_values-value
+      identity = ls_iterator_symbol-int_value value = ls_set_values-value
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     CREATE OBJECT lo_native
       EXPORTING id = zcl_qjs_native_function=>id_string_iterator
@@ -729,44 +726,42 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_reference = lo_native.
     lo_string_prototype->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id
+      identity = ls_iterator_symbol-int_value
       value = zcl_qjs_value=>new_object( lo_reference )
       writable = abap_true enumerable = abap_false configurable = abap_true ).
 
     lo_map_prototype->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id value = zcl_qjs_value=>new_string( 'Map' )
+      identity = ls_reflect_tag-int_value value = zcl_qjs_value=>new_string( 'Map' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_set_prototype->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id value = zcl_qjs_value=>new_string( 'Set' )
+      identity = ls_reflect_tag-int_value value = zcl_qjs_value=>new_string( 'Set' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_map_iterator_proto->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id
+      identity = ls_reflect_tag-int_value
       value = zcl_qjs_value=>new_string( 'Map Iterator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_set_iterator_proto->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id
+      identity = ls_reflect_tag-int_value
       value = zcl_qjs_value=>new_string( 'Set Iterator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_array_iterator_proto->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id
+      identity = ls_reflect_tag-int_value
       value = zcl_qjs_value=>new_string( 'Array Iterator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     lo_string_iterator_proto->define_symbol_property(
-      identity = ls_reflect_tag-symbol_id
+      identity = ls_reflect_tag-int_value
       value = zcl_qjs_value=>new_string( 'String Iterator' )
       writable = abap_false enumerable = abap_false configurable = abap_true ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_boolean
       runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'Boolean' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_symbol
       runtime                            = mo_runtime.
     lo_symbol_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'Symbol' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_symbol_for
       runtime                            = mo_runtime.
@@ -814,7 +809,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_object_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'Object' value = ls_native_value ).
     lo_object_intrinsic->set_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_object_prototype ) ).
@@ -883,7 +877,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
     lo_array_intrinsic = lo_native.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'Array' value = ls_native_value ).
     lo_array_intrinsic->set_property(
       name = 'prototype' value = zcl_qjs_value=>new_object( lo_array_prototype ) ).
@@ -902,7 +895,7 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       id = zcl_qjs_native_function=>id_array_values length = 0 ).
     DATA(ls_array_values) = lo_array_prototype->get_own_property( 'values' ).
     lo_array_prototype->define_symbol_property(
-      identity = ls_iterator_symbol-symbol_id value = ls_array_values-value
+      identity = ls_iterator_symbol-int_value value = ls_array_values-value
       writable = abap_true enumerable = abap_false configurable = abap_true ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_array_push
       runtime                            = mo_runtime.
@@ -1255,7 +1248,6 @@ CLASS zcl_qjs_context IMPLEMENTATION.
       runtime                            = mo_runtime.
     lo_reference = lo_native.
     ls_native_value = zcl_qjs_value=>new_object( lo_reference ).
-    ls_native_value-property_ref = lo_native.
     set_global( name = 'isNaN' value = ls_native_value ).
     CREATE OBJECT lo_native EXPORTING id = zcl_qjs_native_function=>id_is_finite
       runtime                            = mo_runtime.

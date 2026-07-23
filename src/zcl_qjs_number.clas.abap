@@ -354,13 +354,13 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
     ls_value = normalized( value ).
     result = 1.
-    IF ls_value-number_kind = zcl_qjs_value=>number_neg_inf
-        OR ls_value-number_kind = zcl_qjs_value=>number_neg_zero.
+    IF ls_value-int_value = zcl_qjs_value=>number_neg_inf
+        OR ls_value-int_value = zcl_qjs_value=>number_neg_zero.
       result = -1.
-    ELSEIF ls_value-number_kind = zcl_qjs_value=>number_finite
+    ELSEIF ls_value-int_value = zcl_qjs_value=>number_finite
         AND ls_value-float_value < 0.
       result = -1.
-    ELSEIF ls_value-number_kind = zcl_qjs_value=>number_nan.
+    ELSEIF ls_value-int_value = zcl_qjs_value=>number_nan.
       result = 0.
     ENDIF.
   ENDMETHOD.
@@ -369,9 +369,9 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
     ls_value = normalized( value ).
     result = abap_false.
-    IF ls_value-number_kind = zcl_qjs_value=>number_neg_zero.
+    IF ls_value-int_value = zcl_qjs_value=>number_neg_zero.
       result = abap_true.
-    ELSEIF ls_value-number_kind = zcl_qjs_value=>number_finite
+    ELSEIF ls_value-int_value = zcl_qjs_value=>number_finite
         AND ls_value-float_value = 0.
       result = abap_true.
     ENDIF.
@@ -753,7 +753,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
       WHEN zcl_qjs_value=>tag_int OR zcl_qjs_value=>tag_number.
         result = normalized( value ).
       WHEN zcl_qjs_value=>tag_bool.
-        IF value-bool_value = abap_true.
+        IF value-int_value <> 0.
           result = zcl_qjs_value=>new_finite( 1 ).
         ELSE.
           result = zcl_qjs_value=>new_finite( lv_zero ).
@@ -811,7 +811,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     DATA lv_integer TYPE f.
     DATA lv_modulo TYPE f.
     ls_number = to_number( value ).
-    IF ls_number-number_kind <> zcl_qjs_value=>number_finite
+    IF ls_number-int_value <> zcl_qjs_value=>number_finite
         OR ls_number-float_value = 0.
       result = 0.
       RETURN.
@@ -842,14 +842,14 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     ls_left = normalized( left ).
     ls_right = normalized( right ).
     result = abap_false.
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan.
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan.
       RETURN.
     ENDIF.
     IF is_zero( ls_left ) = abap_true AND is_zero( ls_right ) = abap_true.
       result = abap_true.
-    ELSEIF ls_left-number_kind = ls_right-number_kind.
-      IF ls_left-number_kind <> zcl_qjs_value=>number_finite
+    ELSEIF ls_left-int_value = ls_right-int_value.
+      IF ls_left-int_value <> zcl_qjs_value=>number_finite
           OR ls_left-float_value = ls_right-float_value.
         result = abap_true.
       ENDIF.
@@ -868,14 +868,14 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     ls_left = normalized( left ).
     ls_right = normalized( right ).
     result = abap_false.
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan
-        OR ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan
+        OR ls_left-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_neg_inf.
       RETURN.
     ENDIF.
-    IF ls_left-number_kind = zcl_qjs_value=>number_neg_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_pos_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_neg_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_pos_inf.
       IF equal( left = ls_left right = ls_right ) = abap_false.
         result = abap_true.
       ENDIF.
@@ -890,7 +890,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
     DATA lv_float TYPE f.
     ls_value = normalized( value ).
-    CASE ls_value-number_kind.
+    CASE ls_value-int_value.
       WHEN zcl_qjs_value=>number_nan.
         result = ls_value.
       WHEN zcl_qjs_value=>number_pos_inf.
@@ -924,30 +924,30 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     ls_left = normalized( left ).
     ls_right = normalized( right ).
 
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan.
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
     ENDIF.
-    IF ( ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-          AND ls_right-number_kind = zcl_qjs_value=>number_neg_inf )
-        OR ( ls_left-number_kind = zcl_qjs_value=>number_neg_inf
-          AND ls_right-number_kind = zcl_qjs_value=>number_pos_inf ).
+    IF ( ls_left-int_value = zcl_qjs_value=>number_pos_inf
+          AND ls_right-int_value = zcl_qjs_value=>number_neg_inf )
+        OR ( ls_left-int_value = zcl_qjs_value=>number_neg_inf
+          AND ls_right-int_value = zcl_qjs_value=>number_pos_inf ).
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
     ENDIF.
-    IF ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_pos_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_pos_inf.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_pos_inf ).
       RETURN.
     ENDIF.
-    IF ls_left-number_kind = zcl_qjs_value=>number_neg_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_neg_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_neg_inf.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_neg_inf ).
       RETURN.
     ENDIF.
-    IF ls_left-number_kind = zcl_qjs_value=>number_neg_zero
-        AND ls_right-number_kind = zcl_qjs_value=>number_neg_zero.
+    IF ls_left-int_value = zcl_qjs_value=>number_neg_zero
+        AND ls_right-int_value = zcl_qjs_value=>number_neg_zero.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_neg_zero ).
       RETURN.
     ENDIF.
@@ -975,24 +975,24 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     ls_right = normalized( right ).
     lv_sign = sign_of( ls_left ) * sign_of( ls_right ).
 
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan.
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
     ENDIF.
     IF ( is_zero( ls_left ) = abap_true
-          AND ( ls_right-number_kind = zcl_qjs_value=>number_pos_inf
-            OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf ) )
+          AND ( ls_right-int_value = zcl_qjs_value=>number_pos_inf
+            OR ls_right-int_value = zcl_qjs_value=>number_neg_inf ) )
         OR ( is_zero( ls_right ) = abap_true
-          AND ( ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-            OR ls_left-number_kind = zcl_qjs_value=>number_neg_inf ) ).
+          AND ( ls_left-int_value = zcl_qjs_value=>number_pos_inf
+            OR ls_left-int_value = zcl_qjs_value=>number_neg_inf ) ).
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
     ENDIF.
-    IF ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_left-number_kind = zcl_qjs_value=>number_neg_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_left-int_value = zcl_qjs_value=>number_neg_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_neg_inf.
       result = infinity_with_sign( lv_sign ).
       RETURN.
     ENDIF.
@@ -1021,17 +1021,17 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     lv_sign = sign_of( ls_left ) * sign_of( ls_right ).
     lv_left_inf = abap_false.
     lv_right_inf = abap_false.
-    IF ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_left-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_left-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_left-int_value = zcl_qjs_value=>number_neg_inf.
       lv_left_inf = abap_true.
     ENDIF.
-    IF ls_right-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_right-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_neg_inf.
       lv_right_inf = abap_true.
     ENDIF.
 
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan.
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
     ENDIF.
@@ -1066,10 +1066,10 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     DATA lv_float TYPE f.
     ls_left = normalized( left ).
     ls_right = normalized( right ).
-    IF ls_left-number_kind = zcl_qjs_value=>number_nan
-        OR ls_right-number_kind = zcl_qjs_value=>number_nan
-        OR ls_left-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_left-number_kind = zcl_qjs_value=>number_neg_inf
+    IF ls_left-int_value = zcl_qjs_value=>number_nan
+        OR ls_right-int_value = zcl_qjs_value=>number_nan
+        OR ls_left-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_left-int_value = zcl_qjs_value=>number_neg_inf
         OR is_zero( ls_right ) = abap_true.
       result = zcl_qjs_value=>new_special( zcl_qjs_value=>number_nan ).
       RETURN.
@@ -1078,8 +1078,8 @@ CLASS zcl_qjs_number IMPLEMENTATION.
       result = ls_left.
       RETURN.
     ENDIF.
-    IF ls_right-number_kind = zcl_qjs_value=>number_pos_inf
-        OR ls_right-number_kind = zcl_qjs_value=>number_neg_inf.
+    IF ls_right-int_value = zcl_qjs_value=>number_pos_inf
+        OR ls_right-int_value = zcl_qjs_value=>number_neg_inf.
       result = ls_left.
       RETURN.
     ENDIF.
