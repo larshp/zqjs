@@ -276,6 +276,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE ty_local
       RAISING zcx_qjs_error.
+    METHODS capture_parent_bindings.
 ENDCLASS.
 
 CLASS zcl_qjs_parser IMPLEMENTATION.
@@ -298,6 +299,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     LOOP AT global_names INTO lv_global_name.
       declare_name( lv_global_name ).
     ENDLOOP.
+    mo_lexer->prepare( ).
     advance( ).
     predeclare_scope( start_offset = 0 ).
   ENDMETHOD.
@@ -563,7 +565,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_parenthesis_depth TYPE i.
     DATA lv_for_parenthesis_depth TYPE i.
     DATA lv_for_pending TYPE abap_bool.
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( start_offset ).
     WHILE abap_true = abap_true.
       ls_scan = lo_scanner->next( ).
@@ -731,7 +733,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         OR ms_token-text <> 'async'.
       RETURN.
     ENDIF.
-    DATA(lo_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+    DATA(lo_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
     lo_scanner->set_offset( mo_lexer->get_offset( ) ).
     DATA(ls_next) = lo_scanner->next( ).
     result = xsdbool(
@@ -977,7 +979,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         APPEND lt_catch_scope TO mt_scopes.
         lv_catch_scope_index = lines( mt_scopes ).
         DATA lo_catch_scanner TYPE REF TO zcl_qjs_lexer.
-        CREATE OBJECT lo_catch_scanner EXPORTING source = mv_source.
+        CREATE OBJECT lo_catch_scanner EXPORTING cache = mo_lexer.
         lo_catch_scanner->set_offset( ms_token-offset ).
         DATA(ls_catch_opening) = lo_catch_scanner->next( ).
         scan_binding_pattern(
@@ -1270,25 +1272,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     predeclare_scope(
       start_offset = mo_lexer->get_offset( ) stop_at_brace = abap_true ).
-    LOOP AT mt_parent_locals INTO ls_parent_binding.
-      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0.
-        CLEAR ls_local.
-        ls_local-name = ls_parent_binding-name.
-        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_parent
-            source_index = ls_parent_binding-index ).
-        ELSE.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_local
-            source_index = ls_parent_binding-index ).
-        ENDIF.
-        ls_local-kind = zcl_qjs_function=>capture_parent.
-        INSERT ls_local INTO TABLE mt_locals.
-      ENDIF.
-    ENDLOOP.
+    capture_parent_bindings( ).
     advance( ).
     mo_emitter->set_signature(
       parameter_count = lv_parameter_count function_length = lv_function_length
@@ -1523,25 +1507,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
     predeclare_scope(
       start_offset = mo_lexer->get_offset( ) stop_at_brace = abap_true ).
-    LOOP AT mt_parent_locals INTO ls_parent_binding.
-      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0.
-        CLEAR ls_local.
-        ls_local-name = ls_parent_binding-name.
-        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_parent
-            source_index = ls_parent_binding-index ).
-        ELSE.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_local
-            source_index = ls_parent_binding-index ).
-        ENDIF.
-        ls_local-kind = zcl_qjs_function=>capture_parent.
-        INSERT ls_local INTO TABLE mt_locals.
-      ENDIF.
-    ENDLOOP.
+    capture_parent_bindings( ).
     advance( ).
     mo_emitter->set_signature(
       parameter_count = lv_parameter_count function_length = lv_function_length
@@ -1626,25 +1592,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
-    LOOP AT mt_parent_locals INTO ls_parent_binding.
-      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0.
-        CLEAR ls_local.
-        ls_local-name = ls_parent_binding-name.
-        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_parent
-            source_index = ls_parent_binding-index ).
-        ELSE.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_local
-            source_index = ls_parent_binding-index ).
-        ENDIF.
-        ls_local-kind = zcl_qjs_function=>capture_parent.
-        INSERT ls_local INTO TABLE mt_locals.
-      ENDIF.
-    ENDLOOP.
+    capture_parent_bindings( ).
     mo_emitter->set_signature(
       parameter_count = 0 function_length = 0 has_this = abap_true
       constructible = abap_false ).
@@ -1711,25 +1659,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
-    LOOP AT mt_parent_locals INTO ls_parent_binding.
-      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0.
-        CLEAR ls_local.
-        ls_local-name = ls_parent_binding-name.
-        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_parent
-            source_index = ls_parent_binding-index ).
-        ELSE.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_local
-            source_index = ls_parent_binding-index ).
-        ENDIF.
-        ls_local-kind = zcl_qjs_function=>capture_parent.
-        INSERT ls_local INTO TABLE mt_locals.
-      ENDIF.
-    ENDLOOP.
+    capture_parent_bindings( ).
     mo_emitter->set_signature(
       parameter_count = 0 function_length = 0 has_this = abap_true
       constructible = abap_false ).
@@ -1841,7 +1771,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_old_super_call_allowed = mv_super_call_allowed.
     ms_super_binding = ls_base_binding.
     mv_has_super = lv_has_base.
-    CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
     lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
     WHILE abap_true = abap_true.
       ls_private_token = lo_class_scanner->next( ).
@@ -1887,7 +1817,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       CLEAR ls_method.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ms_token-text = 'static'.
-        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
         ls_class_lookahead = lo_class_scanner->next( ).
         IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen
@@ -1909,7 +1839,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ms_token-text = 'async'.
-        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
         ls_class_lookahead = lo_class_scanner->next( ).
         IF ls_class_lookahead-line_terminator_before = abap_false
@@ -1927,7 +1857,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       IF ms_token-kind = zcl_qjs_lexer=>token_identifier
           AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
-        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
         ls_class_lookahead = lo_class_scanner->next( ).
         IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen.
@@ -1971,7 +1901,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       ls_method-name = lv_method_name.
       IF ls_method-accessor_kind = 0.
-        CREATE OBJECT lo_class_scanner EXPORTING source = mv_source.
+        CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
         ls_class_lookahead = lo_class_scanner->next( ).
         IF ls_class_lookahead-kind = zcl_qjs_lexer=>token_assign
@@ -2295,12 +2225,35 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       EXPORTING reason = 'Unknown JavaScript identifier: ' && name.
   ENDMETHOD.
 
+  METHOD capture_parent_bindings.
+    DATA ls_local TYPE ty_local.
+    LOOP AT mt_parent_locals INTO DATA(ls_parent_binding).
+      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
+        TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        CLEAR ls_local.
+        ls_local-name = ls_parent_binding-name.
+        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_parent
+            source_index = ls_parent_binding-index ).
+        ELSE.
+          ls_local-index = mo_emitter->allocate_capture(
+            source_kind  = zcl_qjs_function=>capture_local
+            source_index = ls_parent_binding-index ).
+        ENDIF.
+        ls_local-kind = zcl_qjs_function=>capture_parent.
+        INSERT ls_local INTO TABLE mt_locals.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD pattern_end_offset.
     DATA lo_scanner TYPE REF TO zcl_qjs_lexer.
     DATA ls_scan TYPE zcl_qjs_lexer=>ty_token.
     DATA lv_brackets TYPE i.
     DATA lv_braces TYPE i.
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( start_offset ).
     WHILE abap_true = abap_true.
       ls_scan = lo_scanner->next( ).
@@ -2613,7 +2566,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_resume_offset TYPE i.
     lv_start_offset = ms_token-offset.
     lv_end_offset = pattern_end_offset( lv_start_offset ).
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( lv_start_offset ).
     ls_opening = lo_scanner->next( ).
     scan_binding_pattern(
@@ -2819,7 +2772,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       DATA lt_for_scope TYPE ty_locals.
       APPEND lt_for_scope TO mt_scopes.
       lv_for_lexical_scope = abap_true.
-      DATA(lo_for_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+      DATA(lo_for_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
       lo_for_scanner->set_offset( mo_lexer->get_offset( ) ).
       DATA(ls_for_name) = lo_for_scanner->next( ).
       IF ls_for_name-kind <> zcl_qjs_lexer=>token_identifier.
@@ -2963,7 +2916,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       lv_lexical = abap_true.
       APPEND lt_scope TO mt_scopes.
       lv_scope_index = lines( mt_scopes ).
-      CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+      CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
       lo_scanner->set_offset( lv_start_offset ).
       ls_opening = lo_scanner->next( ).
       scan_binding_pattern(
@@ -3408,7 +3361,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_depth TYPE i.
 
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
-      CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+      CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
       lo_scanner->set_offset( mo_lexer->get_offset( ) ).
       ls_scan = lo_scanner->next( ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_arrow.
@@ -3428,7 +3381,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         RETURN.
       ENDIF.
     ELSEIF ms_token-kind = zcl_qjs_lexer=>token_lparen.
-      CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+      CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
       lo_scanner->set_offset( mo_lexer->get_offset( ) ).
     ELSE.
       RETURN.
@@ -3477,7 +3430,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier
         AND ms_token-text = 'async'.
-      DATA(lo_async_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+      DATA(lo_async_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
       lo_async_scanner->set_offset( mo_lexer->get_offset( ) ).
       DATA(ls_after_async) = lo_async_scanner->next( ).
       IF ls_after_async-kind <> zcl_qjs_lexer=>token_arrow
@@ -3618,26 +3571,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         EXPORTING reason = 'Expected arrow token'.
     ENDIF.
     advance( ).
-
-    LOOP AT mt_parent_locals INTO ls_parent_binding.
-      READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0.
-        CLEAR ls_local.
-        ls_local-name = ls_parent_binding-name.
-        IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_parent
-            source_index = ls_parent_binding-index ).
-        ELSE.
-          ls_local-index = mo_emitter->allocate_capture(
-            source_kind  = zcl_qjs_function=>capture_local
-            source_index = ls_parent_binding-index ).
-        ENDIF.
-        ls_local-kind = zcl_qjs_function=>capture_parent.
-        INSERT ls_local INTO TABLE mt_locals.
-      ENDIF.
-    ENDLOOP.
+    capture_parent_bindings( ).
     mo_emitter->set_signature(
       parameter_count = lv_parameter_count function_length = lv_function_length
       constructible = abap_false async = lv_async ).
@@ -3713,7 +3647,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       RETURN.
     ENDIF.
     lv_end_offset = pattern_end_offset( ms_token-offset ).
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( lv_end_offset ).
     ls_scan = lo_scanner->next( ).
     result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_assign ).
@@ -4031,7 +3965,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lo_scanner TYPE REF TO zcl_qjs_lexer.
     DATA ls_scan TYPE zcl_qjs_lexer=>ty_token.
     DATA lv_depth TYPE i.
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( ms_token-offset ).
     WHILE abap_true = abap_true.
       ls_scan = lo_scanner->next( ).
@@ -4055,7 +3989,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lo_scanner TYPE REF TO zcl_qjs_lexer.
     DATA ls_scan TYPE zcl_qjs_lexer=>ty_token.
     DATA lv_depth TYPE i.
-    CREATE OBJECT lo_scanner EXPORTING source = mv_source.
+    CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( ms_token-offset ).
     WHILE abap_true = abap_true.
       ls_scan = lo_scanner->next( ).
@@ -4866,7 +4800,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         WHILE ms_token-kind <> zcl_qjs_lexer=>token_rbrace.
           IF ms_token-kind = zcl_qjs_lexer=>token_identifier
               AND ms_token-text = 'async'.
-            DATA(lo_object_async_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            DATA(lo_object_async_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
             lo_object_async_scanner->set_offset( mo_lexer->get_offset( ) ).
             DATA(ls_object_async_lookahead) = lo_object_async_scanner->next( ).
             IF ls_object_async_lookahead-line_terminator_before = abap_false
@@ -5041,7 +4975,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             ENDIF.
           ELSEIF ms_token-kind = zcl_qjs_lexer=>token_identifier
               AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
-            DATA(lo_object_accessor_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            DATA(lo_object_accessor_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
             lo_object_accessor_scanner->set_offset( mo_lexer->get_offset( ) ).
             DATA(ls_object_accessor_lookahead) = lo_object_accessor_scanner->next( ).
             IF ls_object_accessor_lookahead-kind = zcl_qjs_lexer=>token_lparen.
@@ -5160,7 +5094,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               RAISE EXCEPTION TYPE zcx_qjs_error
                 EXPORTING reason = 'Expected closing computed-key bracket'.
             ENDIF.
-            DATA(lo_computed_method_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            DATA(lo_computed_method_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
             lo_computed_method_scanner->set_offset( mo_lexer->get_offset( ) ).
             DATA(ls_computed_method_lookahead) = lo_computed_method_scanner->next( ).
             IF ls_computed_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.
@@ -5209,7 +5143,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                 zcl_qjs_number=>parse_literal( ms_token-text ) ).
             ENDIF.
             DATA(lv_object_atom) = mo_emitter->intern_atom( lv_object_name ).
-            DATA(lo_object_method_scanner) = NEW zcl_qjs_lexer( source = mv_source ).
+            DATA(lo_object_method_scanner) = NEW zcl_qjs_lexer( cache = mo_lexer ).
             lo_object_method_scanner->set_offset( mo_lexer->get_offset( ) ).
             DATA(ls_object_method_lookahead) = lo_object_method_scanner->next( ).
             IF ls_object_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.

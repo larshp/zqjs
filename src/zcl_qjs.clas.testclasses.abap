@@ -156,6 +156,7 @@ CLASS ltcl_qjs DEFINITION FINAL FOR TESTING
     METHODS resource_limits FOR TESTING RAISING cx_root.
     METHODS runtime_lifecycle FOR TESTING RAISING cx_root.
     METHODS lexer_literals FOR TESTING RAISING cx_root.
+    METHODS lexer_shared_cache FOR TESTING RAISING cx_root.
     METHODS eval_string_literal FOR TESTING RAISING cx_root.
     METHODS comparisons FOR TESTING RAISING cx_root.
     METHODS primitive_literals FOR TESTING RAISING cx_root.
@@ -1425,6 +1426,32 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = ls_token-text
       exp = 'line' && cl_abap_char_utilities=>newline && 'next' ).
+  ENDMETHOD.
+
+  METHOD lexer_shared_cache.
+    DATA lo_lexer TYPE REF TO zcl_qjs_lexer.
+    DATA lo_scanner TYPE REF TO zcl_qjs_lexer.
+    DATA ls_token TYPE zcl_qjs_lexer=>ty_token.
+    CREATE OBJECT lo_lexer EXPORTING source = `alpha / beta`.
+    ls_token = lo_lexer->next( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_token-text exp = 'alpha' ).
+
+    CREATE OBJECT lo_scanner EXPORTING cache = lo_lexer.
+    lo_scanner->set_offset( 0 ).
+    ls_token = lo_scanner->next( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_token-text exp = 'alpha' ).
+    ls_token = lo_scanner->next( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_token-kind exp = zcl_qjs_lexer=>token_slash ).
+    ls_token = lo_scanner->next( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_token-text exp = 'beta' ).
+
+    ls_token = lo_lexer->next( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_token-kind exp = zcl_qjs_lexer=>token_slash ).
   ENDMETHOD.
 
   METHOD eval_string_literal.

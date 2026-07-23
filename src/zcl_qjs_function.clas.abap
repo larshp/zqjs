@@ -57,6 +57,10 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_code.
 
+    METHODS get_code_reference
+      RETURNING
+        VALUE(result) TYPE REF TO ty_code.
+
     METHODS get_constant
       IMPORTING index TYPE i
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -148,6 +152,10 @@ CLASS zcl_qjs_function IMPLEMENTATION.
 
   METHOD get_code.
     result = mt_code.
+  ENDMETHOD.
+
+  METHOD get_code_reference.
+    GET REFERENCE OF mt_code INTO result.
   ENDMETHOD.
 
   METHOD get_constant.

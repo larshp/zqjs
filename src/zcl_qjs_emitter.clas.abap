@@ -56,6 +56,19 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE i.
 
   PRIVATE SECTION.
+    TYPES: BEGIN OF ty_atom_index,
+      name TYPE string,
+      index TYPE i,
+    END OF ty_atom_index.
+    TYPES ty_atom_indices TYPE HASHED TABLE OF ty_atom_index
+      WITH UNIQUE KEY name.
+    TYPES: BEGIN OF ty_capture_index,
+      source_kind TYPE i,
+      source_index TYPE i,
+      index TYPE i,
+    END OF ty_capture_index.
+    TYPES ty_capture_indices TYPE HASHED TABLE OF ty_capture_index
+      WITH UNIQUE KEY source_kind source_index.
     DATA mt_code TYPE zcl_qjs_function=>ty_code.
     DATA mo_limits TYPE REF TO zcl_qjs_limits.
     DATA mt_constants TYPE zcl_qjs_function=>ty_constants.
@@ -71,7 +84,9 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_generator TYPE abap_bool.
     DATA mv_async TYPE abap_bool.
     DATA mt_atoms TYPE zcl_qjs_function=>ty_atoms.
+    DATA mt_atom_indices TYPE ty_atom_indices.
     DATA mt_captures TYPE zcl_qjs_function=>ty_captures.
+    DATA mt_capture_indices TYPE ty_capture_indices.
     DATA mt_local_specs TYPE zcl_qjs_function=>ty_local_specs.
 ENDCLASS.
 
@@ -186,33 +201,35 @@ CLASS zcl_qjs_emitter IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD intern_atom.
-    DATA lv_index TYPE i VALUE 0.
-    DATA lv_name TYPE string.
-    LOOP AT mt_atoms INTO lv_name.
-      IF lv_name = name.
-        result = lv_index.
-        RETURN.
-      ENDIF.
-      lv_index = lv_index + 1.
-    ENDLOOP.
+    READ TABLE mt_atom_indices WITH TABLE KEY name = name
+      INTO DATA(ls_atom_index).
+    IF sy-subrc = 0.
+      result = ls_atom_index-index.
+      RETURN.
+    ENDIF.
     result = lines( mt_atoms ).
     APPEND name TO mt_atoms.
+    ls_atom_index-name = name.
+    ls_atom_index-index = result.
+    INSERT ls_atom_index INTO TABLE mt_atom_indices.
   ENDMETHOD.
 
   METHOD allocate_capture.
     DATA ls_capture TYPE zcl_qjs_function=>ty_capture.
-    DATA lv_index TYPE i VALUE 0.
-    LOOP AT mt_captures INTO ls_capture.
-      IF ls_capture-source_kind = source_kind
-          AND ls_capture-source_index = source_index.
-        result = lv_index.
-        RETURN.
-      ENDIF.
-      lv_index = lv_index + 1.
-    ENDLOOP.
+    READ TABLE mt_capture_indices
+      WITH TABLE KEY source_kind = source_kind source_index = source_index
+      INTO DATA(ls_capture_index).
+    IF sy-subrc = 0.
+      result = ls_capture_index-index.
+      RETURN.
+    ENDIF.
     ls_capture-source_kind = source_kind.
     ls_capture-source_index = source_index.
     result = lines( mt_captures ).
     APPEND ls_capture TO mt_captures.
+    ls_capture_index-source_kind = source_kind.
+    ls_capture_index-source_index = source_index.
+    ls_capture_index-index = result.
+    INSERT ls_capture_index INTO TABLE mt_capture_indices.
   ENDMETHOD.
 ENDCLASS.
