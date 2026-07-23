@@ -1905,11 +1905,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           CLEAR lo_called.
           CLEAR lo_closure.
-          TRY.
+          IF ls_value-object_ref IS INSTANCE OF zcl_qjs_closure.
               lo_closure ?= ls_value-object_ref.
               lo_called = lo_closure->get_function( ).
-            CATCH cx_sy_move_cast_error.
-          ENDTRY.
+          ENDIF.
           CLEAR lo_host_constructor.
           IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor
               AND lo_closure IS NOT BOUND.
@@ -1959,11 +1958,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             CONTINUE.
           ENDIF.
           IF lo_closure IS NOT BOUND.
-            TRY.
+            IF ls_value-object_ref IS INSTANCE OF zcl_qjs_function.
                 lo_called ?= ls_value-object_ref.
-              CATCH cx_sy_move_cast_error.
-                throw_error( name = 'TypeError' message = 'object is not callable' ).
-            ENDTRY.
+            ELSE.
+              throw_error( name = 'TypeError' message = 'object is not callable' ).
+            ENDIF.
           ENDIF.
           IF lo_called->is_class_constructor( ) = abap_true
               AND ls_instruction-opcode <> zif_qjs_opcodes=>call_constructor
