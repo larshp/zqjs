@@ -127,7 +127,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     DATA lt_stack TYPE ty_stack.
     DATA lt_frames TYPE ty_frames.
     DATA ls_frame TYPE ty_frame.
-    DATA ls_instruction TYPE zcl_qjs_function=>ty_instruction.
+    FIELD-SYMBOLS <ls_instruction> TYPE zcl_qjs_function=>ty_instruction.
     DATA ls_left TYPE zcl_qjs_value=>ty_value.
     DATA ls_right TYPE zcl_qjs_value=>ty_value.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
@@ -317,7 +317,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       lv_frame_index = lines( lt_frames ).
       READ TABLE lt_frames INDEX lv_frame_index ASSIGNING <ls_active_frame>.
       READ TABLE <ls_active_frame>-code->* INDEX <ls_active_frame>-pc
-        INTO ls_instruction.
+        ASSIGNING <ls_instruction>.
       IF sy-subrc <> 0.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Bytecode program counter out of bounds'.
@@ -329,7 +329,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_throw
             EXPORTING value = resume_value.
         ENDIF.
-        CASE ls_instruction-opcode.
+        CASE <ls_instruction>-opcode.
         WHEN zif_qjs_opcodes=>drop.
           qjs_vm_pop ls_value.
         WHEN zif_qjs_opcodes=>duplicate.
@@ -398,7 +398,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>new_array.
           CLEAR lt_arguments.
-          DO ls_instruction-operand TIMES.
+          DO <ls_instruction>-operand TIMES.
             qjs_vm_pop ls_value.
             INSERT ls_value INTO lt_arguments INDEX 1.
           ENDDO.
@@ -414,7 +414,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>rest.
           lo_object = mo_runtime->create_array( ).
           lv_element_index = 0.
-          lv_argument_index = ls_instruction-operand + 1.
+          lv_argument_index = <ls_instruction>-operand + 1.
           WHILE lv_argument_index <= lines( <ls_active_frame>-arguments ).
             READ TABLE <ls_active_frame>-arguments INDEX lv_argument_index INTO ls_value.
             lo_object->set_element( index = lv_element_index value = ls_value ).
@@ -611,9 +611,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>get_field OR zif_qjs_opcodes=>get_field_for_call.
           qjs_vm_pop ls_value.
-          lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
+          lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
           IF ls_value-tag = zcl_qjs_value=>tag_string.
-            IF ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call.
+            IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_field_for_call.
               qjs_vm_push ls_value.
             ENDIF.
             IF lv_atom = 'length'.
@@ -656,8 +656,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'property read from a non-object value' ).
           ENDIF.
-          lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>get_field_for_call.
+          lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_field_for_call.
             qjs_vm_push ls_value.
           ENDIF.
           IF lo_object IS BOUND.
@@ -695,7 +695,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'property write to a non-object value' ).
           ENDIF.
-          lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
+          lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
           IF lo_object IS BOUND.
             lo_object->set( name = lv_atom value = ls_right ).
           ELSEIF lo_closure IS BOUND.
@@ -707,11 +707,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             OR zif_qjs_opcodes=>define_method_computed.
           qjs_vm_pop ls_right.
           DATA(ls_method_key) = zcl_qjs_value=>new_undefined( ).
-          DATA(lv_method_kind) = ls_instruction-operand2.
+          DATA(lv_method_kind) = <ls_instruction>-operand2.
           DATA(lv_method_enumerable) = abap_false.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>define_method_computed.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>define_method_computed.
             qjs_vm_pop ls_method_key.
-            lv_method_kind = ls_instruction-operand.
+            lv_method_kind = <ls_instruction>-operand.
           ENDIF.
           IF lv_method_kind >= 10.
             lv_method_kind = lv_method_kind - 10.
@@ -735,8 +735,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'method target is not an object' ).
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>define_method.
-            lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>define_method.
+            lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
           ELSEIF ls_method_key-tag <> zcl_qjs_value=>tag_symbol.
             lv_atom = zcl_qjs_value=>to_string( ls_method_key ).
           ENDIF.
@@ -786,10 +786,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>get_private_field
             OR zif_qjs_opcodes=>put_private_field
             OR zif_qjs_opcodes=>define_private_field.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>get_private_field.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_private_field.
             qjs_vm_pop ls_right.
             qjs_vm_pop ls_left.
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>put_private_field.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>put_private_field.
             qjs_vm_pop ls_right.
             qjs_vm_pop ls_value.
             qjs_vm_pop ls_left.
@@ -816,7 +816,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'invalid private field access' ).
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>get_private_field.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_private_field.
             IF lo_object->has_private_field( ls_right-symbol_id ) = abap_false.
               throw_error(
                 name = 'TypeError' message = 'private field brand check failed' ).
@@ -824,7 +824,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_value = lo_object->get_private_field(
               identity = ls_right-symbol_id receiver = ls_left ).
             qjs_vm_push ls_value.
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>put_private_field.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>put_private_field.
             IF lo_object->set_private_field(
                 identity = ls_right-symbol_id value = ls_value
                 receiver = ls_left ) = abap_false.
@@ -841,7 +841,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>define_field.
-          IF ls_instruction-operand2 >= 4 AND ls_instruction-operand2 <= 9.
+          IF <ls_instruction>-operand2 >= 4 AND <ls_instruction>-operand2 <= 9.
             qjs_vm_pop ls_value.
             qjs_vm_pop ls_right.
             qjs_vm_pop ls_left.
@@ -858,24 +858,24 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               throw_error(
                 name = 'TypeError' message = 'private method owner is not a class' ).
             ENDIF.
-            IF ls_instruction-operand2 = 4
-                OR ls_instruction-operand2 = 6
-                OR ls_instruction-operand2 = 7.
-              IF ls_instruction-operand2 = 4.
+            IF <ls_instruction>-operand2 = 4
+                OR <ls_instruction>-operand2 = 6
+                OR <ls_instruction>-operand2 = 7.
+              IF <ls_instruction>-operand2 = 4.
                 lo_closure->register_private_method(
                   key = ls_right value = ls_value ).
               ELSE.
                 lo_closure->register_private_accessor(
                   key = ls_right value = ls_value
-                  kind = ls_instruction-operand2 - 5 ).
+                  kind = <ls_instruction>-operand2 - 5 ).
               ENDIF.
             ELSE.
               lo_object = lo_closure->get_property_storage( ).
-              IF ls_instruction-operand2 = 5.
+              IF <ls_instruction>-operand2 = 5.
                 lv_private_method_added = lo_object->add_private_field(
                   identity = ls_right-symbol_id value = ls_value
                   writable = abap_false ).
-              ELSEIF ls_instruction-operand2 = 8.
+              ELSEIF <ls_instruction>-operand2 = 8.
                 lv_private_method_added = lo_object->add_private_accessor(
                   identity = ls_right-symbol_id getter = ls_value
                   setter = zcl_qjs_value=>new_undefined( ) ).
@@ -893,7 +893,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
-          IF ls_instruction-operand2 = 1 OR ls_instruction-operand2 = 3.
+          IF <ls_instruction>-operand2 = 1 OR <ls_instruction>-operand2 = 3.
             qjs_vm_pop ls_value.
             qjs_vm_pop ls_right.
             qjs_vm_pop ls_left.
@@ -917,14 +917,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             lo_closure->register_instance_field(
               key = ls_right initializer = lo_initializer_closure
-              private = xsdbool( ls_instruction-operand2 = 3 ) ).
+              private = xsdbool( <ls_instruction>-operand2 = 3 ) ).
             qjs_vm_push ls_left.
             mo_limits->check_operand_stack( lv_stack_depth ).
             CONTINUE.
           ENDIF.
           qjs_vm_pop ls_right.
           CLEAR ls_field_key.
-          IF ls_instruction-operand2 = 2.
+          IF <ls_instruction>-operand2 = 2.
             qjs_vm_pop ls_field_key.
           ENDIF.
           qjs_vm_pop ls_left.
@@ -945,17 +945,17 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             throw_error(
               name = 'TypeError' message = 'field target is not an object' ).
           ENDIF.
-          IF ls_instruction-operand2 = 2
+          IF <ls_instruction>-operand2 = 2
               AND ls_field_key-tag = zcl_qjs_value=>tag_symbol.
             lo_object->define_symbol_property(
               identity = ls_field_key-symbol_id value = ls_right
               writable = abap_true enumerable = abap_true
               configurable = abap_true ).
           ELSE.
-            IF ls_instruction-operand2 = 2.
+            IF <ls_instruction>-operand2 = 2.
               lv_atom = zcl_qjs_value=>to_string( ls_field_key ).
             ELSE.
-              lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
+              lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
             ENDIF.
             lo_object->define_property(
               name = lv_atom value = ls_right writable = abap_true
@@ -1032,7 +1032,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           IF ls_left-tag = zcl_qjs_value=>tag_string.
-            IF ls_instruction-opcode = zif_qjs_opcodes=>get_element_for_call.
+            IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_element_for_call.
               qjs_vm_push ls_left.
             ENDIF.
             IF ls_right-tag = zcl_qjs_value=>tag_symbol.
@@ -1129,7 +1129,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ELSE.
             ls_value = lo_property_container->get_property( lv_property_name ).
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>get_element_for_call.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>get_element_for_call.
             qjs_vm_push ls_left.
           ENDIF.
           qjs_vm_push ls_value.
@@ -1243,7 +1243,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_local OR zif_qjs_opcodes=>get_lexical.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           READ TABLE <ls_active_frame>-locals INDEX lv_local_index INTO lo_cell.
           IF sy-subrc <> 0.
             RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1253,7 +1253,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_arg.
-          READ TABLE <ls_active_frame>-arguments INDEX ls_instruction-operand + 1
+          READ TABLE <ls_active_frame>-arguments INDEX <ls_instruction>-operand + 1
             INTO ls_value.
           IF sy-subrc <> 0.
             ls_value = zcl_qjs_value=>new_undefined( ).
@@ -1261,7 +1261,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>get_capture.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           READ TABLE <ls_active_frame>-captures INDEX lv_local_index INTO lo_cell.
           IF sy-subrc <> 0.
             RAISE EXCEPTION TYPE zcx_qjs_error
@@ -1271,7 +1271,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>put_capture OR zif_qjs_opcodes=>set_capture.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           qjs_vm_pop ls_value.
           READ TABLE <ls_active_frame>-captures INDEX lv_local_index INTO lo_cell.
           IF sy-subrc <> 0.
@@ -1279,13 +1279,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               EXPORTING reason = 'Bytecode capture index out of bounds'.
           ENDIF.
           lo_cell->set( ls_value ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>set_capture.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>set_capture.
             qjs_vm_push ls_value.
             mo_limits->check_operand_stack( lv_stack_depth ).
           ENDIF.
         WHEN zif_qjs_opcodes=>put_local OR zif_qjs_opcodes=>set_local
             OR zif_qjs_opcodes=>put_lexical OR zif_qjs_opcodes=>set_lexical.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           qjs_vm_pop ls_value.
           READ TABLE <ls_active_frame>-locals INDEX lv_local_index INTO lo_cell.
           IF sy-subrc <> 0.
@@ -1293,13 +1293,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               EXPORTING reason = 'Bytecode local index out of bounds'.
           ENDIF.
           lo_cell->set( ls_value ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>set_local
-              OR ls_instruction-opcode = zif_qjs_opcodes=>set_lexical.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>set_local
+              OR <ls_instruction>-opcode = zif_qjs_opcodes=>set_lexical.
             qjs_vm_push ls_value.
             mo_limits->check_operand_stack( lv_stack_depth ).
           ENDIF.
         WHEN zif_qjs_opcodes=>initialize_lexical.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           qjs_vm_pop ls_value.
           READ TABLE <ls_active_frame>-locals INDEX lv_local_index INTO lo_cell.
           IF sy-subrc <> 0.
@@ -1308,24 +1308,24 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDIF.
           lo_cell->initialize( ls_value ).
         WHEN zif_qjs_opcodes=>reset_lexical.
-          lv_local_index = ls_instruction-operand + 1.
+          lv_local_index = <ls_instruction>-operand + 1.
           IF lv_local_index < 1 OR lv_local_index > lines( <ls_active_frame>-locals ).
             RAISE EXCEPTION TYPE zcx_qjs_error
               EXPORTING reason = 'Bytecode lexical index out of bounds'.
           ENDIF.
           ls_local_spec = <ls_active_frame>-function->get_local_spec(
-            ls_instruction-operand ).
+            <ls_instruction>-operand ).
           ls_value = zcl_qjs_value=>new_undefined( ).
           CREATE OBJECT lo_cell
             EXPORTING value = ls_value initialized = abap_false
               mutable = ls_local_spec-mutable runtime = mo_runtime.
           MODIFY <ls_active_frame>-locals FROM lo_cell INDEX lv_local_index.
         WHEN zif_qjs_opcodes=>push_i32.
-          ls_value = zcl_qjs_value=>new_int( ls_instruction-operand ).
+          ls_value = zcl_qjs_value=>new_int( <ls_instruction>-operand ).
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>push_const.
-          ls_value = <ls_active_frame>-function->get_constant( ls_instruction-operand ).
+          ls_value = <ls_active_frame>-function->get_constant( <ls_instruction>-operand ).
           IF ls_value-tag = zcl_qjs_value=>tag_object.
             DATA lo_template_site TYPE REF TO zcl_qjs_template_site.
             TRY.
@@ -1339,7 +1339,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>make_closure.
-          ls_value = <ls_active_frame>-function->get_constant( ls_instruction-operand ).
+          ls_value = <ls_active_frame>-function->get_constant( <ls_instruction>-operand ).
           TRY.
               lo_called ?= ls_value-object_ref.
             CATCH cx_sy_move_cast_error.
@@ -1383,7 +1383,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
         WHEN zif_qjs_opcodes=>private_symbol.
-          lv_atom = <ls_active_frame>-function->get_atom( ls_instruction-operand ).
+          lv_atom = <ls_active_frame>-function->get_atom( <ls_instruction>-operand ).
           ls_value = mo_runtime->new_symbol( description = '#' && lv_atom ).
           qjs_vm_push ls_value.
           mo_limits->check_operand_stack( lv_stack_depth ).
@@ -1445,9 +1445,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_left = mo_runtime->to_primitive( ls_left ).
           ls_right = mo_runtime->to_primitive( ls_right ).
           DATA(lv_bitwise_operation) = 1.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>bitwise_xor.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>bitwise_xor.
             lv_bitwise_operation = 2.
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>bitwise_or.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>bitwise_or.
             lv_bitwise_operation = 3.
           ENDIF.
           ls_value = zcl_qjs_number=>bitwise(
@@ -1461,9 +1461,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_left = mo_runtime->to_primitive( ls_left ).
           ls_right = mo_runtime->to_primitive( ls_right ).
           DATA(lv_shift_operation) = 1.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>shift_right.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>shift_right.
             lv_shift_operation = 2.
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>shift_right_unsigned.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>shift_right_unsigned.
             lv_shift_operation = 3.
           ENDIF.
           ls_value = zcl_qjs_number=>shift(
@@ -1525,7 +1525,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>increment OR zif_qjs_opcodes=>decrement.
           qjs_vm_pop ls_value.
           ls_value = zcl_qjs_number=>to_number( ls_value ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>increment.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>increment.
             ls_value = zcl_qjs_number=>add(
               left = ls_value right = zcl_qjs_value=>new_int( 1 ) ).
           ELSE.
@@ -1545,11 +1545,11 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           DATA(lv_compare) = abap_false.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>less_than.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>less_than.
             lv_compare = zcl_qjs_number=>less_than( left = ls_left right = ls_right ).
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>greater_than.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>greater_than.
             lv_compare = zcl_qjs_number=>less_than( left = ls_right right = ls_left ).
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>less_equal.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>less_equal.
             lv_compare = zcl_qjs_number=>less_than( left = ls_left right = ls_right ).
             IF lv_compare = abap_false.
               lv_compare = zcl_qjs_number=>equal( left = ls_left right = ls_right ).
@@ -1567,7 +1567,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           qjs_vm_pop ls_right.
           qjs_vm_pop ls_left.
           DATA(lv_equal) = zcl_qjs_value=>strict_equal( left = ls_left right = ls_right ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>strict_not_equal.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>strict_not_equal.
             lv_equal = xsdbool( lv_equal = abap_false ).
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_equal ).
@@ -1733,7 +1733,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_right = mo_runtime->to_primitive( ls_right ).
           ENDIF.
           lv_equal = zcl_qjs_value=>abstract_equal( left = ls_left right = ls_right ).
-          IF ls_instruction-opcode = zif_qjs_opcodes=>not_equal.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>not_equal.
             lv_equal = xsdbool( lv_equal = abap_false ).
           ENDIF.
           ls_value = zcl_qjs_value=>new_boolean( lv_equal ).
@@ -1742,17 +1742,17 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>if_false OR zif_qjs_opcodes=>if_true.
           qjs_vm_pop ls_value.
           DATA(lv_truthy) = zcl_qjs_value=>to_boolean( ls_value ).
-          IF ( ls_instruction-opcode = zif_qjs_opcodes=>if_false
+          IF ( <ls_instruction>-opcode = zif_qjs_opcodes=>if_false
                 AND lv_truthy = abap_false )
-              OR ( ls_instruction-opcode = zif_qjs_opcodes=>if_true
+              OR ( <ls_instruction>-opcode = zif_qjs_opcodes=>if_true
                 AND lv_truthy = abap_true ).
-            <ls_active_frame>-pc = ls_instruction-operand.
+            <ls_active_frame>-pc = <ls_instruction>-operand.
           ENDIF.
         WHEN zif_qjs_opcodes=>goto.
-          <ls_active_frame>-pc = ls_instruction-operand.
+          <ls_active_frame>-pc = <ls_instruction>-operand.
         WHEN zif_qjs_opcodes=>gosub.
           APPEND <ls_active_frame>-pc TO <ls_active_frame>-subroutine_returns.
-          <ls_active_frame>-pc = ls_instruction-operand.
+          <ls_active_frame>-pc = <ls_instruction>-operand.
         WHEN zif_qjs_opcodes=>ret.
           DATA(lv_return_index) = lines( <ls_active_frame>-subroutine_returns ).
           IF lv_return_index = 0.
@@ -1781,8 +1781,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             INTO <ls_active_frame>-pc.
           DELETE <ls_active_frame>-subroutine_returns INDEX lv_return_index.
         WHEN zif_qjs_opcodes=>catch.
-          ls_handler-target = ls_instruction-operand.
-          ls_handler-finally_target = ls_instruction-operand2.
+          ls_handler-target = <ls_instruction>-operand.
+          ls_handler-finally_target = <ls_instruction>-operand2.
           ls_handler-stack_depth = lv_stack_depth.
           APPEND ls_handler TO <ls_active_frame>-handlers.
           ls_value = zcl_qjs_value=>new_undefined( ).
@@ -1819,7 +1819,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_argument_index = lv_argument_index + 1.
           ENDWHILE.
           TRY.
-              IF ls_instruction-operand = 1.
+              IF <ls_instruction>-operand = 1.
                 ls_value = mo_runtime->construct_value(
                   constructor = ls_apply_callable arguments = lt_arguments ).
               ELSE.
@@ -1837,14 +1837,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>call OR zif_qjs_opcodes=>call_method
             OR zif_qjs_opcodes=>call_constructor.
           CLEAR lt_arguments.
-          DO ls_instruction-operand TIMES.
+          DO <ls_instruction>-operand TIMES.
             qjs_vm_pop ls_value.
             INSERT ls_value INTO lt_arguments INDEX 1.
           ENDDO.
           qjs_vm_pop ls_value.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_method.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_method.
             qjs_vm_pop ls_this.
-          ELSEIF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+          ELSEIF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor.
             ls_this = zcl_qjs_value=>new_undefined( ).
           ELSE.
             ls_this = zcl_qjs_value=>new_undefined( ).
@@ -1852,8 +1852,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           IF ls_value-tag <> zcl_qjs_value=>tag_object.
             throw_error( name = 'TypeError' message = 'value is not callable' ).
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_method
-              AND ls_instruction-operand2 = 1.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_method
+              AND <ls_instruction>-operand2 = 1.
             IF <ls_active_frame>-closure IS NOT BOUND.
               throw_error( name = 'TypeError' message = 'super constructor is invalid' ).
             ENDIF.
@@ -1910,7 +1910,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               lo_called = lo_closure->get_function( ).
           ENDIF.
           CLEAR lo_host_constructor.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor
               AND lo_closure IS NOT BOUND.
             TRY.
                 lo_host_constructor ?= ls_value-object_ref.
@@ -1942,7 +1942,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDTRY.
           ENDIF.
           IF lo_host_callable IS BOUND.
-            IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+            IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor.
               throw_error( name = 'TypeError' message = 'value is not constructable' ).
             ENDIF.
             TRY.
@@ -1965,14 +1965,14 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
           ENDIF.
           IF lo_called->is_class_constructor( ) = abap_true
-              AND ls_instruction-opcode <> zif_qjs_opcodes=>call_constructor
-              AND NOT ( ls_instruction-opcode = zif_qjs_opcodes=>call_method
-                AND ls_instruction-operand2 = 1 ).
+              AND <ls_instruction>-opcode <> zif_qjs_opcodes=>call_constructor
+              AND NOT ( <ls_instruction>-opcode = zif_qjs_opcodes=>call_method
+                AND <ls_instruction>-operand2 = 1 ).
             throw_error(
               name    = 'TypeError'
               message = 'class constructor cannot be called without new' ).
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor.
             IF lo_called->is_constructible( ) = abap_false.
               throw_error( name = 'TypeError' message = 'value is not constructable' ).
             ENDIF.
@@ -2031,12 +2031,12 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                   EXPORTING value = mo_runtime->create_error_from_reason(
                     lo_host_error->reason ).
             ENDTRY.
-            IF ls_instruction-opcode = zif_qjs_opcodes=>call_method
-                AND ls_instruction-operand2 = 1
+            IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_method
+                AND <ls_instruction>-operand2 = 1
                 AND <ls_active_frame>-closure IS BOUND.
               <ls_active_frame>-closure->initialize_instance_fields( receiver = ls_this ).
             ENDIF.
-            IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+            IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor.
               ls_value = ls_this.
             ELSE.
               ls_value = zcl_qjs_value=>new_undefined( ).
@@ -2057,7 +2057,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_called_frame-arguments = lt_arguments.
           ls_called_frame-pc = 1.
           ls_called_frame-stack_base = lv_stack_depth.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_constructor.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_constructor.
             ls_called_frame-is_constructor = abap_true.
             ls_called_frame-constructor_this = ls_this.
           ENDIF.
@@ -2065,8 +2065,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ls_called_frame-captures = lo_closure->get_captures( ).
             ls_called_frame-closure = lo_closure.
           ENDIF.
-          IF ls_instruction-opcode = zif_qjs_opcodes=>call_method
-              AND ls_instruction-operand2 = 1.
+          IF <ls_instruction>-opcode = zif_qjs_opcodes=>call_method
+              AND <ls_instruction>-operand2 = 1.
             ls_called_frame-after_return_fields = <ls_active_frame>-closure.
             ls_called_frame-after_return_receiver = ls_this.
           ENDIF.
