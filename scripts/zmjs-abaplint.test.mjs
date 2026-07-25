@@ -5,10 +5,11 @@ import vm from "node:vm";
 
 const fixturePath = resolve("fixtures", "zmjs-abaplint.js");
 const fixture = readFileSync(fixturePath, "utf8");
+const normalizedFixture = fixture.replaceAll("\r\n", "\n");
 const expectedBlob = "81bd3b4c1aa2c56d44be1c9ffe4929a398da7d56";
 const actualBlob = createHash("sha1")
-  .update(`blob ${Buffer.byteLength(fixture)}\0`)
-  .update(fixture)
+  .update(`blob ${Buffer.byteLength(normalizedFixture)}\0`)
+  .update(normalizedFixture)
   .digest("hex");
 
 if (actualBlob !== expectedBlob) {

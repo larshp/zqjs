@@ -485,7 +485,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     ELSEIF mv_is_array = abap_true.
       DATA(ls_array_index) = array_index_from_name( name ).
       IF ls_array_index-found = abap_true AND mr_elements IS BOUND.
-        READ TABLE mr_elements->* INDEX CONV i( ls_array_index-index + 1 )
+        READ TABLE mr_elements->* INDEX ls_array_index-index + 1
           INTO DATA(ls_element).
         IF sy-subrc = 0 AND ls_element-present = abap_true.
           result = ls_element-value.
@@ -990,7 +990,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         AND mr_elements IS BOUND.
       DATA(ls_delete_index) = array_index_from_name( name ).
       IF ls_delete_index-found = abap_true.
-        READ TABLE mr_elements->* INDEX CONV i( ls_delete_index-index + 1 )
+        READ TABLE mr_elements->* INDEX ls_delete_index-index + 1
           ASSIGNING FIELD-SYMBOL(<ls_delete_element>).
         IF sy-subrc = 0. CLEAR <ls_delete_element>-present. ENDIF.
         result = abap_true.
@@ -1022,7 +1022,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     IF result = abap_false AND mv_is_array = abap_true AND mr_elements IS BOUND.
       DATA(ls_has_index) = array_index_from_name( name ).
       IF ls_has_index-found = abap_true.
-        READ TABLE mr_elements->* INDEX CONV i( ls_has_index-index + 1 )
+        READ TABLE mr_elements->* INDEX ls_has_index-index + 1
           INTO DATA(ls_has_element).
         result = xsdbool( sy-subrc = 0 AND ls_has_element-present = abap_true ).
       ENDIF.
@@ -1186,7 +1186,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       IF mv_is_array = abap_true AND mr_elements IS BOUND.
         DATA(ls_own_index) = array_index_from_name( name ).
         IF ls_own_index-found = abap_true.
-          READ TABLE mr_elements->* INDEX CONV i( ls_own_index-index + 1 )
+          READ TABLE mr_elements->* INDEX ls_own_index-index + 1
             INTO DATA(ls_own_element).
           IF sy-subrc = 0 AND ls_own_element-present = abap_true.
             result-found = abap_true.
@@ -1253,7 +1253,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         APPEND VALUE ty_element( index = lines( mr_elements->* ) )
           TO mr_elements->*.
       ENDWHILE.
-      READ TABLE mr_elements->* INDEX CONV i( index + 1 )
+      READ TABLE mr_elements->* INDEX index + 1
         ASSIGNING FIELD-SYMBOL(<ls_element>).
       <ls_element>-present = abap_true.
       <ls_element>-value = value.
@@ -1267,7 +1267,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD has_element.
     IF mv_is_array = abap_true AND mr_elements IS BOUND.
-      READ TABLE mr_elements->* INDEX CONV i( index + 1 ) INTO DATA(ls_element).
+      READ TABLE mr_elements->* INDEX index + 1 INTO DATA(ls_element).
       IF sy-subrc = 0 AND ls_element-present = abap_true.
         result = abap_true.
         RETURN.
@@ -1281,7 +1281,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD get_element.
     DATA lv_name TYPE string.
     IF mv_is_array = abap_true AND mr_elements IS BOUND.
-      READ TABLE mr_elements->* INDEX CONV i( index + 1 ) INTO DATA(ls_element).
+      READ TABLE mr_elements->* INDEX index + 1 INTO DATA(ls_element).
       IF sy-subrc = 0 AND ls_element-present = abap_true.
         result = ls_element-value.
         RETURN.
@@ -1357,7 +1357,20 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD own_property_names.
-    result = mo_shape->names( ).
+    IF mr_elements IS BOUND.
+      DATA lt_indices TYPE STANDARD TABLE OF int8 WITH DEFAULT KEY.
+      LOOP AT mr_elements->* INTO DATA(ls_key_element).
+        IF ls_key_element-present = abap_false. CONTINUE. ENDIF.
+        APPEND ls_key_element-index TO lt_indices.
+      ENDLOOP.
+      SORT lt_indices ASCENDING.
+      LOOP AT lt_indices INTO DATA(lv_key_index).
+        DATA(lv_key_name) = CONV string( lv_key_index ).
+        CONDENSE lv_key_name NO-GAPS.
+        APPEND lv_key_name TO result.
+      ENDLOOP.
+    ENDIF.
+    APPEND LINES OF mo_shape->names( ) TO result.
     IF mv_is_array = abap_true.
       APPEND 'length' TO result.
     ENDIF.

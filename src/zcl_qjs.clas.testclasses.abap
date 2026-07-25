@@ -2898,6 +2898,11 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval(
+      'var keys = Reflect.ownKeys([, , 2]);'
+      && ' keys.length === 2 && keys[0] === "2" && keys[1] === "length";' ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
+
+    ls_result = zcl_qjs=>eval(
       'var object = {}; Reflect.isExtensible(object)'
       && ' && Reflect.preventExtensions(object)'
       && ' && !Reflect.isExtensible(object)'

@@ -431,8 +431,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             qjs_vm_push ls_value.
             CONTINUE.
           WHEN zif_qjs_opcodes=>push_i32.
-            ls_value = VALUE #( tag = zcl_qjs_value=>tag_int
-              int_value = <ls_instruction>-operand ).
+            ls_value = VALUE #( tag       = zcl_qjs_value=>tag_int
+                                int_value = <ls_instruction>-operand ).
             qjs_vm_push ls_value.
             CONTINUE.
           WHEN zif_qjs_opcodes=>goto.

@@ -70,11 +70,21 @@ DATA(number) = zcl_qjs_value=>as_finite_number( result ).
 ## Development
 
 Prerequisites are Node.js 22.18 or newer and Git. Dependencies and upstream source pins
-are exact and recorded in `package-lock.json` and `upstream-lock.json`.
+are exact and recorded in `package-lock.json` and `upstream-lock.json`. The full test
+suite also builds the pinned QuickJS compiler oracle and therefore requires `make` and
+a C compiler. On Windows, use an MSYS2 MinGW64 toolchain; Git Bash alone does not
+include those build tools.
 
 ```text
 npm ci
 npm test
+```
+
+For local development without a native QuickJS build toolchain, run the same suite
+without rebuilding and checking the committed compiler-oracle fixture:
+
+```text
+npm run test:without-oracle
 ```
 
 `npm test` verifies the pinned QuickJS opcode metadata and normalized compiler-oracle
