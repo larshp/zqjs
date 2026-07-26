@@ -209,25 +209,30 @@ CLASS zcl_qjs_value IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD strict_equal.
+    " Match QuickJS's tag-first strict equality path: integer pairs and
+    " non-number tag mismatches never enter the generic number machinery.
     result = abap_false.
-    IF is_number( left ) = abap_true AND is_number( right ) = abap_true.
+    IF left-tag = tag_int AND right-tag = tag_int.
+      result = xsdbool( left-int_value = right-int_value ).
+      RETURN.
+    ELSEIF ( left-tag = tag_int OR left-tag = tag_number )
+        AND ( right-tag = tag_int OR right-tag = tag_number ).
       result = zcl_qjs_number=>equal( left = left right = right ).
+      RETURN.
     ELSEIF left-tag <> right-tag.
       RETURN.
-    ELSE.
-      CASE left-tag.
-        WHEN tag_undefined OR tag_null.
-          result = abap_true.
-        WHEN tag_bool.
-          IF left-int_value = right-int_value. result = abap_true. ENDIF.
-        WHEN tag_string.
-          result = xsdbool( left-string_ref->as_string( ) = right-string_ref->as_string( ) ).
-        WHEN tag_object.
-          IF left-object_ref = right-object_ref. result = abap_true. ENDIF.
-        WHEN tag_symbol.
-          IF left-int_value = right-int_value. result = abap_true. ENDIF.
-      ENDCASE.
     ENDIF.
+    CASE left-tag.
+      WHEN tag_undefined OR tag_null.
+        result = abap_true.
+      WHEN tag_bool OR tag_symbol.
+        result = xsdbool( left-int_value = right-int_value ).
+      WHEN tag_string.
+        result = xsdbool(
+          left-string_ref->as_string( ) = right-string_ref->as_string( ) ).
+      WHEN tag_object.
+        result = xsdbool( left-object_ref = right-object_ref ).
+    ENDCASE.
   ENDMETHOD.
 
   METHOD abstract_equal.

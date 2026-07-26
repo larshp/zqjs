@@ -64,6 +64,91 @@ suspected source. Keep those findings in focused ABAP Unit tests, `PLAN.md`, or
 - Real ABAP: not yet compared on the target SAP_BASIS 7.54+ system.
 - Upstream issue: not filed.
 
+## OA-003 - failed down-cast leaves the target reference bound
+
+- Status: suspected; defensive workaround active; real-ABAP comparison pending.
+- Components: abaplint CLI 2.120.4, transpiler/runtime 2.13.42, open-abap-core
+  `f30a24120b6677e6cbf92210b59db9589c8be32f`.
+- Originating path: `zcl_qjs_vm=>execute`, `push_const`, while probing whether an
+  object-valued constant is a `zcl_qjs_template_site`.
+- Expected by the original implementation: after `lo_template_site ?= value` raises
+  `cx_sy_move_cast_error`, `lo_template_site` is unbound.
+- Observed: after one successful template-site cast, a later failed cast left the
+  previous object reference bound. The handler consequently materialized the stale
+  template site for unrelated object constants. In the `test:zmjs-abaplint` workload,
+  exposing the path through an early constant fast dispatcher produced a 208,888.5 ms
+  run instead of the roughly 45,000-60,000 ms range seen around it.
+- Workaround: `CLEAR lo_template_site` immediately before every caught down-cast whose
+  target is subsequently tested with `IS BOUND`.
+- Impact: caught `?=` probes can silently reuse stale objects, causing incorrect values
+  and extreme allocation/runtime amplification. Audit similar cast-and-catch patterns.
+- Real ABAP: not yet compared. This may be standard assignment-on-failure behavior
+  rather than a transpiler defect, so it remains `suspected`.
+- Upstream issue: not filed.
+
+## OA-004 - end-to-end benchmark timing is highly unstable on the current host
+
+- Status: suspected host/runtime effect; measurement workaround active.
+- Components: Node.js host running transpiler/runtime 2.13.42 and the pinned zqjs
+  dependencies above; observed on 2026-07-26.
+- Originating test: `npm run test:zmjs-abaplint` in consecutive, unchanged or staged
+  source configurations.
+- Expected: adjacent runs should be stable enough that a single sample indicates the
+  direction of a substantial optimization.
+- Observed: valid runs varied from 33,238.5 ms to 81,628.9 ms, while the Node reference
+  in the same harness varied from about 24 ms to 209 ms. One three-sample shape-stage
+  sequence was 58,554.6, 60,877.6, and 45,595.3 ms. This variance can reverse the
+  apparent result of small optimizations.
+- Workaround: compare staged medians from at least three consecutive samples, retain
+  only directional improvements, and run correctness gates separately. Treat the
+  208,888.5 ms stale-reference run from OA-003 as a code-path failure, not host noise.
+- Impact: absolute timings from different sessions are not directly comparable. Keep
+  raw samples with every reported percentage and prefer same-session controls.
+- Real ABAP: not applicable; SAP-side performance still requires separate measurement.
+- Upstream issue: not filed.
+
+## OA-005 - transpiled initialization module was transiently unavailable
+
+- Status: suspected process/filesystem race; one occurrence; not reproduced by
+  individual reruns.
+- Components: Node.js v22.19.0, npm test scripts, transpiler/runtime 2.13.42.
+- Originating test: three `npm run test:zmjs-abaplint` commands chained sequentially
+  after a successful `npm run unit` transpilation.
+- Expected: every benchmark invocation imports the existing `output/init.mjs` emitted
+  by the completed transpile step.
+- Observed: the first benchmark passed at 41,557.3 ms. The second failed with Node
+  `ERR_MODULE_NOT_FOUND` for `output/init.mjs`. An immediate read-only check found the
+  file present, and two subsequent individual benchmark invocations passed.
+- Workaround: do not treat the failed sample as performance data; run benchmark samples
+  as individual commands and confirm `output/init.mjs` after any import failure.
+- Impact: chained benchmark batches can lose a sample and should stop on the first
+  harness error. No source correctness failure was observed.
+- Real ABAP: not applicable.
+- Upstream issue: not filed; a deterministic reproducer is required first.
+
+## Performance experiment anomalies (2026-07-26)
+
+These are not accepted optimizations. They are retained here because their measured
+behavior was counterintuitive and repeating them would waste another benchmark cycle.
+
+| Experiment | Observed result | Disposition |
+| --- | --- | --- |
+| Inline strict equality inside the VM dispatcher | 55,850.3 ms median versus 46,933.9 ms for the shared tagged-value helper | Reverted |
+| Direct numeric equality without `normalized` copies | 70,528.3 ms first combined sample | Reverted |
+| One-copy shape transition plus cached insertion order | 58,554.6 ms median (58,554.6, 60,877.6, 45,595.3) versus a nearby 53,120.2 ms control | Reverted |
+| Early `push_const`/primitive constant dispatch | 81,628.9 ms after fixing OA-003; the first stale-reference run was 208,888.5 ms | Reverted; retained only OA-003 reset |
+| Stack-window argument copying | Approximately 60,700 ms median | Reverted |
+| Lazy local-cell boxing | 48,700-76,100 ms across samples | Reverted |
+| Reference-swapped parser locals table | 45,393.0 ms median (43,678.5, 47,379.3, 45,393.0) versus 27,384.8 ms for lazy parent bindings alone | Reverted; per-lookup reference indirection outweighed two avoided copies |
+| VM integer property-key shortcut | Approximately 10% slower | Reverted |
+| Contiguous local-metadata iteration | 70,300 ms | Reverted |
+| Lazy function prototype/property creation | Semantic test failures | Reverted |
+
+The recurring pattern is that expanding the transpiled VM dispatcher or replacing
+runtime table operations with more ABAP source branches can cost more than the avoided
+helper calls. QuickJS-inspired changes should therefore remain narrow and be validated
+against the full transpiled workload, not inferred from native-engine structure alone.
+
 ## Entry template
 
 ```text

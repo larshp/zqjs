@@ -87,6 +87,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_checked_parser_depth TYPE i.
     DATA mt_locals TYPE ty_locals.
     DATA mt_parent_locals TYPE ty_locals.
+    DATA mr_outer_locals TYPE REF TO ty_locals.
+    DATA mr_outer_parent_locals TYPE REF TO ty_locals.
+    DATA mr_outer_scopes TYPE REF TO ty_scopes.
     DATA mt_loops TYPE ty_loops.
     DATA mv_in_function TYPE abap_bool.
     DATA mv_source TYPE string.
@@ -281,6 +284,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE ty_local
       RAISING zcx_qjs_error.
     METHODS has_binding
+      IMPORTING name TYPE string
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS ensure_parent_binding
       IMPORTING name TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS capture_parent_bindings.
@@ -573,9 +579,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_for_parenthesis_depth TYPE i.
     DATA lv_for_pending TYPE abap_bool.
     DEFINE qjs_note_capture.
-      READ TABLE mt_parent_locals WITH TABLE KEY name = &1
-        TRANSPORTING NO FIELDS.
-      IF sy-subrc = 0. INSERT &1 INTO TABLE mt_capture_names. ENDIF.
+      IF ensure_parent_binding( &1 ) = abap_true.
+        INSERT &1 INTO TABLE mt_capture_names.
+      ENDIF.
     END-OF-DEFINITION.
     CLEAR mt_capture_names.
     mv_capture_filter_ready = abap_true.
@@ -1116,6 +1122,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_function_declaration.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
+    DATA lr_previous_outer_parent TYPE REF TO ty_locals.
+    DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
     DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
@@ -1179,14 +1188,14 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
+    lr_previous_outer_locals = mr_outer_locals.
+    lr_previous_outer_parent = mr_outer_parent_locals.
+    lr_previous_outer_scopes = mr_outer_scopes.
+    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
+    GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
+    GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
-    mt_parent_locals = mt_locals.
-    LOOP AT mt_scopes INTO lt_visible_scope.
-      LOOP AT lt_visible_scope INTO ls_visible_binding.
-        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
-        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
-      ENDLOOP.
-    ENDLOOP.
+    CLEAR mt_parent_locals.
     CLEAR mt_locals.
     CLEAR mt_loops.
     CLEAR mt_finally.
@@ -1329,6 +1338,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
+    mr_outer_locals = lr_previous_outer_locals.
+    mr_outer_parent_locals = lr_previous_outer_parent.
+    mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
     mv_in_generator = lv_outer_in_generator.
     mv_in_async = lv_outer_in_async.
@@ -1354,6 +1366,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_function_expression.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
+    DATA lr_previous_outer_parent TYPE REF TO ty_locals.
+    DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
     DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
@@ -1412,14 +1427,14 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
+    lr_previous_outer_locals = mr_outer_locals.
+    lr_previous_outer_parent = mr_outer_parent_locals.
+    lr_previous_outer_scopes = mr_outer_scopes.
+    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
+    GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
+    GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
-    mt_parent_locals = mt_locals.
-    LOOP AT mt_scopes INTO lt_visible_scope.
-      LOOP AT lt_visible_scope INTO ls_visible_binding.
-        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
-        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
-      ENDLOOP.
-    ENDLOOP.
+    CLEAR mt_parent_locals.
     CLEAR mt_locals.
     CLEAR mt_loops.
     CLEAR mt_finally.
@@ -1566,6 +1581,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
+    mr_outer_locals = lr_previous_outer_locals.
+    mr_outer_parent_locals = lr_previous_outer_parent.
+    mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
     mv_in_generator = lv_outer_in_generator.
     mv_in_async = lv_outer_in_async.
@@ -2215,6 +2233,48 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD ensure_parent_binding.
+    READ TABLE mt_parent_locals WITH TABLE KEY name = name
+      TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    DATA ls_parent TYPE ty_local.
+    IF mr_outer_scopes IS BOUND.
+      DATA(lv_scope_index) = lines( mr_outer_scopes->* ).
+      WHILE lv_scope_index > 0.
+        READ TABLE mr_outer_scopes->* INDEX lv_scope_index
+          ASSIGNING FIELD-SYMBOL(<lt_outer_scope>).
+        READ TABLE <lt_outer_scope> WITH TABLE KEY name = name
+          INTO ls_parent.
+        IF sy-subrc = 0.
+          INSERT ls_parent INTO TABLE mt_parent_locals.
+          result = abap_true.
+          RETURN.
+        ENDIF.
+        lv_scope_index = lv_scope_index - 1.
+      ENDWHILE.
+    ENDIF.
+    IF mr_outer_locals IS BOUND.
+      READ TABLE mr_outer_locals->* WITH TABLE KEY name = name
+        INTO ls_parent.
+      IF sy-subrc = 0.
+        INSERT ls_parent INTO TABLE mt_parent_locals.
+        result = abap_true.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF mr_outer_parent_locals IS BOUND.
+      READ TABLE mr_outer_parent_locals->* WITH TABLE KEY name = name
+        INTO ls_parent.
+      IF sy-subrc = 0.
+        INSERT ls_parent INTO TABLE mt_parent_locals.
+        result = abap_true.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
   METHOD find_binding.
     DATA ls_local TYPE ty_local.
     DATA lv_scope_index TYPE i.
@@ -2233,6 +2293,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       result = ls_local.
       RETURN.
     ENDIF.
+    ensure_parent_binding( name ).
     READ TABLE mt_parent_locals WITH TABLE KEY name = name INTO ls_local.
     IF sy-subrc = 0.
       result-name = name.
@@ -2270,6 +2331,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       result = abap_true.
       RETURN.
     ENDIF.
+    ensure_parent_binding( name ).
     READ TABLE mt_parent_locals WITH TABLE KEY name = name TRANSPORTING NO FIELDS.
     result = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
@@ -3468,6 +3530,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_arrow_function.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
+    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
+    DATA lr_previous_outer_parent TYPE REF TO ty_locals.
+    DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
     DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
@@ -3517,15 +3582,17 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
+    lr_previous_outer_locals = mr_outer_locals.
+    lr_previous_outer_parent = mr_outer_parent_locals.
+    lr_previous_outer_scopes = mr_outer_scopes.
+    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
+    GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
+    GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
-    mt_parent_locals = mt_locals.
-    LOOP AT mt_scopes INTO lt_visible_scope.
-      LOOP AT lt_visible_scope INTO ls_visible_binding.
-        DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
-        INSERT ls_visible_binding INTO TABLE mt_parent_locals.
-      ENDLOOP.
-    ENDLOOP.
+    CLEAR mt_parent_locals.
+    CLEAR mt_locals.
     IF lv_outer_in_function = abap_false.
+      ensure_parent_binding( 'globalThis' ).
       READ TABLE mt_parent_locals WITH TABLE KEY name = 'globalThis'
         INTO ls_global_this.
       IF sy-subrc = 0.
@@ -3534,7 +3601,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         INSERT ls_global_this INTO TABLE mt_parent_locals.
       ENDIF.
     ENDIF.
-    CLEAR mt_locals.
     CLEAR mt_loops.
     CLEAR mt_finally.
     CLEAR mt_scopes.
@@ -3667,6 +3733,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
+    mr_outer_locals = lr_previous_outer_locals.
+    mr_outer_parent_locals = lr_previous_outer_parent.
+    mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
     mv_in_generator = lv_outer_in_generator.
     mv_in_async = lv_outer_in_async.

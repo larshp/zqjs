@@ -1680,6 +1680,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ls_value = lo_active_frame->function->get_constant( <ls_instruction>-operand ).
           IF ls_value-tag = zcl_qjs_value=>tag_object.
             DATA lo_template_site TYPE REF TO zcl_qjs_template_site.
+            CLEAR lo_template_site.
             TRY.
                 lo_template_site ?= ls_value-object_ref.
               CATCH cx_sy_move_cast_error.
