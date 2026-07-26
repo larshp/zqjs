@@ -276,15 +276,17 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       lv_local_index = lv_local_index + 1.
     ENDIF.
     IF function->has_arguments_binding( ) = abap_true.
-      lo_object = mo_runtime->create_array( ).
-      lv_element_index = 0.
-      LOOP AT initial_arguments INTO ls_value.
-        lo_object->set_element( index = lv_element_index value = ls_value ).
-        lv_element_index = lv_element_index + 1.
-      ENDLOOP.
-      ls_value = zcl_qjs_value=>new_object( lo_object ).
-      READ TABLE lo_frame->locals INDEX lv_local_index INTO lo_cell.
-      lo_cell->set( ls_value ).
+      IF function->uses_arguments_object( ) = abap_true.
+        lo_object = mo_runtime->create_array( ).
+        lv_element_index = 0.
+        LOOP AT initial_arguments INTO ls_value.
+          lo_object->set_element( index = lv_element_index value = ls_value ).
+          lv_element_index = lv_element_index + 1.
+        ENDLOOP.
+        ls_value = zcl_qjs_value=>new_object( lo_object ).
+        READ TABLE lo_frame->locals INDEX lv_local_index INTO lo_cell.
+        lo_cell->set( ls_value ).
+      ENDIF.
       lv_local_index = lv_local_index + 1.
     ENDIF.
     lv_argument_index = 1.
@@ -944,15 +946,17 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_local_index = lv_local_index + 1.
           ENDIF.
           IF lo_called->has_arguments_binding( ) = abap_true.
-            lo_object = mo_runtime->create_array( ).
-            lv_element_index = 0.
-            LOOP AT lt_arguments INTO ls_value.
-              lo_object->set_element( index = lv_element_index value = ls_value ).
-              lv_element_index = lv_element_index + 1.
-            ENDLOOP.
-            ls_value = zcl_qjs_value=>new_object( lo_object ).
-            READ TABLE lo_called_frame->locals INDEX lv_local_index INTO lo_cell.
-            lo_cell->set( ls_value ).
+            IF lo_called->uses_arguments_object( ) = abap_true.
+              lo_object = mo_runtime->create_array( ).
+              lv_element_index = 0.
+              LOOP AT lt_arguments INTO ls_value.
+                lo_object->set_element( index = lv_element_index value = ls_value ).
+                lv_element_index = lv_element_index + 1.
+              ENDLOOP.
+              ls_value = zcl_qjs_value=>new_object( lo_object ).
+              READ TABLE lo_called_frame->locals INDEX lv_local_index INTO lo_cell.
+              lo_cell->set( ls_value ).
+            ENDIF.
             lv_local_index = lv_local_index + 1.
           ENDIF.
           lv_argument_index = 1.

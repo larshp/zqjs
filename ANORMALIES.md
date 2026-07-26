@@ -140,6 +140,7 @@ behavior was counterintuitive and repeating them would waste another benchmark c
 | Stack-window argument copying | Approximately 60,700 ms median | Reverted |
 | Lazy local-cell boxing | 48,700-76,100 ms across samples | Reverted |
 | Reference-swapped parser locals table | 45,393.0 ms median (43,678.5, 47,379.3, 45,393.0) versus 27,384.8 ms for lazy parent bindings alone | Reverted; per-lookup reference indirection outweighed two avoided copies |
+| Removing redundant simple-parameter bytecode prologues | 46,281.0 ms median (43,353.9, 47,654.9, 46,281.0) versus 26,033.0 ms with the original prologue | Reverted; fewer VM instructions produced a substantially worse transpiled execution/JIT shape |
 | VM integer property-key shortcut | Approximately 10% slower | Reverted |
 | Contiguous local-metadata iteration | 70,300 ms | Reverted |
 | Lazy function prototype/property creation | Semantic test failures | Reverted |

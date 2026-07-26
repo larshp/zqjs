@@ -25,12 +25,15 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_local,
       name TYPE string,
+      function_depth TYPE i,
       index TYPE i,
       kind TYPE i,
       lexical TYPE abap_bool,
       constant TYPE abap_bool,
     END OF ty_local.
     TYPES ty_locals TYPE HASHED TABLE OF ty_local WITH UNIQUE KEY name.
+    TYPES ty_function_locals TYPE HASHED TABLE OF ty_local
+      WITH UNIQUE KEY name function_depth.
     TYPES ty_jump_indices TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_loop,
       continue_target TYPE i,
@@ -85,11 +88,11 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_limits TYPE REF TO zcl_qjs_limits.
     DATA mv_parser_depth TYPE i.
     DATA mv_checked_parser_depth TYPE i.
-    DATA mt_locals TYPE ty_locals.
+    DATA mt_locals TYPE ty_function_locals.
     DATA mt_parent_locals TYPE ty_locals.
-    DATA mr_outer_locals TYPE REF TO ty_locals.
     DATA mr_outer_parent_locals TYPE REF TO ty_locals.
     DATA mr_outer_scopes TYPE REF TO ty_scopes.
+    DATA mv_function_depth TYPE i.
     DATA mt_loops TYPE ty_loops.
     DATA mv_in_function TYPE abap_bool.
     DATA mv_source TYPE string.
@@ -319,9 +322,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD declare_name.
     DATA ls_local TYPE ty_local.
-    READ TABLE mt_locals WITH TABLE KEY name = name TRANSPORTING NO FIELDS.
+    READ TABLE mt_locals WITH TABLE KEY name = name
+      function_depth = mv_function_depth TRANSPORTING NO FIELDS.
     IF sy-subrc <> 0.
       ls_local-name = name.
+      ls_local-function_depth = mv_function_depth.
       ls_local-index = mo_emitter->allocate_local( ).
       ls_local-kind = zcl_qjs_function=>capture_local.
       INSERT ls_local INTO TABLE mt_locals.
@@ -593,6 +598,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         RETURN.
       ENDIF.
       IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
+        IF ls_scan-text = 'arguments'.
+          mo_emitter->mark_arguments_used( ).
+        ENDIF.
         qjs_note_capture ls_scan-text.
       ENDIF.
       IF lv_declaration_kind > 0.
@@ -794,7 +802,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA ls_local TYPE ty_local.
     DATA ls_binding TYPE ty_global_binding.
     DATA lt_root_scope TYPE ty_locals.
-    LOOP AT mt_locals INTO ls_local.
+    LOOP AT mt_locals INTO ls_local WHERE function_depth = 0.
       ls_binding-name = ls_local-name.
       ls_binding-index = ls_local-index.
       ls_binding-lexical = ls_local-lexical.
@@ -1035,12 +1043,15 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         lv_catch_name = ms_token-text.
         READ TABLE mt_locals WITH TABLE KEY name = lv_catch_name
+          function_depth = mv_function_depth
           INTO ls_outer_local.
         IF sy-subrc = 0.
           lv_had_outer = abap_true.
-          DELETE TABLE mt_locals WITH TABLE KEY name = lv_catch_name.
+          DELETE TABLE mt_locals WITH TABLE KEY name = lv_catch_name
+            function_depth = mv_function_depth.
         ENDIF.
         ls_catch_local-name = lv_catch_name.
+        ls_catch_local-function_depth = mv_function_depth.
         ls_catch_local-index = mo_emitter->allocate_local( ).
         ls_catch_local-kind = zcl_qjs_function=>capture_local.
         INSERT ls_catch_local INTO TABLE mt_locals.
@@ -1066,7 +1077,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       IF lv_pattern_catch = abap_true.
         DELETE mt_scopes INDEX lv_catch_scope_index.
       ELSE.
-        DELETE TABLE mt_locals WITH TABLE KEY name = lv_catch_name.
+        DELETE TABLE mt_locals WITH TABLE KEY name = lv_catch_name
+          function_depth = mv_function_depth.
         IF lv_had_outer = abap_true.
           INSERT ls_outer_local INTO TABLE mt_locals.
         ENDIF.
@@ -1122,10 +1134,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_function_declaration.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
-    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
     DATA lr_previous_outer_parent TYPE REF TO ty_locals.
     DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
-    DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
     DATA lt_outer_finally TYPE ty_finally_stack.
@@ -1164,9 +1174,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         EXPORTING reason = 'Expected function name'.
     ENDIF.
     lv_name = ms_token-text.
-    READ TABLE mt_locals WITH TABLE KEY name = lv_name INTO ls_outer_local.
+    READ TABLE mt_locals WITH TABLE KEY name = lv_name
+      function_depth = mv_function_depth INTO ls_outer_local.
     IF sy-subrc <> 0.
       ls_outer_local-name = lv_name.
+      ls_outer_local-function_depth = mv_function_depth.
       ls_outer_local-index = mo_emitter->allocate_local( ).
       ls_outer_local-kind = zcl_qjs_function=>capture_local.
       INSERT ls_outer_local INTO TABLE mt_locals.
@@ -1179,7 +1191,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
 
     lo_outer_emitter = mo_emitter.
-    lt_outer_locals = mt_locals.
     lt_outer_parent_locals = mt_parent_locals.
     lt_outer_finally = mt_finally.
     lt_outer_scopes = mt_scopes.
@@ -1188,15 +1199,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
-    lr_previous_outer_locals = mr_outer_locals.
     lr_previous_outer_parent = mr_outer_parent_locals.
     lr_previous_outer_scopes = mr_outer_scopes.
-    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
     GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
     GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     CLEAR mt_parent_locals.
-    CLEAR mt_locals.
+    mv_function_depth = mv_function_depth + 1.
     CLEAR mt_loops.
     CLEAR mt_finally.
     CLEAR mt_scopes.
@@ -1207,16 +1216,19 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mv_in_async = lv_async.
 
     ls_local-name = lv_name.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
     CLEAR ls_local.
     ls_local-name = 'this'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
     CLEAR ls_local.
     ls_local-name = 'arguments'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
@@ -1229,6 +1241,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         CLEAR ls_local.
         ls_local-name = ms_token-text.
+        ls_local-function_depth = mv_function_depth.
         ls_local-index = mo_emitter->allocate_local( ).
         ls_local-kind = zcl_qjs_function=>capture_local.
         INSERT ls_local INTO TABLE mt_locals.
@@ -1267,6 +1280,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       CLEAR ls_local.
       ls_local-name = ms_token-text.
+      ls_local-function_depth = mv_function_depth.
       ls_local-index = mo_emitter->allocate_local( ).
       ls_local-kind = zcl_qjs_function=>capture_local.
       INSERT ls_local INTO TABLE mt_locals.
@@ -1332,13 +1346,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     mo_last_function = lo_function.
 
     mo_emitter = lo_outer_emitter.
-    mt_locals = lt_outer_locals.
+    DELETE mt_locals WHERE function_depth = mv_function_depth.
+    mv_function_depth = mv_function_depth - 1.
     mt_parent_locals = lt_outer_parent_locals.
     mt_loops = lt_outer_loops.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
-    mr_outer_locals = lr_previous_outer_locals.
     mr_outer_parent_locals = lr_previous_outer_parent.
     mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
@@ -1366,10 +1380,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_function_expression.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
-    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
     DATA lr_previous_outer_parent TYPE REF TO ty_locals.
     DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
-    DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
     DATA lt_outer_finally TYPE ty_finally_stack.
@@ -1418,7 +1430,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     advance( ).
 
     lo_outer_emitter = mo_emitter.
-    lt_outer_locals = mt_locals.
     lt_outer_parent_locals = mt_parent_locals.
     lt_outer_finally = mt_finally.
     lt_outer_scopes = mt_scopes.
@@ -1427,15 +1438,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
-    lr_previous_outer_locals = mr_outer_locals.
     lr_previous_outer_parent = mr_outer_parent_locals.
     lr_previous_outer_scopes = mr_outer_scopes.
-    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
     GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
     GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     CLEAR mt_parent_locals.
-    CLEAR mt_locals.
+    mv_function_depth = mv_function_depth + 1.
     CLEAR mt_loops.
     CLEAR mt_finally.
     CLEAR mt_scopes.
@@ -1449,15 +1458,18 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ls_local-kind = zcl_qjs_function=>capture_local.
     IF lv_name IS NOT INITIAL.
       ls_local-name = lv_name.
+      ls_local-function_depth = mv_function_depth.
       INSERT ls_local INTO TABLE mt_locals.
     ENDIF.
     CLEAR ls_local.
     ls_local-name = 'this'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
     CLEAR ls_local.
     ls_local-name = 'arguments'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
@@ -1470,6 +1482,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         CLEAR ls_local.
         ls_local-name = ms_token-text.
+        ls_local-function_depth = mv_function_depth.
         ls_local-index = mo_emitter->allocate_local( ).
         ls_local-kind = zcl_qjs_function=>capture_local.
         INSERT ls_local INTO TABLE mt_locals.
@@ -1508,6 +1521,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       CLEAR ls_local.
       ls_local-name = ms_token-text.
+      ls_local-function_depth = mv_function_depth.
       ls_local-index = mo_emitter->allocate_local( ).
       ls_local-kind = zcl_qjs_function=>capture_local.
       INSERT ls_local INTO TABLE mt_locals.
@@ -1575,13 +1589,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lo_function = mo_emitter->to_function( ).
 
     mo_emitter = lo_outer_emitter.
-    mt_locals = lt_outer_locals.
+    DELETE mt_locals WHERE function_depth = mv_function_depth.
+    mv_function_depth = mv_function_depth - 1.
     mt_parent_locals = lt_outer_parent_locals.
     mt_loops = lt_outer_loops.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
-    mr_outer_locals = lr_previous_outer_locals.
     mr_outer_parent_locals = lr_previous_outer_parent.
     mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
@@ -1597,7 +1611,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_class_field_initializer.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
-    DATA lt_outer_locals TYPE ty_locals.
+    DATA lt_outer_locals TYPE ty_function_locals.
     DATA lt_outer_parent_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_finally TYPE ty_finally_stack.
@@ -1620,7 +1634,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
 
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
-    mt_parent_locals = mt_locals.
+    CLEAR mt_parent_locals.
+    LOOP AT mt_locals INTO ls_parent_binding
+        WHERE function_depth = mv_function_depth.
+      INSERT ls_parent_binding INTO TABLE mt_parent_locals.
+    ENDLOOP.
     LOOP AT mt_scopes INTO lt_visible_scope.
       LOOP AT lt_visible_scope INTO ls_visible_binding.
         DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
@@ -1633,9 +1651,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CLEAR mt_scopes.
     CLEAR mt_hoists.
     APPEND lt_root_scope TO mt_scopes.
+    mv_function_depth = mv_function_depth + 1.
     mv_in_function = abap_true.
 
     ls_local-name = 'this'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
@@ -1654,6 +1674,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     mo_emitter = lo_outer_emitter.
     mt_locals = lt_outer_locals.
+    mv_function_depth = mv_function_depth - 1.
     mt_parent_locals = lt_outer_parent_locals.
     mt_loops = lt_outer_loops.
     mt_finally = lt_outer_finally.
@@ -1664,7 +1685,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_class_static_block.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
-    DATA lt_outer_locals TYPE ty_locals.
+    DATA lt_outer_locals TYPE ty_function_locals.
     DATA lt_outer_parent_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_finally TYPE ty_finally_stack.
@@ -1687,7 +1708,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
 
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
-    mt_parent_locals = mt_locals.
+    CLEAR mt_parent_locals.
+    LOOP AT mt_locals INTO ls_parent_binding
+        WHERE function_depth = mv_function_depth.
+      INSERT ls_parent_binding INTO TABLE mt_parent_locals.
+    ENDLOOP.
     LOOP AT mt_scopes INTO lt_visible_scope.
       LOOP AT lt_visible_scope INTO ls_visible_binding.
         DELETE TABLE mt_parent_locals WITH TABLE KEY name = ls_visible_binding-name.
@@ -1700,9 +1725,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CLEAR mt_scopes.
     CLEAR mt_hoists.
     APPEND lt_root_scope TO mt_scopes.
+    mv_function_depth = mv_function_depth + 1.
     mv_in_function = abap_true.
 
     ls_local-name = 'this'.
+    ls_local-function_depth = mv_function_depth.
     ls_local-index = mo_emitter->allocate_local( ).
     ls_local-kind = zcl_qjs_function=>capture_local.
     INSERT ls_local INTO TABLE mt_locals.
@@ -1731,6 +1758,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     mo_emitter = lo_outer_emitter.
     mt_locals = lt_outer_locals.
+    mv_function_depth = mv_function_depth - 1.
     mt_parent_locals = lt_outer_parent_locals.
     mt_loops = lt_outer_loops.
     mt_finally = lt_outer_finally.
@@ -2256,9 +2284,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         lv_scope_index = lv_scope_index - 1.
       ENDWHILE.
     ENDIF.
-    IF mr_outer_locals IS BOUND.
-      READ TABLE mr_outer_locals->* WITH TABLE KEY name = name
-        INTO ls_parent.
+    IF mv_function_depth > 0.
+      READ TABLE mt_locals WITH TABLE KEY name = name
+        function_depth = mv_function_depth - 1 INTO ls_parent.
       IF sy-subrc = 0.
         INSERT ls_parent INTO TABLE mt_parent_locals.
         result = abap_true.
@@ -2288,8 +2316,12 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       lv_scope_index = lv_scope_index - 1.
     ENDWHILE.
-    READ TABLE mt_locals WITH TABLE KEY name = name INTO ls_local.
+    READ TABLE mt_locals WITH TABLE KEY name = name
+      function_depth = mv_function_depth INTO ls_local.
     IF sy-subrc = 0.
+      IF name = 'arguments'.
+        mo_emitter->mark_arguments_used( ).
+      ENDIF.
       result = ls_local.
       RETURN.
     ENDIF.
@@ -2307,6 +2339,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           source_index = ls_local-index ).
       ENDIF.
       result-kind = zcl_qjs_function=>capture_parent.
+      result-function_depth = mv_function_depth.
       INSERT result INTO TABLE mt_locals.
       RETURN.
     ENDIF.
@@ -2326,7 +2359,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       ENDIF.
       lv_scope_index = lv_scope_index - 1.
     ENDWHILE.
-    READ TABLE mt_locals WITH TABLE KEY name = name TRANSPORTING NO FIELDS.
+    READ TABLE mt_locals WITH TABLE KEY name = name
+      function_depth = mv_function_depth TRANSPORTING NO FIELDS.
     IF sy-subrc = 0.
       result = abap_true.
       RETURN.
@@ -2341,10 +2375,12 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA ls_parent_binding TYPE ty_local.
     DEFINE qjs_capture_binding.
       READ TABLE mt_locals WITH TABLE KEY name = ls_parent_binding-name
+        function_depth = mv_function_depth
         TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         CLEAR ls_local.
         ls_local-name = ls_parent_binding-name.
+        ls_local-function_depth = mv_function_depth.
         IF ls_parent_binding-kind = zcl_qjs_function=>capture_parent.
           ls_local-index = mo_emitter->append_capture(
             source_kind  = zcl_qjs_function=>capture_parent
@@ -2732,7 +2768,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Expected identifier after var'.
       ENDIF.
-      READ TABLE mt_locals WITH TABLE KEY name = ms_token-text INTO ls_local.
+      READ TABLE mt_locals WITH TABLE KEY name = ms_token-text
+        function_depth = mv_function_depth INTO ls_local.
       IF sy-subrc <> 0.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Variable declaration was not predeclared: '
@@ -3530,10 +3567,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
   METHOD parse_arrow_function.
     DATA lo_outer_emitter TYPE REF TO zcl_qjs_emitter.
-    DATA lr_previous_outer_locals TYPE REF TO ty_locals.
     DATA lr_previous_outer_parent TYPE REF TO ty_locals.
     DATA lr_previous_outer_scopes TYPE REF TO ty_scopes.
-    DATA lt_outer_locals TYPE ty_locals.
     DATA lt_outer_loops TYPE ty_loops.
     DATA lt_outer_parent_locals TYPE ty_locals.
     DATA lt_outer_finally TYPE ty_finally_stack.
@@ -3573,7 +3608,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     ENDIF.
 
     lo_outer_emitter = mo_emitter.
-    lt_outer_locals = mt_locals.
     lt_outer_parent_locals = mt_parent_locals.
     lt_outer_finally = mt_finally.
     lt_outer_scopes = mt_scopes.
@@ -3582,15 +3616,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_outer_in_function = mv_in_function.
     lv_outer_in_generator = mv_in_generator.
     lv_outer_in_async = mv_in_async.
-    lr_previous_outer_locals = mr_outer_locals.
     lr_previous_outer_parent = mr_outer_parent_locals.
     lr_previous_outer_scopes = mr_outer_scopes.
-    GET REFERENCE OF lt_outer_locals INTO mr_outer_locals.
     GET REFERENCE OF lt_outer_parent_locals INTO mr_outer_parent_locals.
     GET REFERENCE OF lt_outer_scopes INTO mr_outer_scopes.
     CREATE OBJECT mo_emitter EXPORTING limits = mo_limits.
     CLEAR mt_parent_locals.
-    CLEAR mt_locals.
+    mv_function_depth = mv_function_depth + 1.
     IF lv_outer_in_function = abap_false.
       ensure_parent_binding( 'globalThis' ).
       READ TABLE mt_parent_locals WITH TABLE KEY name = 'globalThis'
@@ -3620,6 +3652,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             EXPORTING reason = 'Expected arrow rest parameter name'.
         ENDIF.
         ls_local-name = ms_token-text.
+        ls_local-function_depth = mv_function_depth.
         ls_local-index = mo_emitter->allocate_local( ).
         ls_local-kind = zcl_qjs_function=>capture_local.
         INSERT ls_local INTO TABLE mt_locals.
@@ -3651,6 +3684,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         CLEAR ls_local.
         ls_local-name = ms_token-text.
+        ls_local-function_depth = mv_function_depth.
         ls_local-index = mo_emitter->allocate_local( ).
         ls_local-kind = zcl_qjs_function=>capture_local.
         INSERT ls_local INTO TABLE mt_locals.
@@ -3727,13 +3761,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lo_function = mo_emitter->to_function( ).
 
     mo_emitter = lo_outer_emitter.
-    mt_locals = lt_outer_locals.
+    DELETE mt_locals WHERE function_depth = mv_function_depth.
+    mv_function_depth = mv_function_depth - 1.
     mt_parent_locals = lt_outer_parent_locals.
     mt_loops = lt_outer_loops.
     mt_finally = lt_outer_finally.
     mt_scopes = lt_outer_scopes.
     mt_hoists = lt_outer_hoists.
-    mr_outer_locals = lr_previous_outer_locals.
     mr_outer_parent_locals = lr_previous_outer_parent.
     mr_outer_scopes = lr_previous_outer_scopes.
     mv_in_function = lv_outer_in_function.
@@ -4682,6 +4716,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ELSE.
           READ TABLE mt_locals WITH TABLE KEY name = 'globalThis'
+            function_depth = mv_function_depth
             INTO DATA(ls_global_this_binding).
           IF sy-subrc = 0.
             mo_emitter->emit(
@@ -4925,6 +4960,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ls_object_home_binding-kind = zcl_qjs_function=>capture_local.
         ls_object_home_binding-name = `[[object-home-`
           && CONV string( ls_object_home_binding-index ) && `]]`.
+        ls_object_home_binding-function_depth = mv_function_depth.
         INSERT ls_object_home_binding INTO TABLE mt_locals.
         mo_emitter->emit( zif_qjs_opcodes=>duplicate ).
         mo_emitter->emit(
@@ -5332,7 +5368,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ENDWHILE.
         advance( ).
-        DELETE TABLE mt_locals WITH TABLE KEY name = ls_object_home_binding-name.
+        DELETE TABLE mt_locals WITH TABLE KEY name = ls_object_home_binding-name
+          function_depth = mv_function_depth.
       WHEN zcl_qjs_lexer=>token_new.
         advance( ).
         IF ms_token-kind <> zcl_qjs_lexer=>token_identifier

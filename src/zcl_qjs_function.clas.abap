@@ -33,6 +33,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
         has_self TYPE abap_bool DEFAULT abap_false
         has_this TYPE abap_bool DEFAULT abap_false
         has_arguments TYPE abap_bool DEFAULT abap_false
+        arguments_used TYPE abap_bool DEFAULT abap_false
         constructible TYPE abap_bool DEFAULT abap_true
         class_constructor TYPE abap_bool DEFAULT abap_false
         generator TYPE abap_bool DEFAULT abap_false
@@ -73,6 +74,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS has_self_binding RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_this_binding RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_arguments_binding RETURNING VALUE(result) TYPE abap_bool.
+    METHODS uses_arguments_object RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_constructible RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_class_constructor RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_generator RETURNING VALUE(result) TYPE abap_bool.
@@ -103,6 +105,7 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_has_self TYPE abap_bool.
     DATA mv_has_this TYPE abap_bool.
     DATA mv_has_arguments TYPE abap_bool.
+    DATA mv_arguments_used TYPE abap_bool.
     DATA mv_constructible TYPE abap_bool.
     DATA mv_class_constructor TYPE abap_bool.
     DATA mv_generator TYPE abap_bool.
@@ -129,6 +132,7 @@ CLASS zcl_qjs_function IMPLEMENTATION.
     mv_has_self = has_self.
     mv_has_this = has_this.
     mv_has_arguments = has_arguments.
+    mv_arguments_used = arguments_used.
     mv_constructible = constructible.
     mv_class_constructor = class_constructor.
     mv_generator = generator.
@@ -199,6 +203,9 @@ CLASS zcl_qjs_function IMPLEMENTATION.
 
   METHOD has_arguments_binding.
     result = mv_has_arguments.
+  ENDMETHOD.
+  METHOD uses_arguments_object.
+    result = mv_arguments_used.
   ENDMETHOD.
   METHOD is_constructible.
     result = mv_constructible.

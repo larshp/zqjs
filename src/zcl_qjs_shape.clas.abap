@@ -33,10 +33,15 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_transition,
-      key TYPE string,
+      name TYPE string,
+      accessor TYPE abap_bool,
+      writable TYPE abap_bool,
+      enumerable TYPE abap_bool,
+      configurable TYPE abap_bool,
       shape TYPE REF TO zcl_qjs_shape,
     END OF ty_transition.
-    TYPES ty_transitions TYPE HASHED TABLE OF ty_transition WITH UNIQUE KEY key.
+    TYPES ty_transitions TYPE HASHED TABLE OF ty_transition
+      WITH UNIQUE KEY name accessor writable enumerable configurable.
     DATA mt_descriptors TYPE ty_descriptors.
     DATA mr_transitions TYPE REF TO ty_transitions.
 ENDCLASS.
@@ -54,7 +59,6 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD transition.
-    DATA lv_key TYPE string.
     DATA ls_transition TYPE ty_transition.
     DATA lt_descriptors TYPE ty_descriptors.
     DATA ls_descriptor TYPE ty_descriptor.
@@ -68,29 +72,11 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
       result = me.
       RETURN.
     ENDIF.
-    lv_key = name && `|`.
-    IF accessor = abap_true.
-      lv_key = lv_key && `1|`.
-    ELSE.
-      lv_key = lv_key && `0|`.
-    ENDIF.
-    IF writable = abap_true.
-      lv_key = lv_key && `1|`.
-    ELSE.
-      lv_key = lv_key && `0|`.
-    ENDIF.
-    IF enumerable = abap_true.
-      lv_key = lv_key && `1|`.
-    ELSE.
-      lv_key = lv_key && `0|`.
-    ENDIF.
-    IF configurable = abap_true.
-      lv_key = lv_key && `1`.
-    ELSE.
-      lv_key = lv_key && `0`.
-    ENDIF.
     IF mr_transitions IS BOUND.
-      READ TABLE mr_transitions->* WITH TABLE KEY key = lv_key INTO ls_transition.
+      READ TABLE mr_transitions->* WITH TABLE KEY
+        name = name accessor = accessor writable = writable
+        enumerable = enumerable configurable = configurable
+        INTO ls_transition.
       IF sy-subrc = 0.
         result = ls_transition-shape.
         RETURN.
@@ -116,7 +102,11 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
     ls_descriptor-configurable = configurable.
     INSERT ls_descriptor INTO TABLE lt_descriptors.
     CREATE OBJECT result EXPORTING descriptors = lt_descriptors.
-    ls_transition-key = lv_key.
+    ls_transition-name = name.
+    ls_transition-accessor = accessor.
+    ls_transition-writable = writable.
+    ls_transition-enumerable = enumerable.
+    ls_transition-configurable = configurable.
     ls_transition-shape = result.
     IF mr_transitions IS NOT BOUND. CREATE DATA mr_transitions. ENDIF.
     INSERT ls_transition INTO TABLE mr_transitions->*.
