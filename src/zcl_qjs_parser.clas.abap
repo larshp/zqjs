@@ -1141,8 +1141,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lt_outer_finally TYPE ty_finally_stack.
     DATA lt_outer_scopes TYPE ty_scopes.
     DATA lt_root_scope TYPE ty_locals.
-    DATA lt_visible_scope TYPE ty_locals.
-    DATA ls_visible_binding TYPE ty_local.
     DATA lt_outer_hoists TYPE ty_hoists.
     DATA ls_hoist TYPE ty_hoist.
     DATA lv_constant_index TYPE i.
@@ -1156,7 +1154,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_default_jump TYPE i.
     DATA lo_function TYPE REF TO zcl_qjs_function.
     DATA ls_function_value TYPE zcl_qjs_value=>ty_value.
-    DATA ls_parent_binding TYPE ty_local.
     DATA lv_generator TYPE abap_bool.
     DATA lv_outer_in_generator TYPE abap_bool.
     DATA lv_async TYPE abap_bool.
@@ -1387,8 +1384,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lt_outer_finally TYPE ty_finally_stack.
     DATA lt_outer_scopes TYPE ty_scopes.
     DATA lt_root_scope TYPE ty_locals.
-    DATA lt_visible_scope TYPE ty_locals.
-    DATA ls_visible_binding TYPE ty_local.
     DATA lt_outer_hoists TYPE ty_hoists.
     DATA lv_outer_in_function TYPE abap_bool.
     DATA ls_local TYPE ty_local.
@@ -1398,7 +1393,6 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_seen_default TYPE abap_bool.
     DATA lv_default_jump TYPE i.
     DATA lo_function TYPE REF TO zcl_qjs_function.
-    DATA ls_parent_binding TYPE ty_local.
     DATA lv_class_method TYPE abap_bool.
     DATA lv_class_constructor TYPE abap_bool.
     DATA lv_generator TYPE abap_bool.
@@ -3575,10 +3569,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lt_outer_scopes TYPE ty_scopes.
     DATA lt_outer_hoists TYPE ty_hoists.
     DATA lt_root_scope TYPE ty_locals.
-    DATA lt_visible_scope TYPE ty_locals.
-    DATA ls_visible_binding TYPE ty_local.
     DATA ls_local TYPE ty_local.
-    DATA ls_parent_binding TYPE ty_local.
     DATA ls_global_this TYPE ty_local.
     DATA lv_outer_in_function TYPE abap_bool.
     DATA lv_outer_in_generator TYPE abap_bool.

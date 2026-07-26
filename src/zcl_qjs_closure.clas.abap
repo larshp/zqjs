@@ -65,8 +65,7 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS set_base_constructor
       IMPORTING base TYPE zcl_qjs_value=>ty_value.
     METHODS invoke_default_derived
-      IMPORTING receiver      TYPE zcl_qjs_value=>ty_value
-        arguments             TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      IMPORTING arguments     TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS initialize_instance_fields
@@ -456,7 +455,7 @@ CLASS zcl_qjs_closure IMPLEMENTATION.
     ENDIF.
     IF mo_function->is_default_derived_constructor( ) = abap_true.
       result = invoke_default_derived(
-        receiver = zcl_qjs_value=>new_undefined( ) arguments = arguments ).
+        arguments = arguments ).
       IF result-tag = zcl_qjs_value=>tag_object.
         DATA lo_derived_object TYPE REF TO zcl_qjs_object.
         TRY.

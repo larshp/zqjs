@@ -31,10 +31,6 @@ CLASS zcl_qjs IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD eval.
-    DATA lo_function TYPE REF TO zcl_qjs_function.
-    DATA lo_limits TYPE REF TO zcl_qjs_limits.
-    DATA lo_vm TYPE REF TO zcl_qjs_vm.
-    DATA lo_parser TYPE REF TO zcl_qjs_parser.
     DATA lo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA lo_context TYPE REF TO zcl_qjs_context.
     CREATE OBJECT lo_runtime

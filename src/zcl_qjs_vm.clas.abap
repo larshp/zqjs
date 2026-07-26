@@ -877,7 +877,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               AND lo_called->is_default_derived_constructor( ) = abap_true.
             TRY.
                 ls_this = lo_closure->invoke_default_derived(
-                  receiver = ls_this arguments = lt_arguments ).
+                  arguments = lt_arguments ).
               CATCH zcx_qjs_error INTO lo_host_error.
                 RAISE EXCEPTION TYPE zcx_qjs_throw
                   EXPORTING value = mo_runtime->create_error_from_reason(

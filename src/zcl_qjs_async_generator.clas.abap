@@ -82,7 +82,7 @@ CLASS zcl_qjs_async_generator IMPLEMENTATION.
     mt_arguments = arguments.
     CREATE OBJECT mo_vm
       EXPORTING runtime = mo_runtime limits = mo_runtime->get_limits( ).
-    DATA(ls_initial) = mo_vm->execute(
+    mo_vm->execute(
       function = mo_function initial_closure = mo_closure
       initial_this = ms_this initial_arguments = mt_arguments ).
     IF mo_vm->was_suspended( ) = abap_false

@@ -2379,7 +2379,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         lo_setter_self = me.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
-        DATA(ls_setter_result) = mo_runtime->invoke_callable(
+        mo_runtime->invoke_callable(
           callable   = ls_property-setter
           this_value = zcl_qjs_value=>new_object( lo_setter_self )
           arguments  = lt_setter_arguments ).
@@ -2978,7 +2978,6 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA lv_name TYPE string.
     DATA lv_error_name TYPE string.
     DATA lv_error_message TYPE string.
-    DATA lv_to_string_property TYPE string VALUE 'toString'.
     DATA lv_error_separator TYPE string VALUE ': '.
     DATA ls_this_argument TYPE zcl_qjs_value=>ty_value.
     DATA ls_argument_list TYPE zcl_qjs_value=>ty_value.
@@ -3705,7 +3704,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         APPEND ls_reflect_key TO lt_reflect_define_args.
         APPEND ls_reflect_descriptor TO lt_reflect_define_args.
         TRY.
-            DATA(ls_reflect_ignored) = lo_reflect_define->zif_qjs_callable~call(
+            lo_reflect_define->zif_qjs_callable~call(
               this_value = zcl_qjs_value=>new_undefined( )
               arguments  = lt_reflect_define_args ).
             result = zcl_qjs_value=>new_boolean( abap_true ).
@@ -4016,7 +4015,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               APPEND ls_each_entry-key TO lt_each_arguments.
             ENDIF.
             APPEND this_value TO lt_each_arguments.
-            DATA(ls_each_ignored) = mo_runtime->invoke_callable(
+            mo_runtime->invoke_callable(
               callable = ls_argument this_value = ls_collection_this
               arguments = lt_each_arguments ).
           ENDWHILE.
@@ -7620,7 +7619,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           DATA(ls_all_resolve) = lo_all_state->get( '[[Resolve]]' ).
           DATA lt_all_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
           APPEND ls_all_values TO lt_all_resolve_arguments.
-          DATA(ls_all_resolved) = mo_runtime->invoke_callable(
+          mo_runtime->invoke_callable(
             callable   = ls_all_resolve
             this_value = zcl_qjs_value=>new_undefined( )
             arguments  = lt_all_resolve_arguments ).
@@ -7629,7 +7628,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       WHEN id_promise_combinator_reject OR id_promise_race_fulfill.
         DATA lt_combinator_settle_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND ls_argument TO lt_combinator_settle_arguments.
-        DATA(ls_combinator_settled) = mo_runtime->invoke_callable(
+        mo_runtime->invoke_callable(
           callable   = ms_bound_target
           this_value = zcl_qjs_value=>new_undefined( )
           arguments  = lt_combinator_settle_arguments ).
@@ -7662,7 +7661,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           DATA(ls_settled_resolve) = lo_settled_state->get( '[[Resolve]]' ).
           DATA lt_settled_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
           APPEND ls_settled_values TO lt_settled_resolve_arguments.
-          DATA(ls_settled_resolved) = mo_runtime->invoke_callable(
+          mo_runtime->invoke_callable(
             callable   = ls_settled_resolve
             this_value = zcl_qjs_value=>new_undefined( )
             arguments  = lt_settled_resolve_arguments ).
@@ -7686,7 +7685,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           DATA(ls_any_reject) = lo_any_state->get( '[[Reject]]' ).
           DATA lt_any_reject_arguments TYPE zif_qjs_callable=>ty_arguments.
           APPEND ls_any_aggregate TO lt_any_reject_arguments.
-          DATA(ls_any_rejected) = mo_runtime->invoke_callable(
+          mo_runtime->invoke_callable(
             callable   = ls_any_reject
             this_value = zcl_qjs_value=>new_undefined( )
             arguments  = lt_any_reject_arguments ).
@@ -7792,7 +7791,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         APPEND zcl_qjs_value=>new_object( lo_resolve_ref ) TO lt_executor_arguments.
         APPEND zcl_qjs_value=>new_object( lo_reject_ref ) TO lt_executor_arguments.
         TRY.
-            DATA(ls_executor_result) = runtime->invoke_callable(
+            runtime->invoke_callable(
               callable = ls_executor this_value = zcl_qjs_value=>new_undefined( )
               arguments = lt_executor_arguments ).
           CATCH zcx_qjs_throw INTO DATA(lx_executor_throw).
@@ -7860,7 +7859,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             ELSE.
               APPEND ls_source_step-value TO lt_adder_arguments.
             ENDIF.
-            DATA(ls_adder_ignored) = runtime->invoke_callable(
+            runtime->invoke_callable(
               callable   = ls_collection_adder
               this_value = zcl_qjs_value=>new_object( lo_object )
               arguments  = lt_adder_arguments ).

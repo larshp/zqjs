@@ -376,7 +376,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
     TRY.
         DATA(lo_regex) = cl_abap_regex=>create_pcre(
           pattern = pattern ignore_case = xsdbool( flags CS 'i' ) ).
-        DATA(lo_matcher) = lo_regex->create_matcher( text = '' ).
+        lo_regex->create_matcher( text = '' ).
       CATCH cx_sy_regex.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'SyntaxError: invalid regular expression'.
@@ -461,7 +461,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
 
   METHOD symbol_key_for.
     assert_active( ).
-    DATA(lv_description) = symbol_description( symbol ).
+    symbol_description( symbol ).
     LOOP AT mt_symbol_registry INTO DATA(ls_registry)
         WHERE identity = symbol-int_value.
       result-found = abap_true.
@@ -626,7 +626,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         APPEND zcl_qjs_value=>new_object( lo_then_resolve_ref ) TO lt_then_arguments.
         APPEND zcl_qjs_value=>new_object( lo_then_reject_ref ) TO lt_then_arguments.
         TRY.
-            DATA(ls_then_result) = invoke_callable(
+            invoke_callable(
               callable = ls_job-then_method this_value = ls_job-thenable
               arguments = lt_then_arguments ).
           CATCH zcx_qjs_throw INTO DATA(lx_then_throw).
@@ -659,7 +659,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           ENDIF.
           CLEAR lt_arguments.
           APPEND ls_input TO lt_arguments.
-          DATA(ls_forwarded) = invoke_callable(
+          invoke_callable(
             callable = ls_forwarder this_value = zcl_qjs_value=>new_undefined( )
             arguments = lt_arguments ).
         ENDIF.
@@ -677,7 +677,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           ELSE.
             CLEAR lt_arguments.
             APPEND ls_result TO lt_arguments.
-            DATA(ls_resolved_result) = invoke_callable(
+            invoke_callable(
               callable   = ls_job-next_resolve
               this_value = zcl_qjs_value=>new_undefined( )
               arguments  = lt_arguments ).
@@ -689,7 +689,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           ELSE.
             CLEAR lt_arguments.
             APPEND lx_job_throw->value TO lt_arguments.
-            DATA(ls_rejected_throw) = invoke_callable(
+            invoke_callable(
               callable   = ls_job-next_reject
               this_value = zcl_qjs_value=>new_undefined( )
               arguments  = lt_arguments ).
@@ -702,7 +702,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
           ELSE.
             CLEAR lt_arguments.
             APPEND ls_job_error_value TO lt_arguments.
-            DATA(ls_rejected_error) = invoke_callable(
+            invoke_callable(
               callable   = ls_job-next_reject
               this_value = zcl_qjs_value=>new_undefined( )
               arguments  = lt_arguments ).

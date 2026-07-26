@@ -1,6 +1,5 @@
 CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
-    CONSTANTS collection_none TYPE i VALUE 0.
     CONSTANTS collection_map TYPE i VALUE 1.
     CONSTANTS collection_set TYPE i VALUE 2.
     CONSTANTS iterator_keys TYPE i VALUE 1.
@@ -566,7 +565,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
-        DATA(ls_ignored) = invoke_callable(
+        invoke_callable(
           callable = <ls_existing>-accessor_pair->setter this_value = receiver
           arguments = lt_setter_arguments ).
         RETURN.
@@ -601,7 +600,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
-        DATA(ls_ignored) = invoke_callable(
+        invoke_callable(
           callable = <ls_existing>-accessor_pair->setter this_value = receiver
           arguments = lt_setter_arguments ).
         result = abap_true.
@@ -700,7 +699,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
-        DATA(ls_ignored) = invoke_callable(
+        invoke_callable(
           callable = lr_existing->accessor->setter this_value = receiver
           arguments = lt_setter_arguments ).
         RETURN.
@@ -748,7 +747,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
-        DATA(ls_ignored) = invoke_callable(
+        invoke_callable(
           callable = lr_existing->accessor->setter this_value = receiver
           arguments = lt_setter_arguments ).
         result = abap_true.
@@ -1121,7 +1120,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       ENDIF.
       DATA lt_private_setter_args TYPE zif_qjs_callable=>ty_arguments.
       APPEND value TO lt_private_setter_args.
-      DATA(ls_private_setter_result) = invoke_callable(
+      invoke_callable(
         callable = <field>-accessor_pair->setter this_value = receiver
         arguments = lt_private_setter_args ).
       result = abap_true.
