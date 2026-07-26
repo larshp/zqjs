@@ -28,8 +28,8 @@
     "test": "npm run verify:profile && npm run verify:opcodes && npm run verify:oracle && npm run test:core"
   },
   "devDependencies": {
-    "@abaplint/cli": "2.120.4",
-    "@abaplint/runtime": "2.13.42",
-    "@abaplint/transpiler-cli": "2.13.42"
+    "@abaplint/cli": "2.120.5",
+    "@abaplint/runtime": "2.13.46",
+    "@abaplint/transpiler-cli": "2.13.46"
   }
 }

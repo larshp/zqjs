@@ -24,7 +24,7 @@ CLASS zcl_qjs_string DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     METHODS code_unit_value_at
       IMPORTING
-        index TYPE i
+        index         TYPE i
       RETURNING
         VALUE(result) TYPE i
       RAISING

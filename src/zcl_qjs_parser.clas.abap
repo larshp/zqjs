@@ -2,15 +2,15 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES ty_global_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_global_binding,
-      name TYPE string,
-      index TYPE i,
+      name    TYPE string,
+      index   TYPE i,
       lexical TYPE abap_bool,
     END OF ty_global_binding.
     TYPES ty_global_bindings TYPE STANDARD TABLE OF ty_global_binding WITH DEFAULT KEY.
     METHODS constructor
       IMPORTING
-        source TYPE string
-        limits TYPE REF TO zcl_qjs_limits OPTIONAL
+        source       TYPE string
+        limits       TYPE REF TO zcl_qjs_limits OPTIONAL
         global_names TYPE ty_global_names OPTIONAL
       RAISING
         zcx_qjs_error.
@@ -24,61 +24,61 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_local,
-      name TYPE string,
+      name           TYPE string,
       function_depth TYPE i,
-      index TYPE i,
-      kind TYPE i,
-      lexical TYPE abap_bool,
-      constant TYPE abap_bool,
+      index          TYPE i,
+      kind           TYPE i,
+      lexical        TYPE abap_bool,
+      constant       TYPE abap_bool,
     END OF ty_local.
     TYPES ty_locals TYPE HASHED TABLE OF ty_local WITH UNIQUE KEY name.
     TYPES ty_function_locals TYPE HASHED TABLE OF ty_local
       WITH UNIQUE KEY name function_depth.
     TYPES ty_jump_indices TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_loop,
-      continue_target TYPE i,
-      has_iterator TYPE abap_bool,
+      continue_target   TYPE i,
+      has_iterator      TYPE abap_bool,
       exception_handler TYPE abap_bool,
-      async_iterator TYPE abap_bool,
-      iterator_local TYPE i,
-      break_jumps TYPE ty_jump_indices,
-      continue_jumps TYPE ty_jump_indices,
+      async_iterator    TYPE abap_bool,
+      iterator_local    TYPE i,
+      break_jumps       TYPE ty_jump_indices,
+      continue_jumps    TYPE ty_jump_indices,
     END OF ty_loop.
     TYPES ty_loops TYPE STANDARD TABLE OF ty_loop WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_finally,
-      calls TYPE ty_jump_indices,
+      calls          TYPE ty_jump_indices,
       suppress_throw TYPE abap_bool,
-      loop_depth TYPE i,
+      loop_depth     TYPE i,
     END OF ty_finally.
     TYPES ty_finally_stack TYPE STANDARD TABLE OF ty_finally WITH DEFAULT KEY.
     TYPES ty_scopes TYPE STANDARD TABLE OF ty_locals WITH DEFAULT KEY.
     TYPES ty_capture_names TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
     TYPES: BEGIN OF ty_hoist,
-      name TYPE string,
+      name             TYPE string,
       make_instruction TYPE i,
-      put_instruction TYPE i,
+      put_instruction  TYPE i,
     END OF ty_hoist.
     TYPES ty_hoists TYPE HASHED TABLE OF ty_hoist WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_class_method,
-      name TYPE string,
-      local_index TYPE i,
-      constructor TYPE abap_bool,
-      static TYPE abap_bool,
-      accessor_kind TYPE i,
-      computed TYPE abap_bool,
+      name            TYPE string,
+      local_index     TYPE i,
+      constructor     TYPE abap_bool,
+      static          TYPE abap_bool,
+      accessor_kind   TYPE i,
+      computed        TYPE abap_bool,
       key_local_index TYPE i,
-      field TYPE abap_bool,
-      static_block TYPE abap_bool,
-      private TYPE abap_bool,
-      generator TYPE abap_bool,
-      async TYPE abap_bool,
-      initializer TYPE REF TO zcl_qjs_function,
+      field           TYPE abap_bool,
+      static_block    TYPE abap_bool,
+      private         TYPE abap_bool,
+      generator       TYPE abap_bool,
+      async           TYPE abap_bool,
+      initializer     TYPE REF TO zcl_qjs_function,
     END OF ty_class_method.
     TYPES ty_class_methods TYPE STANDARD TABLE OF ty_class_method WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_private_declaration,
-      name TYPE string,
+      name   TYPE string,
       static TYPE abap_bool,
-      kind TYPE i,
+      kind   TYPE i,
     END OF ty_private_declaration.
     TYPES ty_private_declarations TYPE HASHED TABLE OF ty_private_declaration
       WITH UNIQUE KEY name.
@@ -168,37 +168,37 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS parse_spread_arguments RAISING zcx_qjs_error.
     METHODS parse_spread_array RAISING zcx_qjs_error.
     METHODS pattern_end_offset
-      IMPORTING start_offset TYPE i
+      IMPORTING start_offset  TYPE i
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
     METHODS parse_pattern_declaration
       IMPORTING lexical TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS parse_pattern_parameter
-      IMPORTING argument_index TYPE i
+      IMPORTING argument_index     TYPE i
       RETURNING VALUE(has_default) TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS parse_binding_pattern
       IMPORTING lexical TYPE abap_bool
-        assignment TYPE abap_bool DEFAULT abap_false
+        assignment      TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS parse_array_binding
       IMPORTING lexical TYPE abap_bool
-        assignment TYPE abap_bool DEFAULT abap_false
+        assignment      TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS parse_object_binding
       IMPORTING lexical TYPE abap_bool
-        assignment TYPE abap_bool DEFAULT abap_false
+        assignment      TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS parse_member_binding
       IMPORTING binding TYPE ty_local
       RAISING zcx_qjs_error.
     METHODS emit_binding_default RAISING zcx_qjs_error.
     METHODS is_compound_assignment
-      IMPORTING kind TYPE i
+      IMPORTING kind          TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_identifier_name
-      IMPORTING kind TYPE i
+      IMPORTING kind          TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS emit_compound_operator IMPORTING kind TYPE i RAISING zcx_qjs_error.
     METHODS emit_binding_get IMPORTING binding TYPE ty_local RAISING zcx_qjs_error.
@@ -269,7 +269,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS declare_name IMPORTING name TYPE string RAISING zcx_qjs_error.
     METHODS emit_finally_calls
       IMPORTING for_throw TYPE abap_bool DEFAULT abap_false
-        for_loop_jump TYPE abap_bool DEFAULT abap_false
+        for_loop_jump     TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS emit_iterator_closes
       IMPORTING for_throw TYPE abap_bool DEFAULT abap_false
@@ -283,14 +283,14 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS parse_lexical IMPORTING constant TYPE abap_bool RAISING zcx_qjs_error.
     METHODS reserve_function IMPORTING name TYPE string RAISING zcx_qjs_error.
     METHODS find_binding
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE ty_local
       RAISING zcx_qjs_error.
     METHODS has_binding
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS ensure_parent_binding
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS capture_parent_bindings.
 ENDCLASS.

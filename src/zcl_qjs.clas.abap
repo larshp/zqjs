@@ -2,21 +2,21 @@ CLASS zcl_qjs DEFINITION PUBLIC FINAL CREATE PRIVATE.
   PUBLIC SECTION.
     CLASS-METHODS eval
       IMPORTING
-        source         TYPE string
-        max_steps      TYPE int8 DEFAULT 100000
-        max_objects    TYPE i DEFAULT 10000
-        max_frames     TYPE i DEFAULT 256
+        source            TYPE string
+        max_steps         TYPE int8 DEFAULT 100000
+        max_objects       TYPE i DEFAULT 10000
+        max_frames        TYPE i DEFAULT 256
         max_operand_stack TYPE i DEFAULT 4096
       RETURNING
-        VALUE(result)  TYPE zcl_qjs_value=>ty_value
+        VALUE(result)     TYPE zcl_qjs_value=>ty_value
       RAISING
         zcx_qjs_error.
 
     CLASS-METHODS compile
       IMPORTING
-        source         TYPE string
+        source        TYPE string
       RETURNING
-        VALUE(result)  TYPE REF TO zcl_qjs_function
+        VALUE(result) TYPE REF TO zcl_qjs_function
       RAISING
         zcx_qjs_error.
 ENDCLASS.

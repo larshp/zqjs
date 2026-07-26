@@ -6,8 +6,8 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     METHODS emit
       IMPORTING
-        opcode  TYPE i
-        operand TYPE i DEFAULT 0
+        opcode   TYPE i
+        operand  TYPE i DEFAULT 0
         operand2 TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
 
@@ -22,7 +22,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS add_constant
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE i.
 
     METHODS position RETURNING VALUE(result) TYPE i.
@@ -36,8 +36,8 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING instruction TYPE i opcode TYPE i operand TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
     METHODS allocate_local
-      IMPORTING initialized TYPE abap_bool DEFAULT abap_true
-        mutable TYPE abap_bool DEFAULT abap_true
+      IMPORTING initialized   TYPE abap_bool DEFAULT abap_true
+        mutable               TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result) TYPE i.
     METHODS set_signature
       IMPORTING parameter_count TYPE i function_length TYPE i DEFAULT -1
@@ -50,7 +50,7 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
         async TYPE abap_bool DEFAULT abap_false.
     METHODS mark_arguments_used.
     METHODS intern_atom
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE i.
     METHODS allocate_capture
       IMPORTING source_kind TYPE i source_index TYPE i
@@ -61,15 +61,15 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_atom_index,
-      name TYPE string,
+      name  TYPE string,
       index TYPE i,
     END OF ty_atom_index.
     TYPES ty_atom_indices TYPE HASHED TABLE OF ty_atom_index
       WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_capture_index,
-      source_kind TYPE i,
+      source_kind  TYPE i,
       source_index TYPE i,
-      index TYPE i,
+      index        TYPE i,
     END OF ty_capture_index.
     TYPES ty_capture_indices TYPE HASHED TABLE OF ty_capture_index
       WITH UNIQUE KEY source_kind source_index.

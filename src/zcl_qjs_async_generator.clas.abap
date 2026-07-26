@@ -2,10 +2,10 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor
       IMPORTING runtime TYPE REF TO zcl_qjs_runtime
-        function TYPE REF TO zcl_qjs_function
-        closure TYPE REF TO zcl_qjs_closure
-        this_value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        function        TYPE REF TO zcl_qjs_function
+        closure         TYPE REF TO zcl_qjs_closure
+        this_value      TYPE zcl_qjs_value=>ty_value
+        arguments       TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RAISING zcx_qjs_error.
     METHODS enqueue
       IMPORTING kind TYPE i input TYPE zcl_qjs_value=>ty_value
@@ -23,8 +23,8 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_request,
-      kind TYPE i,
-      input TYPE zcl_qjs_value=>ty_value,
+      kind    TYPE i,
+      input   TYPE zcl_qjs_value=>ty_value,
       promise TYPE REF TO zcl_qjs_object,
     END OF ty_request.
     TYPES ty_requests TYPE STANDARD TABLE OF ty_request WITH DEFAULT KEY.
@@ -46,10 +46,10 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA ms_delegate_next TYPE zcl_qjs_value=>ty_value.
     METHODS process RAISING zcx_qjs_error.
     METHODS execute_current
-      IMPORTING resume TYPE abap_bool DEFAULT abap_false
-        resume_value TYPE zcl_qjs_value=>ty_value OPTIONAL
+      IMPORTING resume  TYPE abap_bool DEFAULT abap_false
+        resume_value    TYPE zcl_qjs_value=>ty_value OPTIONAL
         resume_rejected TYPE abap_bool DEFAULT abap_false
-        resume_kind TYPE i DEFAULT 0
+        resume_kind     TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
     METHODS await_value
       IMPORTING value TYPE zcl_qjs_value=>ty_value result_mode TYPE abap_bool

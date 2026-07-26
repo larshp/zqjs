@@ -1,14 +1,14 @@
 CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES: BEGIN OF ty_descriptor,
-      found TYPE abap_bool,
-      name TYPE string,
-      slot TYPE i,
+      found           TYPE abap_bool,
+      name            TYPE string,
+      slot            TYPE i,
       insertion_order TYPE i,
-      accessor TYPE abap_bool,
-      writable TYPE abap_bool,
-      enumerable TYPE abap_bool,
-      configurable TYPE abap_bool,
+      accessor        TYPE abap_bool,
+      writable        TYPE abap_bool,
+      enumerable      TYPE abap_bool,
+      configurable    TYPE abap_bool,
     END OF ty_descriptor.
     TYPES ty_descriptors TYPE SORTED TABLE OF ty_descriptor WITH UNIQUE KEY name.
     TYPES ty_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
@@ -21,24 +21,24 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
         accessor TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_shape.
     METHODS without
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_shape.
     METHODS lookup
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE ty_descriptor.
     METHODS property_count RETURNING VALUE(result) TYPE i.
     METHODS names
       IMPORTING enumerable_only TYPE abap_bool DEFAULT abap_false
-      RETURNING VALUE(result) TYPE ty_names.
+      RETURNING VALUE(result)   TYPE ty_names.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_transition,
-      name TYPE string,
-      accessor TYPE abap_bool,
-      writable TYPE abap_bool,
-      enumerable TYPE abap_bool,
+      name         TYPE string,
+      accessor     TYPE abap_bool,
+      writable     TYPE abap_bool,
+      enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
-      shape TYPE REF TO zcl_qjs_shape,
+      shape        TYPE REF TO zcl_qjs_shape,
     END OF ty_transition.
     TYPES ty_transitions TYPE HASHED TABLE OF ty_transition
       WITH UNIQUE KEY name accessor writable enumerable configurable.
@@ -126,9 +126,9 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
   METHOD names.
     DATA ls_descriptor TYPE ty_descriptor.
     TYPES: BEGIN OF ty_ordered_name,
-      name TYPE string,
-      index_group TYPE i,
-      numeric_index TYPE int8,
+      name            TYPE string,
+      index_group     TYPE i,
+      numeric_index   TYPE int8,
       insertion_order TYPE i,
     END OF ty_ordered_name.
     DATA lt_ordered TYPE STANDARD TABLE OF ty_ordered_name WITH DEFAULT KEY.

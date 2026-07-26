@@ -14,14 +14,14 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name TYPE string constructor TYPE REF TO zif_qjs_constructable
       RAISING zcx_qjs_error.
     METHODS get_global
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS get_global_object
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS eval
-      IMPORTING source TYPE string
+      IMPORTING source        TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call

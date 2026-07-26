@@ -93,21 +93,21 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES:
       BEGIN OF ty_token,
-        kind   TYPE i,
-        number TYPE i,
-        text   TYPE string,
-        raw    TYPE string,
-        offset TYPE i,
-        end_offset TYPE i,
+        kind                   TYPE i,
+        number                 TYPE i,
+        text                   TYPE string,
+        raw                    TYPE string,
+        offset                 TYPE i,
+        end_offset             TYPE i,
         line_terminator_before TYPE abap_bool,
-        integer_literal TYPE abap_bool,
-        template_continuation TYPE abap_bool,
+        integer_literal        TYPE abap_bool,
+        template_continuation  TYPE abap_bool,
       END OF ty_token.
 
     METHODS constructor
       IMPORTING
         source TYPE string OPTIONAL
-        cache TYPE REF TO zcl_qjs_lexer OPTIONAL.
+        cache  TYPE REF TO zcl_qjs_lexer OPTIONAL.
 
     METHODS next
       RETURNING
@@ -142,11 +142,11 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     METHODS skip_whitespace RAISING zcx_qjs_error.
     METHODS decode_hex_escape
-      IMPORTING digits TYPE string
+      IMPORTING digits        TYPE string
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS hex_escape_value
-      IMPORTING digits TYPE string
+      IMPORTING digits        TYPE string
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
     METHODS decode_surrogate_pair
@@ -154,7 +154,7 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS scan_template_part
-      IMPORTING first TYPE abap_bool DEFAULT abap_false
+      IMPORTING first         TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE ty_token
       RAISING zcx_qjs_error.
     METHODS scan_regexp
@@ -165,11 +165,11 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE ty_token
       RAISING zcx_qjs_error.
     METHODS cached_token
-      IMPORTING index TYPE i
+      IMPORTING index         TYPE i
       RETURNING VALUE(result) TYPE ty_token
       RAISING zcx_qjs_error.
     METHODS token_index_at
-      IMPORTING offset TYPE i
+      IMPORTING offset        TYPE i
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
 ENDCLASS.

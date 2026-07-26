@@ -2,9 +2,9 @@ CLASS zcl_qjs_frame DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES ty_cells TYPE STANDARD TABLE OF REF TO zcl_qjs_cell WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_handler,
-      target TYPE i,
+      target         TYPE i,
       finally_target TYPE i,
-      stack_depth TYPE i,
+      stack_depth    TYPE i,
     END OF ty_handler.
     TYPES ty_handlers TYPE STANDARD TABLE OF ty_handler WITH DEFAULT KEY.
     TYPES ty_return_addresses TYPE STANDARD TABLE OF i WITH DEFAULT KEY.

@@ -2,13 +2,13 @@ CLASS zcl_qjs_template_site DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS add_part IMPORTING cooked TYPE string raw TYPE string.
     METHODS materialize
-      IMPORTING runtime TYPE REF TO zcl_qjs_runtime
+      IMPORTING runtime       TYPE REF TO zcl_qjs_runtime
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_part,
       cooked TYPE string,
-      raw TYPE string,
+      raw    TYPE string,
     END OF ty_part.
     TYPES ty_parts TYPE STANDARD TABLE OF ty_part WITH DEFAULT KEY.
     DATA mt_parts TYPE ty_parts.

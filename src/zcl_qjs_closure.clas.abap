@@ -2,39 +2,39 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES ty_cells TYPE STANDARD TABLE OF REF TO zcl_qjs_cell WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_instance_field,
-      key TYPE zcl_qjs_value=>ty_value,
-      initializer TYPE REF TO zcl_qjs_closure,
-      private TYPE abap_bool,
-      direct TYPE abap_bool,
-      value TYPE zcl_qjs_value=>ty_value,
+      key           TYPE zcl_qjs_value=>ty_value,
+      initializer   TYPE REF TO zcl_qjs_closure,
+      private       TYPE abap_bool,
+      direct        TYPE abap_bool,
+      value         TYPE zcl_qjs_value=>ty_value,
       accessor_kind TYPE i,
     END OF ty_instance_field.
     TYPES ty_instance_fields TYPE STANDARD TABLE OF ty_instance_field
       WITH DEFAULT KEY.
     METHODS constructor
       IMPORTING function TYPE REF TO zcl_qjs_function
-        captures TYPE REF TO ty_cells OPTIONAL
-        properties TYPE REF TO zcl_qjs_object OPTIONAL
+        captures         TYPE REF TO ty_cells OPTIONAL
+        properties       TYPE REF TO zcl_qjs_object OPTIONAL
         prototype_object TYPE REF TO zcl_qjs_object OPTIONAL
-        runtime TYPE REF TO zcl_qjs_runtime OPTIONAL
+        runtime          TYPE REF TO zcl_qjs_runtime OPTIONAL
       RAISING zcx_qjs_error.
     METHODS get_function RETURNING VALUE(result) TYPE REF TO zcl_qjs_function.
     METHODS get_captures RETURNING VALUE(result) TYPE ty_cells.
     METHODS get_captures_reference RETURNING VALUE(result) TYPE REF TO ty_cells.
     METHODS get_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS set_property IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS delete_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_symbol_property
-      IMPORTING identity TYPE i
+      IMPORTING identity      TYPE i
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS get_symbol_with_receiver
@@ -45,46 +45,46 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING identity TYPE i value TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS delete_symbol_property
-      IMPORTING identity TYPE i
+      IMPORTING identity      TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_symbol_property
-      IMPORTING identity TYPE i
+      IMPORTING identity      TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_prototype_object RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS get_property_storage RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS register_instance_field
       IMPORTING key TYPE zcl_qjs_value=>ty_value
         initializer TYPE REF TO zcl_qjs_closure
-        private TYPE abap_bool DEFAULT abap_false.
+        private     TYPE abap_bool DEFAULT abap_false.
     METHODS register_private_method
       IMPORTING key TYPE zcl_qjs_value=>ty_value
-        value TYPE zcl_qjs_value=>ty_value.
+        value       TYPE zcl_qjs_value=>ty_value.
     METHODS register_private_accessor
       IMPORTING key TYPE zcl_qjs_value=>ty_value
         value TYPE zcl_qjs_value=>ty_value kind TYPE i.
     METHODS set_base_constructor
       IMPORTING base TYPE zcl_qjs_value=>ty_value.
     METHODS invoke_default_derived
-      IMPORTING receiver TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      IMPORTING receiver      TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS initialize_instance_fields
       IMPORTING receiver TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS invoke
-      IMPORTING this_value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
-        class_call TYPE abap_bool DEFAULT abap_false
+      IMPORTING this_value    TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        class_call            TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS construct
-      IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+      IMPORTING arguments     TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS construct_with_prototype
-      IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
-        prototype TYPE REF TO zcl_qjs_object OPTIONAL
+      IMPORTING arguments     TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        prototype             TYPE REF TO zcl_qjs_object OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
   PRIVATE SECTION.

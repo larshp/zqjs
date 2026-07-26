@@ -2,7 +2,7 @@ CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES: BEGIN OF ty_step_state,
       maximum TYPE int8,
-      used TYPE int8,
+      used    TYPE int8,
     END OF ty_step_state.
     METHODS constructor
       IMPORTING
@@ -12,7 +12,7 @@ CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
         max_parser_depth    TYPE i DEFAULT 256
         max_source_length   TYPE i DEFAULT 1048576
         max_bytecode_length TYPE i DEFAULT 1048576
-        cancellation TYPE REF TO zif_qjs_cancellation OPTIONAL
+        cancellation        TYPE REF TO zif_qjs_cancellation OPTIONAL
       RAISING
         zcx_qjs_error.
 

@@ -2,9 +2,9 @@ CLASS zcl_qjs_async_task DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor
       IMPORTING runtime TYPE REF TO zcl_qjs_runtime
-        closure TYPE REF TO zcl_qjs_closure
-        this_value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        closure         TYPE REF TO zcl_qjs_closure
+        this_value      TYPE zcl_qjs_value=>ty_value
+        arguments       TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RAISING zcx_qjs_error.
     METHODS start
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -23,7 +23,7 @@ CLASS zcl_qjs_async_task DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_complete TYPE abap_bool.
     METHODS execute_step
       IMPORTING resume_value TYPE zcl_qjs_value=>ty_value OPTIONAL
-        rejected TYPE abap_bool DEFAULT abap_false
+        rejected             TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS await_value
       IMPORTING value TYPE zcl_qjs_value=>ty_value

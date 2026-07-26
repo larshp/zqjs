@@ -2,9 +2,9 @@ CLASS zcl_qjs_cell DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor
       IMPORTING value TYPE zcl_qjs_value=>ty_value
-        initialized TYPE abap_bool DEFAULT abap_true
-        mutable TYPE abap_bool DEFAULT abap_true
-        runtime TYPE REF TO zcl_qjs_runtime OPTIONAL.
+        initialized   TYPE abap_bool DEFAULT abap_true
+        mutable       TYPE abap_bool DEFAULT abap_true
+        runtime       TYPE REF TO zcl_qjs_runtime OPTIONAL.
     METHODS get RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
     METHODS set IMPORTING value TYPE zcl_qjs_value=>ty_value.
     METHODS initialize IMPORTING value TYPE zcl_qjs_value=>ty_value.

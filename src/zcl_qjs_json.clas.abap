@@ -5,13 +5,13 @@ CLASS zcl_qjs_json DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS stringify
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_serialized,
       supported TYPE abap_bool,
-      text TYPE string,
+      text      TYPE string,
     END OF ty_serialized.
     DATA mv_source TYPE string.
     DATA mv_offset TYPE i.
@@ -19,7 +19,7 @@ CLASS zcl_qjs_json DEFINITION PUBLIC FINAL CREATE PRIVATE.
     DATA mt_seen TYPE STANDARD TABLE OF REF TO object WITH DEFAULT KEY.
     DATA mv_depth TYPE i.
     METHODS constructor IMPORTING source TYPE string OPTIONAL
-      runtime TYPE REF TO zcl_qjs_runtime OPTIONAL.
+      runtime                            TYPE REF TO zcl_qjs_runtime OPTIONAL.
     METHODS parse_document RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS parse_value RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -39,7 +39,7 @@ CLASS zcl_qjs_json DEFINITION PUBLIC FINAL CREATE PRIVATE.
     METHODS consume IMPORTING expected TYPE string RAISING zcx_qjs_error.
     METHODS fail RAISING zcx_qjs_error.
     METHODS serialize IMPORTING value TYPE zcl_qjs_value=>ty_value
-      RETURNING VALUE(result) TYPE ty_serialized RAISING zcx_qjs_error.
+      RETURNING VALUE(result)         TYPE ty_serialized RAISING zcx_qjs_error.
     METHODS quote IMPORTING value TYPE string RETURNING VALUE(result) TYPE string.
     METHODS enter_object IMPORTING reference TYPE REF TO object RAISING zcx_qjs_error.
     METHODS leave_object.

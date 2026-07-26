@@ -6,8 +6,8 @@ CLASS zcl_qjs_iterator_result DEFINITION PUBLIC FINAL CREATE PUBLIC.
         prototype TYPE REF TO zcl_qjs_object OPTIONAL.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_property,
-      kind TYPE i,
-      name TYPE string,
+      kind  TYPE i,
+      name  TYPE string,
       value TYPE zcl_qjs_value=>ty_value,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property

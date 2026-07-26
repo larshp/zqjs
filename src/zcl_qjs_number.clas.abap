@@ -63,12 +63,12 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RAISING zcx_qjs_error.
 
     CLASS-METHODS parse_float
-      IMPORTING text TYPE string
+      IMPORTING text          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
 
     CLASS-METHODS format_finite
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
 
@@ -111,7 +111,7 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS bitwise_not
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS shift
@@ -167,7 +167,7 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING
         VALUE(result) TYPE i.
     CLASS-METHODS trim_leading_whitespace
-      IMPORTING text TYPE string
+      IMPORTING text          TYPE string
       RETURNING VALUE(result) TYPE string.
 ENDCLASS.
 

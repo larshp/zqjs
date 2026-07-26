@@ -50,7 +50,7 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING
         VALUE(result) TYPE ty_value.
     CLASS-METHODS as_boolean
-      IMPORTING value TYPE ty_value
+      IMPORTING value         TYPE ty_value
       RETURNING VALUE(result) TYPE abap_bool.
 
     CLASS-METHODS new_null
@@ -76,7 +76,7 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
         zcx_qjs_error.
 
     CLASS-METHODS new_object
-      IMPORTING reference TYPE REF TO object
+      IMPORTING reference     TYPE REF TO object
       RETURNING VALUE(result) TYPE ty_value
       RAISING zcx_qjs_error.
 
@@ -104,11 +104,11 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RAISING zcx_qjs_error.
 
     CLASS-METHODS to_boolean
-      IMPORTING value TYPE ty_value
+      IMPORTING value         TYPE ty_value
       RETURNING VALUE(result) TYPE abap_bool.
 
     CLASS-METHODS to_string
-      IMPORTING value TYPE ty_value
+      IMPORTING value         TYPE ty_value
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
 ENDCLASS.

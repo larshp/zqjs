@@ -3,24 +3,24 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_cells TYPE STANDARD TABLE OF REF TO zcl_qjs_cell WITH DEFAULT KEY.
     METHODS constructor
       IMPORTING
-        limits TYPE REF TO zcl_qjs_limits OPTIONAL
+        limits  TYPE REF TO zcl_qjs_limits OPTIONAL
         runtime TYPE REF TO zcl_qjs_runtime OPTIONAL
       RAISING
         zcx_qjs_error.
 
     METHODS execute
       IMPORTING
-        function      TYPE REF TO zcl_qjs_function
-        initial_cells TYPE ty_cells OPTIONAL
-        initial_closure TYPE REF TO zcl_qjs_closure OPTIONAL
-        initial_this TYPE zcl_qjs_value=>ty_value OPTIONAL
-        initial_arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        function            TYPE REF TO zcl_qjs_function
+        initial_cells       TYPE ty_cells OPTIONAL
+        initial_closure     TYPE REF TO zcl_qjs_closure OPTIONAL
+        initial_this        TYPE zcl_qjs_value=>ty_value OPTIONAL
+        initial_arguments   TYPE zif_qjs_callable=>ty_arguments OPTIONAL
         initial_constructor TYPE abap_bool DEFAULT abap_false
-        resume TYPE abap_bool DEFAULT abap_false
-        resume_kind TYPE i DEFAULT 0
-        resume_value TYPE zcl_qjs_value=>ty_value OPTIONAL
+        resume              TYPE abap_bool DEFAULT abap_false
+        resume_kind         TYPE i DEFAULT 0
+        resume_value        TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING
-        VALUE(result) TYPE zcl_qjs_value=>ty_value
+        VALUE(result)       TYPE zcl_qjs_value=>ty_value
       RAISING
         zcx_qjs_error.
     METHODS was_suspended RETURNING VALUE(result) TYPE abap_bool.

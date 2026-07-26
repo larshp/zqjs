@@ -243,40 +243,40 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       bound_this TYPE zcl_qjs_value=>ty_value OPTIONAL
       bound_arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL.
     METHODS get_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
     METHODS set_property IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value.
     TYPES: BEGIN OF ty_own_property,
-      found TYPE abap_bool,
-      accessor TYPE abap_bool,
-      value TYPE zcl_qjs_value=>ty_value,
-      getter TYPE zcl_qjs_value=>ty_value,
-      setter TYPE zcl_qjs_value=>ty_value,
-      writable TYPE abap_bool,
-      enumerable TYPE abap_bool,
+      found        TYPE abap_bool,
+      accessor     TYPE abap_bool,
+      value        TYPE zcl_qjs_value=>ty_value,
+      getter       TYPE zcl_qjs_value=>ty_value,
+      setter       TYPE zcl_qjs_value=>ty_value,
+      writable     TYPE abap_bool,
+      enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
     END OF ty_own_property.
     METHODS define_property
       IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
         writable TYPE abap_bool enumerable TYPE abap_bool configurable TYPE abap_bool.
     METHODS get_own_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE ty_own_property.
     METHODS delete_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_property
-      IMPORTING name TYPE string
+      IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS has_symbol_property
-      IMPORTING identity TYPE i
+      IMPORTING identity      TYPE i
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS define_symbol_accessor
       IMPORTING identity TYPE i getter TYPE zcl_qjs_value=>ty_value
         setter TYPE zcl_qjs_value=>ty_value enumerable TYPE abap_bool
         configurable TYPE abap_bool.
     METHODS get_own_symbol_property
-      IMPORTING identity TYPE i
+      IMPORTING identity      TYPE i
       RETURNING VALUE(result) TYPE ty_own_property.
     METHODS get_symbol_with_receiver
       IMPORTING identity TYPE i receiver TYPE zcl_qjs_value=>ty_value
@@ -289,26 +289,26 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
     TYPES:
       BEGIN OF ty_integer,
-        value TYPE int8,
+        value             TYPE int8,
         positive_infinity TYPE abap_bool,
         negative_infinity TYPE abap_bool,
       END OF ty_integer.
     TYPES: BEGIN OF ty_property,
-      name TYPE string,
-      value TYPE zcl_qjs_value=>ty_value,
-      writable TYPE abap_bool,
-      enumerable TYPE abap_bool,
+      name         TYPE string,
+      value        TYPE zcl_qjs_value=>ty_value,
+      writable     TYPE abap_bool,
+      enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_symbol_property,
-      identity TYPE i,
-      value TYPE zcl_qjs_value=>ty_value,
-      getter TYPE zcl_qjs_value=>ty_value,
-      setter TYPE zcl_qjs_value=>ty_value,
-      accessor TYPE abap_bool,
-      writable TYPE abap_bool,
-      enumerable TYPE abap_bool,
+      identity     TYPE i,
+      value        TYPE zcl_qjs_value=>ty_value,
+      getter       TYPE zcl_qjs_value=>ty_value,
+      setter       TYPE zcl_qjs_value=>ty_value,
+      accessor     TYPE abap_bool,
+      writable     TYPE abap_bool,
+      enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
     END OF ty_symbol_property.
     TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
@@ -316,17 +316,17 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_promise_capability,
       promise TYPE zcl_qjs_value=>ty_value,
       resolve TYPE zcl_qjs_value=>ty_value,
-      reject TYPE zcl_qjs_value=>ty_value,
+      reject  TYPE zcl_qjs_value=>ty_value,
     END OF ty_promise_capability.
     TYPES: BEGIN OF ty_error_cause,
       found TYPE abap_bool,
       value TYPE zcl_qjs_value=>ty_value,
     END OF ty_error_cause.
     TYPES: BEGIN OF ty_regexp_match,
-      found TYPE abap_bool,
+      found  TYPE abap_bool,
       offset TYPE i,
       length TYPE i,
-      value TYPE string,
+      value  TYPE string,
     END OF ty_regexp_match.
     DATA mv_id TYPE i.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
@@ -339,29 +339,29 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA ms_bound_this TYPE zcl_qjs_value=>ty_value.
     DATA mt_bound_arguments TYPE zif_qjs_callable=>ty_arguments.
     METHODS is_callable
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS is_constructable
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS get_callable_property
       IMPORTING value TYPE zcl_qjs_value=>ty_value name TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS new_promise_capability
-      IMPORTING constructor TYPE zcl_qjs_value=>ty_value
+      IMPORTING constructor   TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE ty_promise_capability
       RAISING zcx_qjs_error zcx_qjs_throw.
     METHODS promise_species_constructor
-      IMPORTING promise TYPE REF TO zcl_qjs_object
+      IMPORTING promise       TYPE REF TO zcl_qjs_object
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error zcx_qjs_throw.
     METHODS get_error_cause
-      IMPORTING options TYPE zcl_qjs_value=>ty_value
+      IMPORTING options       TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE ty_error_cause
       RAISING zcx_qjs_error zcx_qjs_throw.
     METHODS regexp_object
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS regexp_find
@@ -370,11 +370,11 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE ty_regexp_match
       RAISING zcx_qjs_error.
     METHODS array_to_length
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE int8
       RAISING zcx_qjs_error.
     METHODS array_length_value
-      IMPORTING length TYPE int8
+      IMPORTING length        TYPE int8
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
     METHODS array_set_length
       IMPORTING object TYPE REF TO zcl_qjs_object length TYPE int8
@@ -392,68 +392,68 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_collection_next
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_collection_common
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_array_map
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_array_push
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_string_index_of
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_string_replace
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_string_split
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_object_set_prototype
-      IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING arguments     TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_object_define_property
-      IMPORTING arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING arguments     TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call_slow
-      IMPORTING this_value TYPE zcl_qjs_value=>ty_value
-        arguments TYPE zif_qjs_callable=>ty_arguments
+      IMPORTING this_value    TYPE zcl_qjs_value=>ty_value
+        arguments             TYPE zif_qjs_callable=>ty_arguments
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS string_receiver
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        exact TYPE abap_bool DEFAULT abap_false
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        exact                 TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS primitive_value
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
-        prefer_string TYPE abap_bool DEFAULT abap_false
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
+        prefer_string         TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS string_value
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS string_integer
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE ty_integer
       RAISING zcx_qjs_error.
     METHODS string_trim_value
@@ -461,21 +461,21 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS string_is_whitespace
-      IMPORTING character TYPE string
+      IMPORTING character     TYPE string
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS initialize_string_wrapper
       IMPORTING object TYPE REF TO zcl_qjs_object
-        primitive TYPE zcl_qjs_value=>ty_value
+        primitive      TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS reflect_arguments
-      IMPORTING value TYPE zcl_qjs_value=>ty_value
+      IMPORTING value         TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zif_qjs_callable=>ty_arguments
       RAISING zcx_qjs_error.
     METHODS array_sort_compare
-      IMPORTING left TYPE zcl_qjs_value=>ty_value
-        right TYPE zcl_qjs_value=>ty_value
-        comparator TYPE zcl_qjs_value=>ty_value
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
+        comparator            TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
     METHODS array_flatten_into
@@ -492,81 +492,81 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS math_exp_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_log_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_log10_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_reduce_angle
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_sin_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_cos_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_pow_value
-      IMPORTING base TYPE zcl_qjs_value=>ty_value
-        exponent TYPE zcl_qjs_value=>ty_value
+      IMPORTING base          TYPE zcl_qjs_value=>ty_value
+        exponent              TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS math_cbrt_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_expm1_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_log1p_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_atan_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_atan2_value
       IMPORTING y TYPE zcl_qjs_value=>ty_value x TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS math_sinh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_cosh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_tanh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_asinh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_acosh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_atanh_f
-      IMPORTING value TYPE f
+      IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
     METHODS math_round_binary_f
       IMPORTING value TYPE f fraction_bits TYPE i min_exponent TYPE i
       RETURNING VALUE(result) TYPE f.
     METHODS uri_hex_value
-      IMPORTING character TYPE string
+      IMPORTING character     TYPE string
       RETURNING VALUE(result) TYPE i.
     METHODS uri_percent_byte
-      IMPORTING byte TYPE i
+      IMPORTING byte          TYPE i
       RETURNING VALUE(result) TYPE string.
     METHODS uri_code_unit
-      IMPORTING character TYPE string
+      IMPORTING character     TYPE string
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
     METHODS uri_code_point
-      IMPORTING code TYPE i
+      IMPORTING code          TYPE i
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS uri_is_reserved
-      IMPORTING character TYPE string
+      IMPORTING character     TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS uri_encode
       IMPORTING value TYPE string component TYPE abap_bool
