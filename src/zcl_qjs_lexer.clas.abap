@@ -115,6 +115,10 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         zcx_qjs_error.
 
+    METHODS next_into
+      CHANGING token TYPE ty_token
+      RAISING zcx_qjs_error.
+
     METHODS prepare
       RAISING zcx_qjs_error.
 
@@ -942,12 +946,16 @@ CLASS zcl_qjs_lexer IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD next.
-    READ TABLE mr_tokens->* INDEX mv_cursor_index INTO result.
+    next_into( CHANGING token = result ).
+  ENDMETHOD.
+
+  METHOD next_into.
+    READ TABLE mr_tokens->* INDEX mv_cursor_index INTO token.
     IF sy-subrc <> 0.
-      result = cached_token( mv_cursor_index ).
+      token = cached_token( mv_cursor_index ).
     ENDIF.
     mv_cursor_index = mv_cursor_index + 1.
-    mv_cursor_offset = result-end_offset.
+    mv_cursor_offset = token-end_offset.
   ENDMETHOD.
 
   METHOD prepare.

@@ -455,7 +455,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     DATA lv_braces TYPE i.
     WHILE abap_true = abap_true.
       lv_offset = scanner->get_offset( ).
-      ls_scan = scanner->next( ).
+      scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_eof.
         RETURN.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_comma
@@ -496,14 +496,14 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       lv_closing_kind = zcl_qjs_lexer=>token_rbrace.
     ENDIF.
     WHILE abap_true = abap_true.
-      ls_scan = scanner->next( ).
+      scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_eof
           OR ls_scan-kind = lv_closing_kind.
         RETURN.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_comma.
         CONTINUE.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_ellipsis.
-        ls_scan = scanner->next( ).
+        scanner->next_into( CHANGING token = ls_scan ).
         scan_binding_target(
           scanner = scanner first = ls_scan
           declaration_kind = declaration_kind ).
@@ -511,7 +511,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         IF ls_scan-kind = zcl_qjs_lexer=>token_lbracket.
           lv_depth = 1.
           WHILE lv_depth > 0.
-            ls_next = scanner->next( ).
+            scanner->next_into( CHANGING token = ls_next ).
             IF ls_next-kind = zcl_qjs_lexer=>token_lbracket.
               lv_depth = lv_depth + 1.
             ELSEIF ls_next-kind = zcl_qjs_lexer=>token_rbracket.
@@ -520,19 +520,19 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               RETURN.
             ENDIF.
           ENDWHILE.
-          ls_next = scanner->next( ).
+          scanner->next_into( CHANGING token = ls_next ).
           IF ls_next-kind <> zcl_qjs_lexer=>token_colon.
             RETURN.
           ENDIF.
-          ls_next = scanner->next( ).
+          scanner->next_into( CHANGING token = ls_next ).
           scan_binding_target(
             scanner = scanner first = ls_next
             declaration_kind = declaration_kind ).
         ELSE.
           lv_offset = scanner->get_offset( ).
-          ls_next = scanner->next( ).
+          scanner->next_into( CHANGING token = ls_next ).
           IF ls_next-kind = zcl_qjs_lexer=>token_colon.
-            ls_next = scanner->next( ).
+            scanner->next_into( CHANGING token = ls_next ).
             scan_binding_target(
               scanner = scanner first = ls_next
               declaration_kind = declaration_kind ).
@@ -550,7 +550,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           declaration_kind = declaration_kind ).
       ENDIF.
       lv_offset = scanner->get_offset( ).
-      ls_next = scanner->next( ).
+      scanner->next_into( CHANGING token = ls_next ).
       IF ls_next-kind = zcl_qjs_lexer=>token_assign.
         skip_binding_default(
           scanner = scanner closing_kind = lv_closing_kind ).
@@ -582,7 +582,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( start_offset ).
     WHILE abap_true = abap_true.
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_eof.
         RETURN.
       ENDIF.
@@ -684,9 +684,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         lv_expect_declaration_name = abap_true.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_function.
-        ls_name = lo_scanner->next( ).
+        lo_scanner->next_into( CHANGING token = ls_name ).
         IF ls_name-kind = zcl_qjs_lexer=>token_star.
-          ls_name = lo_scanner->next( ).
+          lo_scanner->next_into( CHANGING token = ls_name ).
         ENDIF.
         IF ls_name-kind = zcl_qjs_lexer=>token_identifier.
           declare_name( ls_name-text ).
@@ -694,7 +694,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         ENDIF.
         lv_function_depth = 0.
         WHILE abap_true = abap_true.
-          ls_scan = lo_scanner->next( ).
+          lo_scanner->next_into( CHANGING token = ls_scan ).
           IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
             qjs_note_capture ls_scan-text.
           ENDIF.
@@ -706,7 +706,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ENDWHILE.
         WHILE lv_function_depth > 0.
-          ls_scan = lo_scanner->next( ).
+          lo_scanner->next_into( CHANGING token = ls_scan ).
           IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
             qjs_note_capture ls_scan-text.
           ENDIF.
@@ -719,13 +719,13 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ENDWHILE.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_class AND lv_depth = 0.
-        ls_name = lo_scanner->next( ).
+        lo_scanner->next_into( CHANGING token = ls_name ).
         IF ls_name-kind = zcl_qjs_lexer=>token_identifier.
           declare_lexical( name = ls_name-text constant = abap_true ).
         ENDIF.
         lv_function_depth = 0.
         WHILE abap_true = abap_true.
-          ls_scan = lo_scanner->next( ).
+          lo_scanner->next_into( CHANGING token = ls_scan ).
           IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
             qjs_note_capture ls_scan-text.
           ENDIF.
@@ -737,7 +737,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ENDIF.
         ENDWHILE.
         WHILE lv_function_depth > 0.
-          ls_scan = lo_scanner->next( ).
+          lo_scanner->next_into( CHANGING token = ls_scan ).
           IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
             qjs_note_capture ls_scan-text.
           ENDIF.
@@ -754,7 +754,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD advance.
-    ms_token = mo_lexer->next( ).
+    mo_lexer->next_into( CHANGING token = ms_token ).
   ENDMETHOD.
 
   METHOD is_async_function_start.
@@ -1803,7 +1803,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
     lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
     WHILE abap_true = abap_true.
-      ls_private_token = lo_class_scanner->next( ).
+      lo_class_scanner->next_into( CHANGING token = ls_private_token ).
       IF ls_private_token-kind = zcl_qjs_lexer=>token_lbrace.
         lv_private_depth = lv_private_depth + 1.
       ELSEIF ls_private_token-kind = zcl_qjs_lexer=>token_rbrace.
@@ -1848,7 +1848,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           AND ms_token-text = 'static'.
         CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
-        ls_class_lookahead = lo_class_scanner->next( ).
+        lo_class_scanner->next_into( CHANGING token = ls_class_lookahead ).
         IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen
             AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_assign
             AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_semicolon
@@ -1870,7 +1870,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           AND ms_token-text = 'async'.
         CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
-        ls_class_lookahead = lo_class_scanner->next( ).
+        lo_class_scanner->next_into( CHANGING token = ls_class_lookahead ).
         IF ls_class_lookahead-line_terminator_before = abap_false
             AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen
             AND ls_class_lookahead-kind <> zcl_qjs_lexer=>token_assign
@@ -1888,7 +1888,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           AND ( ms_token-text = 'get' OR ms_token-text = 'set' ).
         CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
-        ls_class_lookahead = lo_class_scanner->next( ).
+        lo_class_scanner->next_into( CHANGING token = ls_class_lookahead ).
         IF ls_class_lookahead-kind <> zcl_qjs_lexer=>token_lparen.
           IF ms_token-text = 'get'.
             ls_method-accessor_kind = 1.
@@ -1932,7 +1932,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       IF ls_method-accessor_kind = 0.
         CREATE OBJECT lo_class_scanner EXPORTING cache = mo_lexer.
         lo_class_scanner->set_offset( mo_lexer->get_offset( ) ).
-        ls_class_lookahead = lo_class_scanner->next( ).
+        lo_class_scanner->next_into( CHANGING token = ls_class_lookahead ).
         IF ls_class_lookahead-kind = zcl_qjs_lexer=>token_assign
             OR ls_class_lookahead-kind = zcl_qjs_lexer=>token_semicolon
             OR ls_class_lookahead-kind = zcl_qjs_lexer=>token_rbrace
@@ -2319,7 +2319,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( start_offset ).
     WHILE abap_true = abap_true.
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_eof.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'Unterminated destructuring pattern'.
@@ -2631,7 +2631,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_end_offset = pattern_end_offset( lv_start_offset ).
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( lv_start_offset ).
-    ls_opening = lo_scanner->next( ).
+    lo_scanner->next_into( CHANGING token = ls_opening ).
     scan_binding_pattern(
       scanner = lo_scanner opening_kind = ls_opening-kind
       declaration_kind = 1 ).
@@ -2981,7 +2981,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
       lv_scope_index = lines( mt_scopes ).
       CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
       lo_scanner->set_offset( lv_start_offset ).
-      ls_opening = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_opening ).
       scan_binding_pattern(
         scanner = lo_scanner opening_kind = ls_opening-kind
         declaration_kind = COND i(
@@ -3426,7 +3426,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     IF ms_token-kind = zcl_qjs_lexer=>token_identifier.
       CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
       lo_scanner->set_offset( mo_lexer->get_offset( ) ).
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_arrow.
         result = xsdbool( ls_scan-line_terminator_before = abap_false ).
         RETURN.
@@ -3436,7 +3436,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         RETURN.
       ENDIF.
       IF ls_scan-kind = zcl_qjs_lexer=>token_identifier.
-        ls_scan = lo_scanner->next( ).
+        lo_scanner->next_into( CHANGING token = ls_scan ).
         result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_arrow
           AND ls_scan-line_terminator_before = abap_false ).
         RETURN.
@@ -3452,7 +3452,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
 
     lv_depth = 1.
     WHILE lv_depth > 0.
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_lparen.
         lv_depth = lv_depth + 1.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_rparen.
@@ -3461,7 +3461,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDWHILE.
-    ls_scan = lo_scanner->next( ).
+    lo_scanner->next_into( CHANGING token = ls_scan ).
     result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_arrow
       AND ls_scan-line_terminator_before = abap_false ).
   ENDMETHOD.
@@ -3714,7 +3714,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     lv_end_offset = pattern_end_offset( ms_token-offset ).
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( lv_end_offset ).
-    ls_scan = lo_scanner->next( ).
+    lo_scanner->next_into( CHANGING token = ls_scan ).
     result = xsdbool( ls_scan-kind = zcl_qjs_lexer=>token_assign ).
   ENDMETHOD.
 
@@ -4033,7 +4033,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( ms_token-offset ).
     WHILE abap_true = abap_true.
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_lbracket.
         lv_depth = lv_depth + 1.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_rbracket.
@@ -4057,7 +4057,7 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
     CREATE OBJECT lo_scanner EXPORTING cache = mo_lexer.
     lo_scanner->set_offset( ms_token-offset ).
     WHILE abap_true = abap_true.
-      ls_scan = lo_scanner->next( ).
+      lo_scanner->next_into( CHANGING token = ls_scan ).
       IF ls_scan-kind = zcl_qjs_lexer=>token_lparen.
         lv_depth = lv_depth + 1.
       ELSEIF ls_scan-kind = zcl_qjs_lexer=>token_rparen.

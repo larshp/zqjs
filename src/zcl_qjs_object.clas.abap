@@ -559,24 +559,22 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD set_symbol_with_receiver.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
-      INTO DATA(ls_existing).
+      ASSIGNING FIELD-SYMBOL(<ls_existing>).
     IF sy-subrc = 0.
-      IF ls_existing-accessor = abap_true.
-        IF ls_existing-accessor_pair->setter-tag = zcl_qjs_value=>tag_undefined.
+      IF <ls_existing>-accessor = abap_true.
+        IF <ls_existing>-accessor_pair->setter-tag = zcl_qjs_value=>tag_undefined.
           raise_error( name = 'TypeError' message = 'property has no setter' ).
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
         DATA(ls_ignored) = invoke_callable(
-          callable = ls_existing-accessor_pair->setter this_value = receiver
+          callable = <ls_existing>-accessor_pair->setter this_value = receiver
           arguments = lt_setter_arguments ).
         RETURN.
-      ELSEIF ls_existing-writable = abap_false.
+      ELSEIF <ls_existing>-writable = abap_false.
         raise_error( name = 'TypeError' message = 'property is not writable' ).
       ELSEIF receiver-object_ref = me.
-        ls_existing-value = value.
-        DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
-        INSERT ls_existing INTO TABLE mt_symbol_properties.
+        <ls_existing>-value = value.
         RETURN.
       ENDIF.
     ELSEIF mo_prototype IS BOUND.
@@ -596,25 +594,23 @@ CLASS zcl_qjs_object IMPLEMENTATION.
 
   METHOD reflect_set_symbol.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
-      INTO DATA(ls_existing).
+      ASSIGNING FIELD-SYMBOL(<ls_existing>).
     IF sy-subrc = 0.
-      IF ls_existing-accessor = abap_true.
-        IF ls_existing-accessor_pair->setter-tag = zcl_qjs_value=>tag_undefined.
+      IF <ls_existing>-accessor = abap_true.
+        IF <ls_existing>-accessor_pair->setter-tag = zcl_qjs_value=>tag_undefined.
           RETURN.
         ENDIF.
         DATA lt_setter_arguments TYPE zif_qjs_callable=>ty_arguments.
         APPEND value TO lt_setter_arguments.
         DATA(ls_ignored) = invoke_callable(
-          callable = ls_existing-accessor_pair->setter this_value = receiver
+          callable = <ls_existing>-accessor_pair->setter this_value = receiver
           arguments = lt_setter_arguments ).
         result = abap_true.
         RETURN.
-      ELSEIF ls_existing-writable = abap_false.
+      ELSEIF <ls_existing>-writable = abap_false.
         RETURN.
       ELSEIF receiver-object_ref = me.
-        ls_existing-value = value.
-        DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
-        INSERT ls_existing INTO TABLE mt_symbol_properties.
+        <ls_existing>-value = value.
         result = abap_true.
         RETURN.
       ENDIF.
@@ -807,35 +803,36 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD define_property.
     DATA ls_descriptor TYPE zcl_qjs_shape=>ty_descriptor.
     ls_descriptor = mo_shape->lookup( name ).
+    READ TABLE mt_properties WITH TABLE KEY name = name
+      ASSIGNING FIELD-SYMBOL(<ls_property>).
     IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
       raise_error( name = 'TypeError' message = 'object is not extensible' ).
     ENDIF.
     IF ls_descriptor-found = abap_true AND ls_descriptor-configurable = abap_false.
-      READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_old_property).
       IF ls_descriptor-accessor = abap_true OR configurable = abap_true
           OR ls_descriptor-enumerable <> enumerable
           OR ( ls_descriptor-writable = abap_false AND writable = abap_true )
           OR ( ls_descriptor-writable = abap_false
             AND zcl_qjs_value=>strict_equal(
-              left = ls_old_property-value right = value ) = abap_false ).
+              left = <ls_property>-value right = value ) = abap_false ).
         raise_error( name = 'TypeError' message = 'property is not configurable' ).
       ENDIF.
     ENDIF.
     mo_shape = mo_shape->transition(
       name = name writable = writable enumerable = enumerable
       configurable = configurable accessor = abap_false ).
-    DATA ls_property TYPE ty_property.
-    ls_property-name = name.
-    READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_cell_property).
-    IF sy-subrc = 0 AND ls_cell_property-cell IS BOUND
-        AND ls_descriptor-accessor = abap_false.
-      ls_cell_property-cell->set( value ).
-      ls_property-cell = ls_cell_property-cell.
+    IF <ls_property> IS ASSIGNED.
+      IF <ls_property>-cell IS BOUND AND ls_descriptor-accessor = abap_false.
+        <ls_property>-cell->set( value ).
+      ELSE.
+        CLEAR <ls_property>-accessor.
+        CLEAR <ls_property>-cell.
+        <ls_property>-value = value.
+      ENDIF.
     ELSE.
-      ls_property-value = value.
+      INSERT VALUE ty_property( name = name value = value )
+        INTO TABLE mt_properties.
     ENDIF.
-    DELETE TABLE mt_properties WITH TABLE KEY name = name.
-    INSERT ls_property INTO TABLE mt_properties.
   ENDMETHOD.
 
   METHOD define_cell_property.
@@ -843,107 +840,124 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       raise_error( name = 'TypeError' message = 'global property cell is not bound' ).
     ENDIF.
     DATA(ls_descriptor) = mo_shape->lookup( name ).
+    READ TABLE mt_properties WITH TABLE KEY name = name
+      ASSIGNING FIELD-SYMBOL(<ls_property>).
     IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
       raise_error( name = 'TypeError' message = 'object is not extensible' ).
     ENDIF.
     mo_shape = mo_shape->transition(
       name = name writable = writable enumerable = enumerable
       configurable = configurable accessor = abap_false ).
-    DATA(ls_property) = VALUE ty_property( name = name cell = cell ).
-    DELETE TABLE mt_properties WITH TABLE KEY name = name.
-    INSERT ls_property INTO TABLE mt_properties.
+    IF <ls_property> IS ASSIGNED.
+      CLEAR <ls_property>-value.
+      CLEAR <ls_property>-accessor.
+      <ls_property>-cell = cell.
+    ELSE.
+      INSERT VALUE ty_property( name = name cell = cell )
+        INTO TABLE mt_properties.
+    ENDIF.
   ENDMETHOD.
 
   METHOD define_accessor.
     DATA(ls_descriptor) = mo_shape->lookup( name ).
+    READ TABLE mt_properties WITH TABLE KEY name = name
+      ASSIGNING FIELD-SYMBOL(<ls_property>).
     IF ls_descriptor-found = abap_false AND mv_extensible = abap_false.
       raise_error( name = 'TypeError' message = 'object is not extensible' ).
     ENDIF.
     IF ls_descriptor-found = abap_true AND ls_descriptor-configurable = abap_false.
-      READ TABLE mt_properties WITH TABLE KEY name = name INTO DATA(ls_old_accessor).
       IF ls_descriptor-accessor = abap_false OR configurable = abap_true
           OR ls_descriptor-enumerable <> enumerable
           OR zcl_qjs_value=>strict_equal(
-            left = ls_old_accessor-accessor->getter right = getter ) = abap_false
+            left = <ls_property>-accessor->getter right = getter ) = abap_false
           OR zcl_qjs_value=>strict_equal(
-            left = ls_old_accessor-accessor->setter right = setter ) = abap_false.
+            left = <ls_property>-accessor->setter right = setter ) = abap_false.
         raise_error( name = 'TypeError' message = 'property is not configurable' ).
       ENDIF.
     ENDIF.
     mo_shape = mo_shape->transition(
       name = name writable = abap_false enumerable = enumerable
       configurable = configurable accessor = abap_true ).
-    DATA ls_property TYPE ty_property.
-    ls_property-name = name.
-    ls_property-accessor = NEW zcl_qjs_accessor_pair(
-      getter = getter setter = setter ).
-    DELETE TABLE mt_properties WITH TABLE KEY name = name.
-    INSERT ls_property INTO TABLE mt_properties.
+    IF <ls_property> IS ASSIGNED.
+      CLEAR <ls_property>-value.
+      CLEAR <ls_property>-cell.
+      <ls_property>-accessor = NEW zcl_qjs_accessor_pair(
+        getter = getter setter = setter ).
+    ELSE.
+      INSERT VALUE ty_property(
+        name     = name
+        accessor = NEW zcl_qjs_accessor_pair( getter = getter setter = setter ) )
+        INTO TABLE mt_properties.
+    ENDIF.
   ENDMETHOD.
 
   METHOD define_symbol_property.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
-      INTO DATA(ls_old_property).
-    IF sy-subrc <> 0 AND mv_extensible = abap_false.
+      ASSIGNING FIELD-SYMBOL(<ls_property>).
+    IF <ls_property> IS NOT ASSIGNED AND mv_extensible = abap_false.
       raise_error( name = 'TypeError' message = 'object is not extensible' ).
     ENDIF.
-    IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
-      IF ls_old_property-accessor = abap_true OR configurable = abap_true
-          OR ls_old_property-enumerable <> enumerable
-          OR ( ls_old_property-writable = abap_false AND writable = abap_true )
-          OR ( ls_old_property-writable = abap_false
+    IF <ls_property> IS ASSIGNED AND <ls_property>-configurable = abap_false.
+      IF <ls_property>-accessor = abap_true OR configurable = abap_true
+          OR <ls_property>-enumerable <> enumerable
+          OR ( <ls_property>-writable = abap_false AND writable = abap_true )
+          OR ( <ls_property>-writable = abap_false
             AND zcl_qjs_value=>strict_equal(
-              left = ls_old_property-value right = value ) = abap_false ).
+              left = <ls_property>-value right = value ) = abap_false ).
         raise_error( name = 'TypeError' message = 'property is not configurable' ).
       ENDIF.
     ENDIF.
-    DATA ls_property TYPE ty_symbol_property.
-    IF sy-subrc = 0.
-      ls_property-insertion_order = ls_old_property-insertion_order.
+    IF <ls_property> IS ASSIGNED.
+      <ls_property>-value = value.
+      CLEAR <ls_property>-accessor_pair.
+      <ls_property>-accessor = abap_false.
+      <ls_property>-writable = writable.
+      <ls_property>-enumerable = enumerable.
+      <ls_property>-configurable = configurable.
     ELSE.
-      ls_property-insertion_order = mv_next_symbol_order.
+      INSERT VALUE ty_symbol_property(
+        identity = identity value = value writable = writable
+        enumerable = enumerable configurable = configurable
+        insertion_order = mv_next_symbol_order )
+        INTO TABLE mt_symbol_properties.
       mv_next_symbol_order = mv_next_symbol_order + 1.
     ENDIF.
-    ls_property-identity = identity.
-    ls_property-value = value.
-    ls_property-writable = writable.
-    ls_property-enumerable = enumerable.
-    ls_property-configurable = configurable.
-    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
-    INSERT ls_property INTO TABLE mt_symbol_properties.
   ENDMETHOD.
 
   METHOD define_symbol_accessor.
     READ TABLE mt_symbol_properties WITH TABLE KEY identity = identity
-      INTO DATA(ls_old_property).
-    IF sy-subrc <> 0 AND mv_extensible = abap_false.
+      ASSIGNING FIELD-SYMBOL(<ls_property>).
+    IF <ls_property> IS NOT ASSIGNED AND mv_extensible = abap_false.
       raise_error( name = 'TypeError' message = 'object is not extensible' ).
     ENDIF.
-    IF sy-subrc = 0 AND ls_old_property-configurable = abap_false.
-      IF ls_old_property-accessor = abap_false OR configurable = abap_true
-          OR ls_old_property-enumerable <> enumerable
+    IF <ls_property> IS ASSIGNED AND <ls_property>-configurable = abap_false.
+      IF <ls_property>-accessor = abap_false OR configurable = abap_true
+          OR <ls_property>-enumerable <> enumerable
           OR zcl_qjs_value=>strict_equal(
-            left = ls_old_property-accessor_pair->getter right = getter ) = abap_false
+            left = <ls_property>-accessor_pair->getter right = getter ) = abap_false
           OR zcl_qjs_value=>strict_equal(
-            left = ls_old_property-accessor_pair->setter right = setter ) = abap_false.
+            left = <ls_property>-accessor_pair->setter right = setter ) = abap_false.
         raise_error( name = 'TypeError' message = 'property is not configurable' ).
       ENDIF.
     ENDIF.
-    DATA ls_property TYPE ty_symbol_property.
-    IF sy-subrc = 0.
-      ls_property-insertion_order = ls_old_property-insertion_order.
+    IF <ls_property> IS ASSIGNED.
+      CLEAR <ls_property>-value.
+      <ls_property>-accessor_pair = NEW zcl_qjs_accessor_pair(
+        getter = getter setter = setter ).
+      <ls_property>-accessor = abap_true.
+      <ls_property>-writable = abap_false.
+      <ls_property>-enumerable = enumerable.
+      <ls_property>-configurable = configurable.
     ELSE.
-      ls_property-insertion_order = mv_next_symbol_order.
+      INSERT VALUE ty_symbol_property(
+        identity = identity accessor = abap_true
+        accessor_pair = NEW zcl_qjs_accessor_pair(
+          getter = getter setter = setter )
+        enumerable = enumerable configurable = configurable
+        insertion_order = mv_next_symbol_order )
+        INTO TABLE mt_symbol_properties.
       mv_next_symbol_order = mv_next_symbol_order + 1.
     ENDIF.
-    ls_property-identity = identity.
-    ls_property-accessor_pair = NEW zcl_qjs_accessor_pair(
-      getter = getter setter = setter ).
-    ls_property-accessor = abap_true.
-    ls_property-enumerable = enumerable.
-    ls_property-configurable = configurable.
-    DELETE TABLE mt_symbol_properties WITH TABLE KEY identity = identity.
-    INSERT ls_property INTO TABLE mt_symbol_properties.
   ENDMETHOD.
 
   METHOD invoke_callable.

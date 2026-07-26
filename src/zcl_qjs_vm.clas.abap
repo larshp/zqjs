@@ -106,6 +106,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     DATA lt_frames TYPE ty_frames.
     DATA lo_frame TYPE REF TO zcl_qjs_frame.
     FIELD-SYMBOLS <ls_instruction> TYPE zcl_qjs_function=>ty_instruction.
+    FIELD-SYMBOLS <ls_stack_value> TYPE zcl_qjs_value=>ty_value.
     DATA ls_left TYPE zcl_qjs_value=>ty_value.
     DATA ls_right TYPE zcl_qjs_value=>ty_value.
     DATA ls_value TYPE zcl_qjs_value=>ty_value.
@@ -302,6 +303,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
     lv_checked_frame_depth = lines( lt_frames ).
     ENDIF.
     lv_frame_index = lines( lt_frames ).
+    READ TABLE lt_frames INDEX lv_frame_index INTO lo_active_frame.
 
     lr_step_state = mo_limits->step_state_reference( ).
     lv_direct_steps = xsdbool( mo_limits->has_cancellation( ) = abap_false ).
@@ -315,7 +317,6 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       ELSE.
         mo_limits->consume( ).
       ENDIF.
-      READ TABLE lt_frames INDEX lv_frame_index INTO lo_active_frame.
       READ TABLE lo_active_frame->code->* INDEX lo_active_frame->pc
         ASSIGNING <ls_instruction>.
       IF sy-subrc <> 0.
@@ -348,12 +349,15 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             qjs_vm_push ls_value.
             CONTINUE.
           WHEN zif_qjs_opcodes=>drop.
-            qjs_vm_pop ls_value.
+            IF lv_stack_depth = 0. stack_underflow( ). ENDIF.
+            lv_stack_depth = lv_stack_depth - 1.
             CONTINUE.
           WHEN zif_qjs_opcodes=>put_local OR zif_qjs_opcodes=>set_local
               OR zif_qjs_opcodes=>put_lexical OR zif_qjs_opcodes=>set_lexical.
             lv_local_index = <ls_instruction>-operand + 1.
-            qjs_vm_pop ls_value.
+            IF lv_stack_depth = 0. stack_underflow( ). ENDIF.
+            READ TABLE lt_stack INDEX lv_stack_depth ASSIGNING <ls_stack_value>.
+            lv_stack_depth = lv_stack_depth - 1.
             READ TABLE lo_active_frame->locals INDEX lv_local_index INTO lo_cell.
             IF sy-subrc <> 0.
               RAISE EXCEPTION TYPE zcx_qjs_error
@@ -361,13 +365,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             IF lo_cell->mv_initialized = abap_true
                 AND lo_cell->mv_mutable = abap_true.
-              lo_cell->ms_value = ls_value.
+              lo_cell->ms_value = <ls_stack_value>.
             ELSE.
-              lo_cell->set( ls_value ).
+              lo_cell->set( <ls_stack_value> ).
             ENDIF.
             IF <ls_instruction>-opcode = zif_qjs_opcodes=>set_local
                 OR <ls_instruction>-opcode = zif_qjs_opcodes=>set_lexical.
-              qjs_vm_push ls_value.
+              lv_stack_depth = lv_stack_depth + 1.
             ENDIF.
             CONTINUE.
           WHEN zif_qjs_opcodes=>get_capture.
@@ -389,8 +393,10 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             qjs_vm_push ls_value.
             CONTINUE.
           WHEN zif_qjs_opcodes=>if_false OR zif_qjs_opcodes=>if_true.
-            qjs_vm_pop ls_value.
-            DATA(lv_fast_truthy) = zcl_qjs_value=>to_boolean( ls_value ).
+            IF lv_stack_depth = 0. stack_underflow( ). ENDIF.
+            READ TABLE lt_stack INDEX lv_stack_depth ASSIGNING <ls_stack_value>.
+            lv_stack_depth = lv_stack_depth - 1.
+            DATA(lv_fast_truthy) = zcl_qjs_value=>to_boolean( <ls_stack_value> ).
             IF ( <ls_instruction>-opcode = zif_qjs_opcodes=>if_false
                   AND lv_fast_truthy = abap_false )
                 OR ( <ls_instruction>-opcode = zif_qjs_opcodes=>if_true
@@ -408,27 +414,30 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             CONTINUE.
           WHEN zif_qjs_opcodes=>initialize_lexical.
             lv_local_index = <ls_instruction>-operand + 1.
-            qjs_vm_pop ls_value.
+            IF lv_stack_depth = 0. stack_underflow( ). ENDIF.
+            READ TABLE lt_stack INDEX lv_stack_depth ASSIGNING <ls_stack_value>.
+            lv_stack_depth = lv_stack_depth - 1.
             READ TABLE lo_active_frame->locals INDEX lv_local_index INTO lo_cell.
             IF sy-subrc <> 0.
               RAISE EXCEPTION TYPE zcx_qjs_error
                 EXPORTING reason = 'Bytecode lexical index out of bounds'.
             ENDIF.
-            lo_cell->initialize( ls_value ).
+            lo_cell->initialize( <ls_stack_value> ).
             CONTINUE.
           WHEN zif_qjs_opcodes=>strict_equal
               OR zif_qjs_opcodes=>strict_not_equal.
-            qjs_vm_pop ls_right.
-            qjs_vm_pop ls_left.
+            IF lv_stack_depth < 2. stack_underflow( ). ENDIF.
+            READ TABLE lt_stack INDEX lv_stack_depth INTO ls_right.
+            lv_stack_depth = lv_stack_depth - 1.
+            READ TABLE lt_stack INDEX lv_stack_depth ASSIGNING <ls_stack_value>.
             DATA(lv_fast_equal) = zcl_qjs_value=>strict_equal(
-              left = ls_left right = ls_right ).
+              left = <ls_stack_value> right = ls_right ).
             IF <ls_instruction>-opcode = zif_qjs_opcodes=>strict_not_equal.
               lv_fast_equal = xsdbool( lv_fast_equal = abap_false ).
             ENDIF.
-            CLEAR ls_value.
-            ls_value-tag = zcl_qjs_value=>tag_bool.
-            IF lv_fast_equal = abap_true. ls_value-int_value = 1. ENDIF.
-            qjs_vm_push ls_value.
+            CLEAR <ls_stack_value>.
+            <ls_stack_value>-tag = zcl_qjs_value=>tag_bool.
+            IF lv_fast_equal = abap_true. <ls_stack_value>-int_value = 1. ENDIF.
             CONTINUE.
           WHEN zif_qjs_opcodes=>push_i32.
             ls_value = VALUE #( tag       = zcl_qjs_value=>tag_int
@@ -959,6 +968,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           ENDWHILE.
           APPEND lo_called_frame TO lt_frames.
           lv_frame_index = lv_frame_index + 1.
+          lo_active_frame = lo_called_frame.
           IF lv_frame_index > lv_checked_frame_depth.
             mo_limits->check_frame_stack( lv_frame_index ).
             lv_checked_frame_depth = lv_frame_index.
@@ -966,14 +976,13 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
         WHEN zif_qjs_opcodes=>drop.
           qjs_vm_pop ls_value.
         WHEN zif_qjs_opcodes=>duplicate.
-          qjs_vm_pop ls_value.
-          qjs_vm_push ls_value.
+          IF lv_stack_depth = 0. stack_underflow( ). ENDIF.
+          READ TABLE lt_stack INDEX lv_stack_depth INTO ls_value.
           qjs_vm_push ls_value.
         WHEN zif_qjs_opcodes=>duplicate_two.
-          qjs_vm_pop ls_right.
-          qjs_vm_pop ls_left.
-          qjs_vm_push ls_left.
-          qjs_vm_push ls_right.
+          IF lv_stack_depth < 2. stack_underflow( ). ENDIF.
+          READ TABLE lt_stack INDEX lv_stack_depth - 1 INTO ls_left.
+          READ TABLE lt_stack INDEX lv_stack_depth INTO ls_right.
           qjs_vm_push ls_left.
           qjs_vm_push ls_right.
         WHEN zif_qjs_opcodes=>swap.
@@ -2083,6 +2092,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
               mv_generator_complete = abap_true.
               RETURN.
             ENDIF.
+            READ TABLE lt_frames INDEX lv_frame_index INTO lo_active_frame.
             qjs_vm_push result.
             CONTINUE.
           ENDIF.
@@ -2279,6 +2289,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mv_generator_complete = abap_true.
             RETURN.
           ENDIF.
+          READ TABLE lt_frames INDEX lv_frame_index INTO lo_active_frame.
           qjs_vm_push result.
         WHEN zif_qjs_opcodes=>return_undefined.
           IF lo_active_frame->is_constructor = abap_true.
@@ -2297,6 +2308,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             mv_generator_complete = abap_true.
             RETURN.
           ENDIF.
+          READ TABLE lt_frames INDEX lv_frame_index INTO lo_active_frame.
           qjs_vm_push result.
         WHEN zif_qjs_opcodes=>throw.
           qjs_vm_pop ls_value.
@@ -2349,6 +2361,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_throw
             EXPORTING value = lo_throw->value.
         ENDIF.
+        lo_active_frame = lo_frame.
       ENDTRY.
     ENDWHILE.
 

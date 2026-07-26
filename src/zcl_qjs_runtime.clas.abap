@@ -551,23 +551,23 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
 
   METHOD is_callable_value.
     DATA lo_callable TYPE REF TO zif_qjs_callable.
-    DATA lo_closure TYPE REF TO zcl_qjs_closure.
     IF value-tag <> zcl_qjs_value=>tag_object.
       RETURN.
     ENDIF.
-    TRY.
-        lo_closure ?= value-object_ref.
-      CATCH cx_sy_move_cast_error.
-    ENDTRY.
-    IF lo_closure IS BOUND.
+    IF value-object_ref IS INSTANCE OF zcl_qjs_closure
+        OR value-object_ref IS INSTANCE OF zcl_qjs_native_function.
       result = abap_true.
-      RETURN.
+    ELSEIF value-object_ref IS INSTANCE OF zcl_qjs_object.
+      result = abap_false.
+    ELSE.
+      " Keep the embedding interface extensible, but do not use a failed cast
+      " as the ordinary-object fast path.
+      TRY.
+          lo_callable ?= value-object_ref.
+        CATCH cx_sy_move_cast_error.
+      ENDTRY.
+      result = xsdbool( lo_callable IS BOUND ).
     ENDIF.
-    TRY.
-        lo_callable ?= value-object_ref.
-      CATCH cx_sy_move_cast_error.
-    ENDTRY.
-    result = xsdbool( lo_callable IS BOUND ).
   ENDMETHOD.
 
   METHOD enqueue_promise_job.
@@ -728,7 +728,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
       lo_callable ?= callable-object_ref.
     ELSE.
       TRY.
-        lo_callable ?= callable-object_ref.
+          lo_callable ?= callable-object_ref.
         CATCH cx_sy_move_cast_error.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'TypeError: object is not callable'.
