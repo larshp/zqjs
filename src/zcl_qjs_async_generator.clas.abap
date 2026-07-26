@@ -203,11 +203,11 @@ CLASS zcl_qjs_async_generator IMPLEMENTATION.
     DATA lv_fulfill_id TYPE i.
     DATA lv_reject_id TYPE i.
     IF result_mode = abap_true.
-      lv_fulfill_id = zcl_qjs_native_function=>id_async_generator_result_fulfill.
-      lv_reject_id = zcl_qjs_native_function=>id_async_generator_result_reject.
+      lv_fulfill_id = zcl_qjs_native_function=>id_async_gen_result_fulfill.
+      lv_reject_id = zcl_qjs_native_function=>id_async_gen_result_reject.
     ELSE.
-      lv_fulfill_id = zcl_qjs_native_function=>id_async_generator_await_fulfill.
-      lv_reject_id = zcl_qjs_native_function=>id_async_generator_await_reject.
+      lv_fulfill_id = zcl_qjs_native_function=>id_async_gen_await_fulfill.
+      lv_reject_id = zcl_qjs_native_function=>id_async_gen_await_reject.
     ENDIF.
     DATA(lo_fulfill) = NEW zcl_qjs_native_function(
       id = lv_fulfill_id runtime = mo_runtime bound_target = ls_self
@@ -346,10 +346,10 @@ CLASS zcl_qjs_async_generator IMPLEMENTATION.
     lo_self_ref = me.
     DATA(ls_self) = zcl_qjs_value=>new_object( lo_self_ref ).
     DATA(lo_fulfill) = NEW zcl_qjs_native_function(
-      id = zcl_qjs_native_function=>id_async_generator_delegate_fulfill
+      id = zcl_qjs_native_function=>id_async_gen_delegate_fulfill
       runtime = mo_runtime bound_target = ls_self ).
     DATA(lo_reject) = NEW zcl_qjs_native_function(
-      id = zcl_qjs_native_function=>id_async_generator_delegate_reject
+      id = zcl_qjs_native_function=>id_async_gen_delegate_reject
       runtime = mo_runtime bound_target = ls_self ).
     DATA lo_fulfill_ref TYPE REF TO object.
     DATA lo_reject_ref TYPE REF TO object.

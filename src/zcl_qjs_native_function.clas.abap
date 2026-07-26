@@ -223,13 +223,13 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS id_async_generator_next TYPE i VALUE 228.
     CONSTANTS id_async_generator_throw TYPE i VALUE 229.
     CONSTANTS id_async_generator_return TYPE i VALUE 230.
-    CONSTANTS id_async_generator_await_fulfill TYPE i VALUE 231.
-    CONSTANTS id_async_generator_await_reject TYPE i VALUE 232.
-    CONSTANTS id_async_generator_result_fulfill TYPE i VALUE 233.
-    CONSTANTS id_async_generator_result_reject TYPE i VALUE 234.
+    CONSTANTS id_async_gen_await_fulfill TYPE i VALUE 231.
+    CONSTANTS id_async_gen_await_reject TYPE i VALUE 232.
+    CONSTANTS id_async_gen_result_fulfill TYPE i VALUE 233.
+    CONSTANTS id_async_gen_result_reject TYPE i VALUE 234.
     CONSTANTS id_async_from_sync_throw TYPE i VALUE 235.
-    CONSTANTS id_async_generator_delegate_fulfill TYPE i VALUE 236.
-    CONSTANTS id_async_generator_delegate_reject TYPE i VALUE 237.
+    CONSTANTS id_async_gen_delegate_fulfill TYPE i VALUE 236.
+    CONSTANTS id_async_gen_delegate_reject TYPE i VALUE 237.
     CONSTANTS id_regexp TYPE i VALUE 238.
     CONSTANTS id_regexp_exec TYPE i VALUE 239.
     CONSTANTS id_regexp_test TYPE i VALUE 240.
@@ -7275,10 +7275,10 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             WHEN mv_id = id_async_generator_throw THEN 2
             ELSE 0 )
           input = ls_argument ).
-      WHEN id_async_generator_await_fulfill OR id_async_generator_await_reject
-          OR id_async_generator_result_fulfill OR id_async_generator_result_reject
-          OR id_async_generator_delegate_fulfill
-          OR id_async_generator_delegate_reject.
+      WHEN id_async_gen_await_fulfill OR id_async_gen_await_reject
+          OR id_async_gen_result_fulfill OR id_async_gen_result_reject
+          OR id_async_gen_delegate_fulfill
+          OR id_async_gen_delegate_reject.
         DATA lo_async_generator TYPE REF TO zcl_qjs_async_generator.
         TRY.
             lo_async_generator ?= ms_bound_target-object_ref.
@@ -7291,20 +7291,20 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF ls_argument-tag = 0.
           ls_argument = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        IF mv_id = id_async_generator_delegate_fulfill
-            OR mv_id = id_async_generator_delegate_reject.
+        IF mv_id = id_async_gen_delegate_fulfill
+            OR mv_id = id_async_gen_delegate_reject.
           lo_async_generator->resume_delegate(
             value = ls_argument rejected = xsdbool(
-              mv_id = id_async_generator_delegate_reject ) ).
-        ELSEIF mv_id = id_async_generator_await_fulfill
-            OR mv_id = id_async_generator_await_reject.
+              mv_id = id_async_gen_delegate_reject ) ).
+        ELSEIF mv_id = id_async_gen_await_fulfill
+            OR mv_id = id_async_gen_await_reject.
           lo_async_generator->resume_await(
             value = ls_argument rejected = xsdbool(
-              mv_id = id_async_generator_await_reject ) ).
+              mv_id = id_async_gen_await_reject ) ).
         ELSE.
           lo_async_generator->resume_result(
             value = ls_argument rejected = xsdbool(
-              mv_id = id_async_generator_result_reject )
+              mv_id = id_async_gen_result_reject )
             done = xsdbool( ms_bound_this-int_value <> 0 ) ).
         ENDIF.
         result = zcl_qjs_value=>new_undefined( ).
@@ -7935,11 +7935,11 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           OR id_async_from_sync_return OR id_async_from_sync_throw
           OR id_async_generator_next
           OR id_async_generator_throw OR id_async_generator_return
-          OR id_async_generator_await_fulfill OR id_async_generator_await_reject
-          OR id_async_generator_result_fulfill
-          OR id_async_generator_result_reject
-          OR id_async_generator_delegate_fulfill
-          OR id_async_generator_delegate_reject.
+          OR id_async_gen_await_fulfill OR id_async_gen_await_reject
+          OR id_async_gen_result_fulfill
+          OR id_async_gen_result_reject
+          OR id_async_gen_delegate_fulfill
+          OR id_async_gen_delegate_reject.
         RAISE EXCEPTION TYPE zcx_qjs_error
           EXPORTING reason = 'TypeError: global function is not a constructor'.
       WHEN id_bound_function.
