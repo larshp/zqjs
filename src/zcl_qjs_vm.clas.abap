@@ -921,8 +921,9 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lo_called_frame->after_return_fields = lo_active_frame->closure.
             lo_called_frame->after_return_receiver = ls_this.
           ENDIF.
+          DATA(ls_undefined) = VALUE zcl_qjs_value=>ty_value(
+            tag = zcl_qjs_value=>tag_undefined ).
           DO lo_called->get_local_count( ) TIMES.
-            DATA(ls_undefined) = zcl_qjs_value=>new_undefined( ).
             ls_local_spec = lo_called->get_local_spec( sy-index - 1 ).
             CREATE OBJECT lo_cell
               EXPORTING value = ls_undefined initialized = ls_local_spec-initialized

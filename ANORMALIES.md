@@ -144,6 +144,11 @@ behavior was counterintuitive and repeating them would waste another benchmark c
 | VM integer property-key shortcut | Approximately 10% slower | Reverted |
 | Contiguous local-metadata iteration | 70,300 ms | Reverted |
 | Lazy function prototype/property creation | Semantic test failures | Reverted |
+| Hashed shape-descriptor table | 22,729.7 ms median (24,276.1, 21,178.4, 22,729.7) versus the retained 21,055.8 ms sorted-table baseline | Reverted; the transpiler's hash-table overhead outweighed eliminating insertion sorting for these small shapes |
+| Standard-table shape descriptor vector | 21,172.5 ms median (18,635.2, 21,172.5, 21,675.6) versus a same-session 20,404.3 ms sorted-table control (20,404.3, 21,059.0, 19,289.2) | Reverted; linear lookup was 3.8% slower despite removing the visible sort stack |
+| Skip `DELETE TABLE` for new shape properties | 21,382.5 ms median (21,382.5, 20,088.9, 21,444.3) versus the same-session 20,404.3 ms control | Reverted; removing redundant table work made the transpiled/JIT path 4.8% slower |
+| Reuse cached `undefined` for missing call arguments | 20,958.7 ms median (20,879.2, 21,467.5, 20,958.7) versus 19,380.7 ms for caching only local initialization | Reverted; one fewer helper call changed the generated dispatcher path and was 8.1% slower |
+| Inline `VALUE` for the `push_undefined` opcode | 21,239.7 ms median (21,422.0, 21,239.7, 21,053.8) versus a 19,165.7 ms local-cache control | Reverted; the narrow dispatcher substitution was 10.8% slower |
 
 The recurring pattern is that expanding the transpiled VM dispatcher or replacing
 runtime table operations with more ABAP source branches can cost more than the avoided
