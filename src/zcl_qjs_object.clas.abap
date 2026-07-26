@@ -244,12 +244,11 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       cell TYPE REF TO zcl_qjs_cell,
     END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
-    TYPES: BEGIN OF ty_element,
-      index TYPE int8,
-      present TYPE abap_bool,
-      value TYPE zcl_qjs_value=>ty_value,
-    END OF ty_element.
-    TYPES ty_elements TYPE STANDARD TABLE OF ty_element WITH DEFAULT KEY.
+    " QuickJS represents dense array slots as values and reserves a special
+    " value for holes. Tag zero is not a JavaScript value, so it is the hole
+    " marker here and avoids a redundant index and presence flag per element.
+    TYPES ty_elements TYPE STANDARD TABLE OF zcl_qjs_value=>ty_value
+      WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_array_index,
       found TYPE abap_bool,
       index TYPE int8,
@@ -487,8 +486,8 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       IF ls_array_index-found = abap_true AND mr_elements IS BOUND.
         READ TABLE mr_elements->* INDEX ls_array_index-index + 1
           INTO DATA(ls_element).
-        IF sy-subrc = 0 AND ls_element-present = abap_true.
-          result = ls_element-value.
+        IF sy-subrc = 0 AND ls_element-tag <> 0.
+          result = ls_element.
           RETURN.
         ENDIF.
       ENDIF.
@@ -1006,7 +1005,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       IF ls_delete_index-found = abap_true.
         READ TABLE mr_elements->* INDEX ls_delete_index-index + 1
           ASSIGNING FIELD-SYMBOL(<ls_delete_element>).
-        IF sy-subrc = 0. CLEAR <ls_delete_element>-present. ENDIF.
+        IF sy-subrc = 0. CLEAR <ls_delete_element>. ENDIF.
         result = abap_true.
         RETURN.
       ENDIF.
@@ -1038,7 +1037,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       IF ls_has_index-found = abap_true.
         READ TABLE mr_elements->* INDEX ls_has_index-index + 1
           INTO DATA(ls_has_element).
-        result = xsdbool( sy-subrc = 0 AND ls_has_element-present = abap_true ).
+        result = xsdbool( sy-subrc = 0 AND ls_has_element-tag <> 0 ).
       ENDIF.
     ENDIF.
   ENDMETHOD.
@@ -1165,7 +1164,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD own_property_count.
     result = mo_shape->property_count( ) + lines( mt_symbol_properties ).
     IF mr_elements IS BOUND.
-      LOOP AT mr_elements->* TRANSPORTING NO FIELDS WHERE present = abap_true.
+      LOOP AT mr_elements->* TRANSPORTING NO FIELDS WHERE tag <> 0.
         result = result + 1.
       ENDLOOP.
     ENDIF.
@@ -1202,9 +1201,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         IF ls_own_index-found = abap_true.
           READ TABLE mr_elements->* INDEX ls_own_index-index + 1
             INTO DATA(ls_own_element).
-          IF sy-subrc = 0 AND ls_own_element-present = abap_true.
+          IF sy-subrc = 0 AND ls_own_element-tag <> 0.
             result-found = abap_true.
-            result-value = ls_own_element-value.
+            result-value = ls_own_element.
             result-writable = abap_true.
             result-enumerable = abap_true.
             result-configurable = abap_true.
@@ -1255,22 +1254,30 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     DATA lv_name TYPE string.
     DATA lv_max_array_length TYPE int8.
     lv_max_array_length = '4294967295'.
-    lv_name = index.
-    CONDENSE lv_name NO-GAPS.
     DATA lv_element_slots TYPE i.
     IF mr_elements IS BOUND. lv_element_slots = lines( mr_elements->* ). ENDIF.
+    " QuickJS keeps sequential array writes on its dense-elements path. New
+    " array literals and push-like operations overwhelmingly hit this branch.
+    IF mv_is_array = abap_true AND index = lv_element_slots
+        AND index >= 0 AND index < lv_max_array_length
+        AND mo_shape->property_count( ) = 0.
+      IF mr_elements IS NOT BOUND. CREATE DATA mr_elements. ENDIF.
+      APPEND value TO mr_elements->*.
+      IF index >= mv_length. mv_length = index + 1. ENDIF.
+      RETURN.
+    ENDIF.
+    lv_name = index.
+    CONDENSE lv_name NO-GAPS.
     IF mv_is_array = abap_true AND index >= 0 AND index < lv_max_array_length
         AND index <= lv_element_slots + 64
         AND mo_shape->lookup( lv_name )-found = abap_false.
       IF mr_elements IS NOT BOUND. CREATE DATA mr_elements. ENDIF.
       WHILE lines( mr_elements->* ) <= index.
-        APPEND VALUE ty_element( index = lines( mr_elements->* ) )
-          TO mr_elements->*.
+        APPEND INITIAL LINE TO mr_elements->*.
       ENDWHILE.
       READ TABLE mr_elements->* INDEX index + 1
         ASSIGNING FIELD-SYMBOL(<ls_element>).
-      <ls_element>-present = abap_true.
-      <ls_element>-value = value.
+      <ls_element> = value.
     ELSE.
       set( name = lv_name value = value ).
     ENDIF.
@@ -1282,7 +1289,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
   METHOD has_element.
     IF mv_is_array = abap_true AND mr_elements IS BOUND.
       READ TABLE mr_elements->* INDEX index + 1 INTO DATA(ls_element).
-      IF sy-subrc = 0 AND ls_element-present = abap_true.
+      IF sy-subrc = 0 AND ls_element-tag <> 0.
         result = abap_true.
         RETURN.
       ENDIF.
@@ -1296,8 +1303,8 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     DATA lv_name TYPE string.
     IF mv_is_array = abap_true AND mr_elements IS BOUND.
       READ TABLE mr_elements->* INDEX index + 1 INTO DATA(ls_element).
-      IF sy-subrc = 0 AND ls_element-present = abap_true.
-        result = ls_element-value.
+      IF sy-subrc = 0 AND ls_element-tag <> 0.
+        result = ls_element.
         RETURN.
       ENDIF.
     ENDIF.
@@ -1318,10 +1325,13 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     ENDIF.
     IF length < mv_length.
       IF mr_elements IS BOUND.
-        LOOP AT mr_elements->* ASSIGNING FIELD-SYMBOL(<ls_truncated_element>)
-            WHERE index >= length.
-          CLEAR <ls_truncated_element>-present.
-        ENDLOOP.
+        DATA(lv_truncate_index) = length + 1.
+        WHILE lv_truncate_index <= lines( mr_elements->* ).
+          READ TABLE mr_elements->* INDEX lv_truncate_index
+            ASSIGNING FIELD-SYMBOL(<ls_truncated_element>).
+          CLEAR <ls_truncated_element>.
+          lv_truncate_index = lv_truncate_index + 1.
+        ENDWHILE.
       ENDIF.
       DATA lt_delete_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
       LOOP AT mt_properties INTO DATA(ls_property).
@@ -1358,10 +1368,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     IF mr_elements IS BOUND.
       DATA lt_indices TYPE STANDARD TABLE OF int8 WITH DEFAULT KEY.
       LOOP AT mr_elements->* INTO DATA(ls_key_element).
-        IF ls_key_element-present = abap_false. CONTINUE. ENDIF.
-        APPEND ls_key_element-index TO lt_indices.
+        IF ls_key_element-tag = 0. CONTINUE. ENDIF.
+        APPEND CONV int8( sy-tabix - 1 ) TO lt_indices.
       ENDLOOP.
-      SORT lt_indices ASCENDING.
       LOOP AT lt_indices INTO DATA(lv_key_index).
         DATA(lv_key_name) = CONV string( lv_key_index ).
         CONDENSE lv_key_name NO-GAPS.
@@ -1374,10 +1383,9 @@ CLASS zcl_qjs_object IMPLEMENTATION.
     IF mr_elements IS BOUND.
       DATA lt_indices TYPE STANDARD TABLE OF int8 WITH DEFAULT KEY.
       LOOP AT mr_elements->* INTO DATA(ls_key_element).
-        IF ls_key_element-present = abap_false. CONTINUE. ENDIF.
-        APPEND ls_key_element-index TO lt_indices.
+        IF ls_key_element-tag = 0. CONTINUE. ENDIF.
+        APPEND CONV int8( sy-tabix - 1 ) TO lt_indices.
       ENDLOOP.
-      SORT lt_indices ASCENDING.
       LOOP AT lt_indices INTO DATA(lv_key_index).
         DATA(lv_key_name) = CONV string( lv_key_index ).
         CONDENSE lv_key_name NO-GAPS.
