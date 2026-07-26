@@ -5,7 +5,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       name    TYPE string,
       index   TYPE i,
       lexical TYPE abap_bool,
-    END OF ty_global_binding.
+      END OF ty_global_binding.
     TYPES ty_global_bindings TYPE STANDARD TABLE OF ty_global_binding WITH DEFAULT KEY.
     METHODS constructor
       IMPORTING
@@ -30,7 +30,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       kind           TYPE i,
       lexical        TYPE abap_bool,
       constant       TYPE abap_bool,
-    END OF ty_local.
+      END OF ty_local.
     TYPES ty_locals TYPE HASHED TABLE OF ty_local WITH UNIQUE KEY name.
     TYPES ty_function_locals TYPE HASHED TABLE OF ty_local
       WITH UNIQUE KEY name function_depth.
@@ -43,13 +43,13 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       iterator_local    TYPE i,
       break_jumps       TYPE ty_jump_indices,
       continue_jumps    TYPE ty_jump_indices,
-    END OF ty_loop.
+      END OF ty_loop.
     TYPES ty_loops TYPE STANDARD TABLE OF ty_loop WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_finally,
       calls          TYPE ty_jump_indices,
       suppress_throw TYPE abap_bool,
       loop_depth     TYPE i,
-    END OF ty_finally.
+      END OF ty_finally.
     TYPES ty_finally_stack TYPE STANDARD TABLE OF ty_finally WITH DEFAULT KEY.
     TYPES ty_scopes TYPE STANDARD TABLE OF ty_locals WITH DEFAULT KEY.
     TYPES ty_capture_names TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
@@ -57,7 +57,7 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       name             TYPE string,
       make_instruction TYPE i,
       put_instruction  TYPE i,
-    END OF ty_hoist.
+      END OF ty_hoist.
     TYPES ty_hoists TYPE HASHED TABLE OF ty_hoist WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_class_method,
       name            TYPE string,
@@ -73,13 +73,13 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       generator       TYPE abap_bool,
       async           TYPE abap_bool,
       initializer     TYPE REF TO zcl_qjs_function,
-    END OF ty_class_method.
+      END OF ty_class_method.
     TYPES ty_class_methods TYPE STANDARD TABLE OF ty_class_method WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_private_declaration,
       name   TYPE string,
       static TYPE abap_bool,
       kind   TYPE i,
-    END OF ty_private_declaration.
+      END OF ty_private_declaration.
     TYPES ty_private_declarations TYPE HASHED TABLE OF ty_private_declaration
       WITH UNIQUE KEY name.
     DATA mo_lexer TYPE REF TO zcl_qjs_lexer.

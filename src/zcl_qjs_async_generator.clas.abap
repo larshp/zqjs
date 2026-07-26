@@ -26,7 +26,7 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
       kind    TYPE i,
       input   TYPE zcl_qjs_value=>ty_value,
       promise TYPE REF TO zcl_qjs_object,
-    END OF ty_request.
+      END OF ty_request.
     TYPES ty_requests TYPE STANDARD TABLE OF ty_request WITH DEFAULT KEY.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mo_function TYPE REF TO zcl_qjs_function.

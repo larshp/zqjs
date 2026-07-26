@@ -9,7 +9,7 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable        TYPE abap_bool,
       enumerable      TYPE abap_bool,
       configurable    TYPE abap_bool,
-    END OF ty_descriptor.
+      END OF ty_descriptor.
     TYPES ty_descriptors TYPE SORTED TABLE OF ty_descriptor WITH UNIQUE KEY name.
     TYPES ty_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
@@ -39,7 +39,7 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
       enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
       shape        TYPE REF TO zcl_qjs_shape,
-    END OF ty_transition.
+      END OF ty_transition.
     TYPES ty_transitions TYPE HASHED TABLE OF ty_transition
       WITH UNIQUE KEY name accessor writable enumerable configurable.
     DATA mt_descriptors TYPE ty_descriptors.
@@ -130,7 +130,7 @@ CLASS zcl_qjs_shape IMPLEMENTATION.
       index_group     TYPE i,
       numeric_index   TYPE int8,
       insertion_order TYPE i,
-    END OF ty_ordered_name.
+      END OF ty_ordered_name.
     DATA lt_ordered TYPE STANDARD TABLE OF ty_ordered_name WITH DEFAULT KEY.
     LOOP AT mt_descriptors INTO ls_descriptor.
       IF enumerable_only = abap_false OR ls_descriptor-enumerable = abap_true.

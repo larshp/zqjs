@@ -274,7 +274,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_symbol,
       identity    TYPE i,
       description TYPE string,
-    END OF ty_symbol.
+      END OF ty_symbol.
     TYPES ty_symbols TYPE HASHED TABLE OF ty_symbol WITH UNIQUE KEY identity.
     TYPES:
       BEGIN OF ty_symbol_registry,
@@ -329,7 +329,7 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       promise         TYPE REF TO zcl_qjs_object,
       thenable        TYPE zcl_qjs_value=>ty_value,
       then_method     TYPE zcl_qjs_value=>ty_value,
-    END OF ty_promise_job.
+      END OF ty_promise_job.
     TYPES ty_promise_jobs TYPE STANDARD TABLE OF ty_promise_job WITH DEFAULT KEY.
     DATA mt_promise_jobs TYPE ty_promise_jobs.
     DATA mv_max_jobs TYPE i.

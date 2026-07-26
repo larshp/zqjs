@@ -255,7 +255,7 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable     TYPE abap_bool,
       enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
-    END OF ty_own_property.
+      END OF ty_own_property.
     METHODS define_property
       IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
         writable TYPE abap_bool enumerable TYPE abap_bool configurable TYPE abap_bool.
@@ -299,7 +299,7 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable     TYPE abap_bool,
       enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
-    END OF ty_property.
+      END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_symbol_property,
       identity     TYPE i,
@@ -310,24 +310,24 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable     TYPE abap_bool,
       enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
-    END OF ty_symbol_property.
+      END OF ty_symbol_property.
     TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
       WITH UNIQUE KEY identity.
     TYPES: BEGIN OF ty_promise_capability,
       promise TYPE zcl_qjs_value=>ty_value,
       resolve TYPE zcl_qjs_value=>ty_value,
       reject  TYPE zcl_qjs_value=>ty_value,
-    END OF ty_promise_capability.
+      END OF ty_promise_capability.
     TYPES: BEGIN OF ty_error_cause,
       found TYPE abap_bool,
       value TYPE zcl_qjs_value=>ty_value,
-    END OF ty_error_cause.
+      END OF ty_error_cause.
     TYPES: BEGIN OF ty_regexp_match,
       found  TYPE abap_bool,
       offset TYPE i,
       length TYPE i,
       value  TYPE string,
-    END OF ty_regexp_match.
+      END OF ty_regexp_match.
     DATA mv_id TYPE i.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mo_context TYPE REF TO zcl_qjs_context.

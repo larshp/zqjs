@@ -5,7 +5,7 @@ CLASS zcl_qjs_frame DEFINITION PUBLIC FINAL CREATE PUBLIC.
       target         TYPE i,
       finally_target TYPE i,
       stack_depth    TYPE i,
-    END OF ty_handler.
+      END OF ty_handler.
     TYPES ty_handlers TYPE STANDARD TABLE OF ty_handler WITH DEFAULT KEY.
     TYPES ty_return_addresses TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     DATA function TYPE REF TO zcl_qjs_function.

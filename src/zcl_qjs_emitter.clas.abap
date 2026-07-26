@@ -63,14 +63,14 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_atom_index,
       name  TYPE string,
       index TYPE i,
-    END OF ty_atom_index.
+      END OF ty_atom_index.
     TYPES ty_atom_indices TYPE HASHED TABLE OF ty_atom_index
       WITH UNIQUE KEY name.
     TYPES: BEGIN OF ty_capture_index,
       source_kind  TYPE i,
       source_index TYPE i,
       index        TYPE i,
-    END OF ty_capture_index.
+      END OF ty_capture_index.
     TYPES ty_capture_indices TYPE HASHED TABLE OF ty_capture_index
       WITH UNIQUE KEY source_kind source_index.
     DATA mt_code TYPE zcl_qjs_function=>ty_code.

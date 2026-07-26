@@ -8,7 +8,7 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       direct        TYPE abap_bool,
       value         TYPE zcl_qjs_value=>ty_value,
       accessor_kind TYPE i,
-    END OF ty_instance_field.
+      END OF ty_instance_field.
     TYPES ty_instance_fields TYPE STANDARD TABLE OF ty_instance_field
       WITH DEFAULT KEY.
     METHODS constructor

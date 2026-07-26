@@ -12,7 +12,7 @@ CLASS zcl_qjs_json DEFINITION PUBLIC FINAL CREATE PRIVATE.
     TYPES: BEGIN OF ty_serialized,
       supported TYPE abap_bool,
       text      TYPE string,
-    END OF ty_serialized.
+      END OF ty_serialized.
     DATA mv_source TYPE string.
     DATA mv_offset TYPE i.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.

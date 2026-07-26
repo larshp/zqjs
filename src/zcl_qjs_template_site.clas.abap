@@ -9,7 +9,7 @@ CLASS zcl_qjs_template_site DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_part,
       cooked TYPE string,
       raw    TYPE string,
-    END OF ty_part.
+      END OF ty_part.
     TYPES ty_parts TYPE STANDARD TABLE OF ty_part WITH DEFAULT KEY.
     DATA mt_parts TYPE ty_parts.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.

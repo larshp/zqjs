@@ -14,12 +14,12 @@ CLASS zcl_qjs_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_capture,
       source_kind  TYPE i,
       source_index TYPE i,
-    END OF ty_capture.
+      END OF ty_capture.
     TYPES ty_captures TYPE STANDARD TABLE OF ty_capture WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_local_spec,
       initialized TYPE abap_bool,
       mutable     TYPE abap_bool,
-    END OF ty_local_spec.
+      END OF ty_local_spec.
     TYPES ty_local_specs TYPE STANDARD TABLE OF ty_local_spec WITH DEFAULT KEY.
 
     METHODS constructor

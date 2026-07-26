@@ -35,7 +35,7 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_global,
       name TYPE string,
       cell TYPE REF TO zcl_qjs_cell,
-    END OF ty_global.
+      END OF ty_global.
     TYPES ty_globals TYPE SORTED TABLE OF ty_global WITH UNIQUE KEY name.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     DATA mv_disposed TYPE abap_bool.

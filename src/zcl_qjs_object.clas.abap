@@ -26,14 +26,14 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable     TYPE abap_bool,
       enumerable   TYPE abap_bool,
       configurable TYPE abap_bool,
-    END OF ty_own_property.
+      END OF ty_own_property.
     TYPES ty_symbol_ids TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_collection_entry,
       found   TYPE abap_bool,
       deleted TYPE abap_bool,
       key     TYPE zcl_qjs_value=>ty_value,
       value   TYPE zcl_qjs_value=>ty_value,
-    END OF ty_collection_entry.
+      END OF ty_collection_entry.
     METHODS get
       IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
@@ -242,7 +242,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       value    TYPE zcl_qjs_value=>ty_value,
       accessor TYPE REF TO zcl_qjs_accessor_pair,
       cell     TYPE REF TO zcl_qjs_cell,
-    END OF ty_property.
+      END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property WITH UNIQUE KEY name.
     " QuickJS represents dense array slots as values and reserves a special
     " value for holes. Tag zero is not a JavaScript value, so it is the hole
@@ -252,7 +252,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_array_index,
       found TYPE abap_bool,
       index TYPE int8,
-    END OF ty_array_index.
+      END OF ty_array_index.
     TYPES: BEGIN OF ty_symbol_property,
       identity        TYPE i,
       value           TYPE zcl_qjs_value=>ty_value,
@@ -262,7 +262,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       enumerable      TYPE abap_bool,
       configurable    TYPE abap_bool,
       insertion_order TYPE i,
-    END OF ty_symbol_property.
+      END OF ty_symbol_property.
     TYPES ty_symbol_properties TYPE HASHED TABLE OF ty_symbol_property
       WITH UNIQUE KEY identity.
     TYPES: BEGIN OF ty_private_field,
@@ -271,7 +271,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       writable      TYPE abap_bool,
       accessor      TYPE abap_bool,
       accessor_pair TYPE REF TO zcl_qjs_accessor_pair,
-    END OF ty_private_field.
+      END OF ty_private_field.
     TYPES ty_private_fields TYPE HASHED TABLE OF ty_private_field
       WITH UNIQUE KEY identity.
     DATA mt_properties TYPE ty_properties.
@@ -290,7 +290,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       next_promise TYPE REF TO zcl_qjs_object,
       next_resolve TYPE zcl_qjs_value=>ty_value,
       next_reject  TYPE zcl_qjs_value=>ty_value,
-    END OF ty_promise_reaction.
+      END OF ty_promise_reaction.
     TYPES ty_promise_reactions TYPE STANDARD TABLE OF ty_promise_reaction
       WITH DEFAULT KEY.
     TYPES: BEGIN OF ty_cold_state,
@@ -316,7 +316,7 @@ CLASS zcl_qjs_object DEFINITION PUBLIC FINAL CREATE PUBLIC.
       is_regexp                  TYPE abap_bool,
       regexp_pattern             TYPE string,
       regexp_flags               TYPE string,
-    END OF ty_cold_state.
+      END OF ty_cold_state.
     DATA mr_cold TYPE REF TO ty_cold_state.
     DATA mv_length TYPE int8.
     DATA mv_length_writable TYPE abap_bool VALUE abap_true.

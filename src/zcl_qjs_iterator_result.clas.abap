@@ -9,7 +9,7 @@ CLASS zcl_qjs_iterator_result DEFINITION PUBLIC FINAL CREATE PUBLIC.
       kind  TYPE i,
       name  TYPE string,
       value TYPE zcl_qjs_value=>ty_value,
-    END OF ty_property.
+      END OF ty_property.
     TYPES ty_properties TYPE HASHED TABLE OF ty_property
       WITH UNIQUE KEY kind name.
     DATA ms_done TYPE zcl_qjs_value=>ty_value.

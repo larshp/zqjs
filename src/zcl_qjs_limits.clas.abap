@@ -3,7 +3,7 @@ CLASS zcl_qjs_limits DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES: BEGIN OF ty_step_state,
       maximum TYPE int8,
       used    TYPE int8,
-    END OF ty_step_state.
+      END OF ty_step_state.
     METHODS constructor
       IMPORTING
         max_steps           TYPE int8 DEFAULT 100000
