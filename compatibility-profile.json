@@ -29,9 +29,9 @@
     "test262Commit": "9e61c12835c5e4a3bdba93850427e6742c4f64c4",
     "openAbapCoreCommit": "f30a24120b6677e6cbf92210b59db9589c8be32f",
     "unicodeVersion": "17.0.0",
-    "abaplintCli": "2.120.4",
-    "abaplintRuntime": "2.13.42",
-    "abaplintTranspiler": "2.13.42"
+    "abaplintCli": "2.120.5",
+    "abaplintRuntime": "2.13.46",
+    "abaplintTranspiler": "2.13.46"
   },
   "features": {
     "scripts": "enabled",
