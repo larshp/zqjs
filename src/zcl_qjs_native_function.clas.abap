@@ -6603,7 +6603,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDIF.
         DATA lo_set_proto_closure TYPE REF TO zcl_qjs_closure.
         DATA lo_set_proto_base TYPE REF TO zcl_qjs_closure.
-        DATA(lv_set_proto_constructable_base) = abap_false.
+        DATA(lv_set_proto_construct_base) = abap_false.
         CLEAR lo_set_proto_closure.
         CLEAR lo_set_proto_base.
         TRY.
@@ -6623,7 +6623,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF ls_set_proto_value-tag = zcl_qjs_value=>tag_object.
           IF lo_set_proto_closure IS BOUND
               AND is_constructable( ls_set_proto_value ) = abap_true.
-            lv_set_proto_constructable_base = abap_true.
+            lv_set_proto_construct_base = abap_true.
           ENDIF.
           TRY.
               lo_new_prototype ?= ls_set_proto_value-object_ref.
@@ -6634,7 +6634,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
                 CATCH cx_sy_move_cast_error.
               ENDTRY.
               IF lo_new_prototype IS NOT BOUND.
-                IF lv_set_proto_constructable_base = abap_true.
+                IF lv_set_proto_construct_base = abap_true.
                   lo_new_prototype = mo_runtime->get_function_prototype( ).
                 ELSE.
                   RAISE EXCEPTION TYPE zcx_qjs_error
@@ -6645,7 +6645,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDIF.
         lo_object->set_prototype( lo_new_prototype ).
         IF lo_set_proto_closure IS BOUND
-            AND lv_set_proto_constructable_base = abap_true.
+            AND lv_set_proto_construct_base = abap_true.
           lo_set_proto_closure->set_base_constructor( ls_set_proto_value ).
         ENDIF.
         result = ls_set_proto_target.

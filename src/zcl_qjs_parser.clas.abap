@@ -5004,9 +5004,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               ENDIF.
               DATA(ls_old_object_async_super) = ms_super_binding.
               DATA(lv_old_object_async_has_super) = mv_has_super.
-              DATA(lv_old_object_async_super_static) = mv_super_static.
-              DATA(lv_old_object_async_super_method) = mv_super_object_method.
-              DATA(lv_old_object_async_super_call) = mv_super_call_allowed.
+              DATA(lv_old_object_async_static) = mv_super_static.
+              DATA(lv_old_object_async_method) = mv_super_object_method.
+              DATA(lv_old_object_async_call) = mv_super_call_allowed.
               ms_super_binding = ls_object_home_binding.
               mv_has_super = abap_true.
               mv_super_static = abap_true.
@@ -5019,9 +5019,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               parse_function_expression( ).
               ms_super_binding = ls_old_object_async_super.
               mv_has_super = lv_old_object_async_has_super.
-              mv_super_static = lv_old_object_async_super_static.
-              mv_super_object_method = lv_old_object_async_super_method.
-              mv_super_call_allowed = lv_old_object_async_super_call.
+              mv_super_static = lv_old_object_async_static.
+              mv_super_object_method = lv_old_object_async_method.
+              mv_super_call_allowed = lv_old_object_async_call.
               IF lv_object_async_computed = abap_true.
                 mo_emitter->emit(
                   opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
@@ -5106,11 +5106,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                   zcl_qjs_number=>parse_literal( ms_token-text ) ).
               ENDIF.
             ENDIF.
-            DATA(ls_old_object_generator_super) = ms_super_binding.
-            DATA(lv_old_object_generator_has_super) = mv_has_super.
-            DATA(lv_old_object_generator_super_static) = mv_super_static.
-            DATA(lv_old_object_generator_super_method) = mv_super_object_method.
-            DATA(lv_old_object_generator_super_call) = mv_super_call_allowed.
+            DATA(ls_old_object_gen_super) = ms_super_binding.
+            DATA(lv_old_object_gen_has_super) = mv_has_super.
+            DATA(lv_old_object_gen_static) = mv_super_static.
+            DATA(lv_old_object_gen_method) = mv_super_object_method.
+            DATA(lv_old_object_gen_call) = mv_super_call_allowed.
             ms_super_binding = ls_object_home_binding.
             mv_has_super = abap_true.
             mv_super_static = abap_true.
@@ -5120,11 +5120,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             mv_parsing_generator_method = abap_true.
             ms_token-kind = zcl_qjs_lexer=>token_function.
             parse_function_expression( ).
-            ms_super_binding = ls_old_object_generator_super.
-            mv_has_super = lv_old_object_generator_has_super.
-            mv_super_static = lv_old_object_generator_super_static.
-            mv_super_object_method = lv_old_object_generator_super_method.
-            mv_super_call_allowed = lv_old_object_generator_super_call.
+            ms_super_binding = ls_old_object_gen_super.
+            mv_has_super = lv_old_object_gen_has_super.
+            mv_super_static = lv_old_object_gen_static.
+            mv_super_object_method = lv_old_object_gen_method.
+            mv_super_call_allowed = lv_old_object_gen_call.
             IF lv_object_generator_computed = abap_true.
               mo_emitter->emit(
                 opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
@@ -5143,11 +5143,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               DATA(lv_plain_accessor_name) = ms_token-text.
               DATA(lv_plain_accessor_atom) = mo_emitter->intern_atom(
                 lv_plain_accessor_name ).
-              DATA(ls_old_plain_accessor_super) = ms_super_binding.
-              DATA(lv_old_plain_accessor_has_super) = mv_has_super.
-              DATA(lv_old_plain_accessor_static) = mv_super_static.
-              DATA(lv_old_plain_accessor_method) = mv_super_object_method.
-              DATA(lv_old_plain_accessor_call) = mv_super_call_allowed.
+              DATA(ls_old_plain_acc_super) = ms_super_binding.
+              DATA(lv_old_plain_acc_has_super) = mv_has_super.
+              DATA(lv_old_plain_acc_static) = mv_super_static.
+              DATA(lv_old_plain_acc_method) = mv_super_object_method.
+              DATA(lv_old_plain_acc_call) = mv_super_call_allowed.
               ms_super_binding = ls_object_home_binding.
               mv_has_super = abap_true.
               mv_super_static = abap_true.
@@ -5156,11 +5156,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               mv_parsing_class_method = abap_true.
               ms_token-kind = zcl_qjs_lexer=>token_function.
               parse_function_expression( ).
-              ms_super_binding = ls_old_plain_accessor_super.
-              mv_has_super = lv_old_plain_accessor_has_super.
-              mv_super_static = lv_old_plain_accessor_static.
-              mv_super_object_method = lv_old_plain_accessor_method.
-              mv_super_call_allowed = lv_old_plain_accessor_call.
+              ms_super_binding = ls_old_plain_acc_super.
+              mv_has_super = lv_old_plain_acc_has_super.
+              mv_super_static = lv_old_plain_acc_static.
+              mv_super_object_method = lv_old_plain_acc_method.
+              mv_super_call_allowed = lv_old_plain_acc_call.
               mo_emitter->emit(
                 opcode = zif_qjs_opcodes=>define_method
                 operand = lv_plain_accessor_atom operand2 = 10 ).
@@ -5210,11 +5210,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
                     zcl_qjs_number=>parse_literal( ms_token-text ) ).
                 ENDIF.
               ENDIF.
-              DATA(ls_old_object_accessor_super) = ms_super_binding.
-              DATA(lv_old_object_accessor_has_super) = mv_has_super.
-              DATA(lv_old_object_accessor_static) = mv_super_static.
-              DATA(lv_old_object_accessor_method) = mv_super_object_method.
-              DATA(lv_old_object_accessor_call) = mv_super_call_allowed.
+              DATA(ls_old_object_acc_super) = ms_super_binding.
+              DATA(lv_old_object_acc_has_super) = mv_has_super.
+              DATA(lv_old_object_acc_static) = mv_super_static.
+              DATA(lv_old_object_acc_method) = mv_super_object_method.
+              DATA(lv_old_object_acc_call) = mv_super_call_allowed.
               ms_super_binding = ls_object_home_binding.
               mv_has_super = abap_true.
               mv_super_static = abap_true.
@@ -5223,11 +5223,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               mv_parsing_class_method = abap_true.
               ms_token-kind = zcl_qjs_lexer=>token_function.
               parse_function_expression( ).
-              ms_super_binding = ls_old_object_accessor_super.
-              mv_has_super = lv_old_object_accessor_has_super.
-              mv_super_static = lv_old_object_accessor_static.
-              mv_super_object_method = lv_old_object_accessor_method.
-              mv_super_call_allowed = lv_old_object_accessor_call.
+              ms_super_binding = ls_old_object_acc_super.
+              mv_has_super = lv_old_object_acc_has_super.
+              mv_super_static = lv_old_object_acc_static.
+              mv_super_object_method = lv_old_object_acc_method.
+              mv_super_call_allowed = lv_old_object_acc_call.
               IF lv_object_accessor_computed = abap_true.
                 mo_emitter->emit(
                   opcode  = zif_qjs_opcodes=>define_method_computed
@@ -5259,11 +5259,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             lo_computed_method_scanner->set_offset( mo_lexer->get_offset( ) ).
             DATA(ls_computed_method_lookahead) = lo_computed_method_scanner->next( ).
             IF ls_computed_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.
-              DATA(ls_old_computed_method_super) = ms_super_binding.
-              DATA(lv_old_computed_method_has_super) = mv_has_super.
-              DATA(lv_old_computed_method_static) = mv_super_static.
-              DATA(lv_old_computed_method_flag) = mv_super_object_method.
-              DATA(lv_old_computed_method_call) = mv_super_call_allowed.
+              DATA(ls_old_computed_super) = ms_super_binding.
+              DATA(lv_old_computed_has_super) = mv_has_super.
+              DATA(lv_old_computed_static) = mv_super_static.
+              DATA(lv_old_computed_method) = mv_super_object_method.
+              DATA(lv_old_computed_call) = mv_super_call_allowed.
               ms_super_binding = ls_object_home_binding.
               mv_has_super = abap_true.
               mv_super_static = abap_true.
@@ -5272,11 +5272,11 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               mv_parsing_class_method = abap_true.
               ms_token-kind = zcl_qjs_lexer=>token_function.
               parse_function_expression( ).
-              ms_super_binding = ls_old_computed_method_super.
-              mv_has_super = lv_old_computed_method_has_super.
-              mv_super_static = lv_old_computed_method_static.
-              mv_super_object_method = lv_old_computed_method_flag.
-              mv_super_call_allowed = lv_old_computed_method_call.
+              ms_super_binding = ls_old_computed_super.
+              mv_has_super = lv_old_computed_has_super.
+              mv_super_static = lv_old_computed_static.
+              mv_super_object_method = lv_old_computed_method.
+              mv_super_call_allowed = lv_old_computed_call.
               mo_emitter->emit(
                 opcode = zif_qjs_opcodes=>define_method_computed operand = 10 ).
             ELSE.
@@ -5310,9 +5310,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
             IF ls_object_method_lookahead-kind = zcl_qjs_lexer=>token_lparen.
               DATA(ls_old_object_method_super) = ms_super_binding.
               DATA(lv_old_object_method_has_super) = mv_has_super.
-              DATA(lv_old_object_method_super_static) = mv_super_static.
-              DATA(lv_old_object_method_super_method) = mv_super_object_method.
-              DATA(lv_old_object_method_super_call) = mv_super_call_allowed.
+              DATA(lv_old_object_method_static) = mv_super_static.
+              DATA(lv_old_object_method_flag) = mv_super_object_method.
+              DATA(lv_old_object_method_call) = mv_super_call_allowed.
               ms_super_binding = ls_object_home_binding.
               mv_has_super = abap_true.
               mv_super_static = abap_true.
@@ -5323,9 +5323,9 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               parse_function_expression( ).
               ms_super_binding = ls_old_object_method_super.
               mv_has_super = lv_old_object_method_has_super.
-              mv_super_static = lv_old_object_method_super_static.
-              mv_super_object_method = lv_old_object_method_super_method.
-              mv_super_call_allowed = lv_old_object_method_super_call.
+              mv_super_static = lv_old_object_method_static.
+              mv_super_object_method = lv_old_object_method_flag.
+              mv_super_call_allowed = lv_old_object_method_call.
               mo_emitter->emit(
                 opcode   = zif_qjs_opcodes=>define_method
                 operand  = lv_object_atom
