@@ -59,7 +59,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
       ENDTRY.
     ENDIF.
     IF ls_error-tag = 0.
-      DATA lv_separator TYPE string VALUE ': '.
+      DATA lv_separator TYPE string VALUE `: `.
       ls_error = zcl_qjs_value=>new_string( name && lv_separator && message ).
     ENDIF.
     RAISE EXCEPTION TYPE zcx_qjs_throw EXPORTING value = ls_error.
@@ -712,6 +712,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDIF.
             DATA lo_super_result_prototype TYPE REF TO zcl_qjs_object.
             DATA lo_super_placeholder TYPE REF TO zcl_qjs_object.
+            CLEAR lo_super_result_prototype.
+            CLEAR lo_super_placeholder.
             TRY.
                 lo_super_placeholder ?= lo_active_frame->constructor_this-object_ref.
               CATCH cx_sy_move_cast_error.
@@ -732,6 +734,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ENDTRY.
             IF lo_super_result_prototype IS BOUND.
               DATA lo_super_result_object TYPE REF TO zcl_qjs_object.
+              CLEAR lo_super_result_object.
               TRY.
                   lo_super_result_object ?= ls_this-object_ref.
                 CATCH cx_sy_move_cast_error.
@@ -1441,6 +1444,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
                 name = 'TypeError' message = 'field owner is not a class' ).
             ENDIF.
             DATA lo_initializer_closure TYPE REF TO zcl_qjs_closure.
+            CLEAR lo_initializer_closure.
             TRY.
                 lo_initializer_closure ?= ls_value-object_ref.
               CATCH cx_sy_move_cast_error.
@@ -2169,6 +2173,8 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           DATA ls_yield_star_input TYPE zcl_qjs_value=>ty_value.
           DATA ls_yield_star_iterator TYPE zcl_qjs_value=>ty_value.
           DATA lv_yield_star_pass_value TYPE abap_bool.
+          CLEAR lv_yield_star_kind.
+          CLEAR lv_yield_star_pass_value.
           IF mv_generator_delegating = abap_true.
             qjs_vm_pop ls_value.
             lv_yield_star_kind = ls_value-int_value.

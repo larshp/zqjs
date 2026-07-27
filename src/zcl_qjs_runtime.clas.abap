@@ -629,6 +629,7 @@ CLASS zcl_qjs_runtime IMPLEMENTATION.
         lo_then_resolve_ref = lo_then_resolve.
         lo_then_reject_ref = lo_then_reject.
         DATA lt_then_arguments TYPE zif_qjs_callable=>ty_arguments.
+        CLEAR lt_then_arguments.
         APPEND zcl_qjs_value=>new_object( lo_then_resolve_ref ) TO lt_then_arguments.
         APPEND zcl_qjs_value=>new_object( lo_then_reject_ref ) TO lt_then_arguments.
         TRY.

@@ -997,6 +997,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(ls_flat_element) = source->get( lv_flat_source_name ).
         IF use_mapper = abap_true.
           DATA lt_flat_arguments TYPE zif_qjs_callable=>ty_arguments.
+          CLEAR lt_flat_arguments.
           APPEND ls_flat_element TO lt_flat_arguments.
           APPEND array_length_value( lv_flat_source_index ) TO lt_flat_arguments.
           APPEND zcl_qjs_value=>new_object( source ) TO lt_flat_arguments.
@@ -1006,6 +1007,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             arguments  = lt_flat_arguments ).
         ENDIF.
         DATA lo_flat_nested TYPE REF TO zcl_qjs_object.
+        CLEAR lo_flat_nested.
         IF depth > 0 AND ls_flat_element-tag = zcl_qjs_value=>tag_object.
           TRY.
               lo_flat_nested ?= ls_flat_element-object_ref.
@@ -3002,7 +3004,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA lv_name TYPE string.
     DATA lv_error_name TYPE string.
     DATA lv_error_message TYPE string.
-    DATA lv_error_separator TYPE string VALUE ': '.
+    DATA lv_error_separator TYPE string VALUE `: `.
     DATA ls_this_argument TYPE zcl_qjs_value=>ty_value.
     DATA ls_argument_list TYPE zcl_qjs_value=>ty_value.
     DATA lt_forwarded TYPE zif_qjs_callable=>ty_arguments.
@@ -4031,6 +4033,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               CONTINUE.
             ENDIF.
             DATA lt_each_arguments TYPE zif_qjs_callable=>ty_arguments.
+            CLEAR lt_each_arguments.
             IF lv_collection_kind = zcl_qjs_object=>collection_map.
               APPEND ls_each_entry-value TO lt_each_arguments.
               APPEND ls_each_entry-key TO lt_each_arguments.
@@ -7502,6 +7505,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
                 EXIT.
               ENDIF.
               DATA lt_resolve_arguments TYPE zif_qjs_callable=>ty_arguments.
+              CLEAR lt_resolve_arguments.
               APPEND ls_combinator_step-value TO lt_resolve_arguments.
               DATA(ls_resolved_input) = mo_runtime->invoke_callable(
                 callable = ls_combinator_resolve this_value = this_value
@@ -7866,6 +7870,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               EXIT.
             ENDIF.
             DATA lt_adder_arguments TYPE zif_qjs_callable=>ty_arguments.
+            CLEAR lt_adder_arguments.
             IF mv_id = id_map.
               IF ls_source_step-value-tag <> zcl_qjs_value=>tag_object.
                 RAISE EXCEPTION TYPE zcx_qjs_error

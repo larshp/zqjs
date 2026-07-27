@@ -4988,6 +4988,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               ENDIF.
               DATA lv_object_async_computed TYPE abap_bool.
               DATA lv_object_async_name TYPE string.
+              CLEAR lv_object_async_computed.
+              CLEAR lv_object_async_name.
               IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
                 lv_object_async_computed = abap_true.
                 advance( ).
@@ -5091,6 +5093,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
           ELSEIF ms_token-kind = zcl_qjs_lexer=>token_star.
             DATA lv_object_generator_computed TYPE abap_bool.
             DATA lv_object_generator_name TYPE string.
+            CLEAR lv_object_generator_computed.
+            CLEAR lv_object_generator_name.
             advance( ).
             IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
               lv_object_generator_computed = abap_true.
@@ -5195,6 +5199,8 @@ CLASS zcl_qjs_parser IMPLEMENTATION.
               advance( ).
               DATA lv_object_accessor_computed TYPE abap_bool.
               DATA lv_object_accessor_name TYPE string.
+              CLEAR lv_object_accessor_computed.
+              CLEAR lv_object_accessor_name.
               IF ms_token-kind = zcl_qjs_lexer=>token_lbracket.
                 lv_object_accessor_computed = abap_true.
                 mo_emitter->emit( zif_qjs_opcodes=>duplicate ).

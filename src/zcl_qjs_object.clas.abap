@@ -428,7 +428,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       ENDTRY.
     ENDIF.
     IF ls_error-tag = 0.
-      DATA lv_separator TYPE string VALUE ': '.
+      DATA lv_separator TYPE string VALUE `: `.
       ls_error = zcl_qjs_value=>new_string( name && lv_separator && message ).
     ENDIF.
     RAISE EXCEPTION TYPE zcx_qjs_throw EXPORTING value = ls_error.

@@ -30,8 +30,8 @@
     "openAbapCoreCommit": "f30a24120b6677e6cbf92210b59db9589c8be32f",
     "unicodeVersion": "17.0.0",
     "abaplintCli": "2.120.6",
-    "abaplintRuntime": "2.13.46",
-    "abaplintTranspiler": "2.13.46"
+    "abaplintRuntime": "2.13.47",
+    "abaplintTranspiler": "2.13.47"
   },
   "features": {
     "scripts": "enabled",

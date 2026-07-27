@@ -35,7 +35,7 @@ CLASS zcl_qjs_cell IMPLEMENTATION.
         CATCH zcx_qjs_error.
       ENDTRY.
     ENDIF.
-    DATA lv_separator TYPE string VALUE ': '.
+    DATA lv_separator TYPE string VALUE `: `.
     result = zcl_qjs_value=>new_string( name && lv_separator && message ).
   ENDMETHOD.
   METHOD get.
