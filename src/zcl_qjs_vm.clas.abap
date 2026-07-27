@@ -45,7 +45,8 @@ CLASS zcl_qjs_vm DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mv_async_yield_star TYPE abap_bool.
 
     METHODS stack_underflow RAISING zcx_qjs_error.
-    METHODS throw_error IMPORTING name TYPE string message TYPE string.
+    METHODS throw_error IMPORTING name TYPE string
+      message                          TYPE string.
 ENDCLASS.
 
 CLASS zcl_qjs_vm IMPLEMENTATION.

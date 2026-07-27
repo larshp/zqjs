@@ -5,13 +5,16 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS get_runtime RETURNING VALUE(result) TYPE REF TO zcl_qjs_runtime
       RAISING zcx_qjs_error.
     METHODS set_global
-      IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+      IMPORTING name TYPE string
+        value        TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS register_function
-      IMPORTING name TYPE string callable TYPE REF TO zif_qjs_callable
+      IMPORTING name TYPE string
+        callable     TYPE REF TO zif_qjs_callable
       RAISING zcx_qjs_error.
     METHODS register_constructor
-      IMPORTING name TYPE string constructor TYPE REF TO zif_qjs_constructable
+      IMPORTING name TYPE string
+        constructor  TYPE REF TO zif_qjs_constructable
       RAISING zcx_qjs_error.
     METHODS get_global
       IMPORTING name          TYPE string
@@ -25,8 +28,9 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS call
-      IMPORTING name TYPE string arguments TYPE zif_qjs_callable=>ty_arguments OPTIONAL
-        this_value TYPE zcl_qjs_value=>ty_value OPTIONAL
+      IMPORTING name          TYPE string
+        arguments             TYPE zif_qjs_callable=>ty_arguments OPTIONAL
+        this_value            TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS dispose.
@@ -43,16 +47,22 @@ CLASS zcl_qjs_context DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA mo_global_object TYPE REF TO zcl_qjs_object.
     METHODS assert_active RAISING zcx_qjs_error.
     METHODS install_string_method
-      IMPORTING prototype TYPE REF TO zcl_qjs_object name TYPE string
-        id TYPE i length TYPE i
+      IMPORTING prototype TYPE REF TO zcl_qjs_object
+        name              TYPE string
+        id                TYPE i
+        length            TYPE i
       RAISING zcx_qjs_error.
     METHODS install_reflect_method
-      IMPORTING reflect_object TYPE REF TO zcl_qjs_object name TYPE string
-        id TYPE i length TYPE i
+      IMPORTING reflect_object TYPE REF TO zcl_qjs_object
+        name                   TYPE string
+        id                     TYPE i
+        length                 TYPE i
       RAISING zcx_qjs_error.
     METHODS install_collection_method
-      IMPORTING prototype TYPE REF TO zcl_qjs_object name TYPE string
-        id TYPE i length TYPE i
+      IMPORTING prototype TYPE REF TO zcl_qjs_object
+        name              TYPE string
+        id                TYPE i
+        length            TYPE i
       RAISING zcx_qjs_error.
 ENDCLASS.
 

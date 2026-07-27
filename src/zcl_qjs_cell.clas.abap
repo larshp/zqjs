@@ -15,7 +15,8 @@ CLASS zcl_qjs_cell DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.
     METHODS error_value
-      IMPORTING name TYPE string message TYPE string
+      IMPORTING name          TYPE string
+        message               TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value.
 ENDCLASS.
 

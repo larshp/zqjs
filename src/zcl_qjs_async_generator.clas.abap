@@ -8,18 +8,22 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
         arguments       TYPE zif_qjs_callable=>ty_arguments OPTIONAL
       RAISING zcx_qjs_error.
     METHODS enqueue
-      IMPORTING kind TYPE i input TYPE zcl_qjs_value=>ty_value
+      IMPORTING kind          TYPE i
+        input                 TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS resume_await
-      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        rejected      TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS resume_result
-      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
-        done TYPE abap_bool
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        rejected      TYPE abap_bool
+        done          TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS resume_delegate
-      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        rejected      TYPE abap_bool
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_request,
@@ -52,13 +56,15 @@ CLASS zcl_qjs_async_generator DEFINITION PUBLIC FINAL CREATE PUBLIC.
         resume_kind     TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
     METHODS await_value
-      IMPORTING value TYPE zcl_qjs_value=>ty_value result_mode TYPE abap_bool
-        done TYPE abap_bool DEFAULT abap_false
-        resume_kind TYPE i DEFAULT 0
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        result_mode   TYPE abap_bool
+        done          TYPE abap_bool DEFAULT abap_false
+        resume_kind   TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
     METHODS finish_current
-      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
-        done TYPE abap_bool DEFAULT abap_false
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        rejected      TYPE abap_bool
+        done          TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS delegate_current RAISING zcx_qjs_error.
     METHODS await_delegate

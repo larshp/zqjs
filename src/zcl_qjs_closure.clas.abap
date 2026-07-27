@@ -25,7 +25,8 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
-    METHODS set_property IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+    METHODS set_property IMPORTING name TYPE string
+      value                             TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS delete_property
       IMPORTING name          TYPE string
@@ -38,11 +39,13 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS get_symbol_with_receiver
-      IMPORTING identity TYPE i receiver TYPE zcl_qjs_value=>ty_value
+      IMPORTING identity      TYPE i
+        receiver              TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS set_symbol_property
-      IMPORTING identity TYPE i value TYPE zcl_qjs_value=>ty_value
+      IMPORTING identity TYPE i
+        value            TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS delete_symbol_property
       IMPORTING identity      TYPE i
@@ -61,7 +64,8 @@ CLASS zcl_qjs_closure DEFINITION PUBLIC FINAL CREATE PUBLIC.
         value       TYPE zcl_qjs_value=>ty_value.
     METHODS register_private_accessor
       IMPORTING key TYPE zcl_qjs_value=>ty_value
-        value TYPE zcl_qjs_value=>ty_value kind TYPE i.
+        value       TYPE zcl_qjs_value=>ty_value
+        kind        TYPE i.
     METHODS set_base_constructor
       IMPORTING base TYPE zcl_qjs_value=>ty_value.
     METHODS invoke_default_derived

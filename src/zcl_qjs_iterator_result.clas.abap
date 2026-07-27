@@ -2,8 +2,9 @@ CLASS zcl_qjs_iterator_result DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     INTERFACES zif_qjs_property_container.
     METHODS constructor
-      IMPORTING done TYPE abap_bool value TYPE zcl_qjs_value=>ty_value
-        prototype TYPE REF TO zcl_qjs_object OPTIONAL.
+      IMPORTING done TYPE abap_bool
+        value        TYPE zcl_qjs_value=>ty_value
+        prototype    TYPE REF TO zcl_qjs_object OPTIONAL.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_property,
       kind  TYPE i,

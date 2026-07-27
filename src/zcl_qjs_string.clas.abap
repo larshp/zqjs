@@ -6,7 +6,8 @@ CLASS zcl_qjs_string DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING
         VALUE(result) TYPE REF TO zcl_qjs_string.
     CLASS-METHODS code_unit_value
-      IMPORTING value TYPE string index TYPE i
+      IMPORTING value         TYPE string
+        index                 TYPE i
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
 

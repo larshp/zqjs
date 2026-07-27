@@ -217,8 +217,9 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING async TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS parse_for_pattern
-      IMPORTING declaration_kind TYPE i is_for_of TYPE abap_bool
-        async TYPE abap_bool DEFAULT abap_false
+      IMPORTING declaration_kind TYPE i
+        is_for_of                TYPE abap_bool
+        async                    TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS is_for_in_head
       RETURNING VALUE(result) TYPE abap_bool
@@ -238,7 +239,8 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING inferred_name TYPE string OPTIONAL
       RAISING zcx_qjs_error.
     METHODS parse_class
-      IMPORTING declaration TYPE abap_bool inferred_name TYPE string OPTIONAL
+      IMPORTING declaration TYPE abap_bool
+        inferred_name       TYPE string OPTIONAL
       RAISING zcx_qjs_error.
     METHODS parse_class_field_initializer
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_function
@@ -250,21 +252,26 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS parse_throw RAISING zcx_qjs_error.
     METHODS parse_try RAISING zcx_qjs_error.
     METHODS predeclare_scope
-      IMPORTING start_offset TYPE i stop_at_brace TYPE abap_bool DEFAULT abap_false
+      IMPORTING start_offset TYPE i
+        stop_at_brace        TYPE abap_bool DEFAULT abap_false
       RAISING zcx_qjs_error.
     METHODS scan_binding_pattern
-      IMPORTING scanner TYPE REF TO zcl_qjs_lexer opening_kind TYPE i
+      IMPORTING scanner  TYPE REF TO zcl_qjs_lexer
+        opening_kind     TYPE i
         declaration_kind TYPE i
       RAISING zcx_qjs_error.
     METHODS scan_binding_target
-      IMPORTING scanner TYPE REF TO zcl_qjs_lexer
-        first TYPE zcl_qjs_lexer=>ty_token declaration_kind TYPE i
+      IMPORTING scanner  TYPE REF TO zcl_qjs_lexer
+        first            TYPE zcl_qjs_lexer=>ty_token
+        declaration_kind TYPE i
       RAISING zcx_qjs_error.
     METHODS skip_binding_default
-      IMPORTING scanner TYPE REF TO zcl_qjs_lexer closing_kind TYPE i
+      IMPORTING scanner TYPE REF TO zcl_qjs_lexer
+        closing_kind    TYPE i
       RAISING zcx_qjs_error.
     METHODS declare_scan_binding
-      IMPORTING name TYPE string declaration_kind TYPE i
+      IMPORTING name     TYPE string
+        declaration_kind TYPE i
       RAISING zcx_qjs_error.
     METHODS declare_name IMPORTING name TYPE string RAISING zcx_qjs_error.
     METHODS emit_finally_calls
@@ -278,7 +285,8 @@ CLASS zcl_qjs_parser DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING async TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS declare_lexical
-      IMPORTING name TYPE string constant TYPE abap_bool
+      IMPORTING name TYPE string
+        constant     TYPE abap_bool
       RAISING zcx_qjs_error.
     METHODS parse_lexical IMPORTING constant TYPE abap_bool RAISING zcx_qjs_error.
     METHODS reserve_function IMPORTING name TYPE string RAISING zcx_qjs_error.

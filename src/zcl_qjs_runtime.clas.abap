@@ -65,7 +65,8 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_iterator_result
-      IMPORTING done TYPE abap_bool value TYPE zcl_qjs_value=>ty_value
+      IMPORTING done          TYPE abap_bool
+        value                 TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS create_generator
@@ -84,7 +85,8 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_regexp
-      IMPORTING pattern TYPE string flags TYPE string OPTIONAL
+      IMPORTING pattern       TYPE string
+        flags                 TYPE string OPTIONAL
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS enqueue_promise_job
@@ -128,7 +130,8 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS iterator_method
-      IMPORTING iterator TYPE zcl_qjs_value=>ty_value name TYPE string
+      IMPORTING iterator      TYPE zcl_qjs_value=>ty_value
+        name                  TYPE string
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS iterator_result
@@ -240,7 +243,8 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS get_regexp_prototype
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
     METHODS set_error_prototype
-      IMPORTING name TYPE string prototype TYPE REF TO zcl_qjs_object.
+      IMPORTING name TYPE string
+        prototype    TYPE REF TO zcl_qjs_object.
     METHODS get_error_prototype
       IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object.
@@ -250,8 +254,9 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_object
       RAISING zcx_qjs_error.
     METHODS create_error
-      IMPORTING name TYPE string message TYPE string OPTIONAL
-        cause TYPE zcl_qjs_value=>ty_value OPTIONAL
+      IMPORTING name          TYPE string
+        message               TYPE string OPTIONAL
+        cause                 TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS create_error_from_reason
@@ -259,8 +264,9 @@ CLASS zcl_qjs_runtime DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS create_aggregate_error
-      IMPORTING errors TYPE REF TO zcl_qjs_object message TYPE string OPTIONAL
-        cause TYPE zcl_qjs_value=>ty_value OPTIONAL
+      IMPORTING errors        TYPE REF TO zcl_qjs_object
+        message               TYPE string OPTIONAL
+        cause                 TYPE zcl_qjs_value=>ty_value OPTIONAL
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS allocated_object_count RETURNING VALUE(result) TYPE i.

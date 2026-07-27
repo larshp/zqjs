@@ -150,7 +150,8 @@ CLASS zcl_qjs_lexer DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE i
       RAISING zcx_qjs_error.
     METHODS decode_surrogate_pair
-      IMPORTING high TYPE i low TYPE i
+      IMPORTING high          TYPE i
+        low                   TYPE i
       RETURNING VALUE(result) TYPE string
       RAISING zcx_qjs_error.
     METHODS scan_template_part

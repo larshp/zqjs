@@ -10,7 +10,8 @@ CLASS zcl_qjs_async_task DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     METHODS resume
-      IMPORTING value TYPE zcl_qjs_value=>ty_value rejected TYPE abap_bool
+      IMPORTING value TYPE zcl_qjs_value=>ty_value
+        rejected      TYPE abap_bool
       RAISING zcx_qjs_error.
   PRIVATE SECTION.
     DATA mo_runtime TYPE REF TO zcl_qjs_runtime.

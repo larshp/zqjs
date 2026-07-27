@@ -27,36 +27,44 @@ CLASS zcl_qjs_emitter DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     METHODS position RETURNING VALUE(result) TYPE i.
     METHODS patch
-      IMPORTING instruction TYPE i target TYPE i
+      IMPORTING instruction TYPE i
+        target              TYPE i
       RAISING zcx_qjs_error.
     METHODS patch_second
-      IMPORTING instruction TYPE i target TYPE i
+      IMPORTING instruction TYPE i
+        target              TYPE i
       RAISING zcx_qjs_error.
     METHODS replace
-      IMPORTING instruction TYPE i opcode TYPE i operand TYPE i DEFAULT 0
+      IMPORTING instruction TYPE i
+        opcode              TYPE i
+        operand             TYPE i DEFAULT 0
       RAISING zcx_qjs_error.
     METHODS allocate_local
       IMPORTING initialized   TYPE abap_bool DEFAULT abap_true
         mutable               TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result) TYPE i.
     METHODS set_signature
-      IMPORTING parameter_count TYPE i function_length TYPE i DEFAULT -1
-        has_self TYPE abap_bool DEFAULT abap_false
-        has_this TYPE abap_bool DEFAULT abap_false name TYPE string OPTIONAL
-        has_arguments TYPE abap_bool DEFAULT abap_false
-        constructible TYPE abap_bool DEFAULT abap_true
-        class_constructor TYPE abap_bool DEFAULT abap_false
-        generator TYPE abap_bool DEFAULT abap_false
-        async TYPE abap_bool DEFAULT abap_false.
+      IMPORTING parameter_count TYPE i
+        function_length         TYPE i DEFAULT -1
+        has_self                TYPE abap_bool DEFAULT abap_false
+        has_this                TYPE abap_bool DEFAULT abap_false
+        name                    TYPE string OPTIONAL
+        has_arguments           TYPE abap_bool DEFAULT abap_false
+        constructible           TYPE abap_bool DEFAULT abap_true
+        class_constructor       TYPE abap_bool DEFAULT abap_false
+        generator               TYPE abap_bool DEFAULT abap_false
+        async                   TYPE abap_bool DEFAULT abap_false.
     METHODS mark_arguments_used.
     METHODS intern_atom
       IMPORTING name          TYPE string
       RETURNING VALUE(result) TYPE i.
     METHODS allocate_capture
-      IMPORTING source_kind TYPE i source_index TYPE i
+      IMPORTING source_kind   TYPE i
+        source_index          TYPE i
       RETURNING VALUE(result) TYPE i.
     METHODS append_capture
-      IMPORTING source_kind TYPE i source_index TYPE i
+      IMPORTING source_kind   TYPE i
+        source_index          TYPE i
       RETURNING VALUE(result) TYPE i.
 
   PRIVATE SECTION.

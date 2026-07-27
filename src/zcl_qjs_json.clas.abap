@@ -1,7 +1,8 @@
 CLASS zcl_qjs_json DEFINITION PUBLIC FINAL CREATE PRIVATE.
   PUBLIC SECTION.
     CLASS-METHODS parse
-      IMPORTING source TYPE string runtime TYPE REF TO zcl_qjs_runtime
+      IMPORTING source        TYPE string
+        runtime               TYPE REF TO zcl_qjs_runtime
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS stringify

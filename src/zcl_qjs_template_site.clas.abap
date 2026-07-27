@@ -1,6 +1,7 @@
 CLASS zcl_qjs_template_site DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
-    METHODS add_part IMPORTING cooked TYPE string raw TYPE string.
+    METHODS add_part IMPORTING cooked TYPE string
+      raw                             TYPE string.
     METHODS materialize
       IMPORTING runtime       TYPE REF TO zcl_qjs_runtime
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value

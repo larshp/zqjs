@@ -15,10 +15,11 @@ CLASS zcl_qjs_shape DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     METHODS constructor IMPORTING descriptors TYPE ty_descriptors OPTIONAL.
     METHODS transition
-      IMPORTING name TYPE string writable TYPE abap_bool DEFAULT abap_true
-        enumerable TYPE abap_bool DEFAULT abap_true
-        configurable TYPE abap_bool DEFAULT abap_true
-        accessor TYPE abap_bool DEFAULT abap_false
+      IMPORTING name          TYPE string
+        writable              TYPE abap_bool DEFAULT abap_true
+        enumerable            TYPE abap_bool DEFAULT abap_true
+        configurable          TYPE abap_bool DEFAULT abap_true
+        accessor              TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE REF TO zcl_qjs_shape.
     METHODS without
       IMPORTING name          TYPE string

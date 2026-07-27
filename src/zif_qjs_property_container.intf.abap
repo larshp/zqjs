@@ -4,7 +4,8 @@ INTERFACE zif_qjs_property_container PUBLIC.
     RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS set_property
-    IMPORTING name TYPE string value TYPE zcl_qjs_value=>ty_value
+    IMPORTING name TYPE string
+      value        TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS delete_property
     IMPORTING name          TYPE string
@@ -14,7 +15,8 @@ INTERFACE zif_qjs_property_container PUBLIC.
     RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS set_symbol_property
-    IMPORTING identity TYPE i value TYPE zcl_qjs_value=>ty_value
+    IMPORTING identity TYPE i
+      value            TYPE zcl_qjs_value=>ty_value
     RAISING zcx_qjs_error.
   METHODS delete_symbol_property
     IMPORTING identity      TYPE i

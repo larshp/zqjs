@@ -37,7 +37,8 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
         zcx_qjs_error.
 
     CLASS-METHODS modulo
-      IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
 
@@ -58,7 +59,8 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
         zcx_qjs_error.
 
     CLASS-METHODS parse_int
-      IMPORTING text TYPE string radix TYPE i DEFAULT 0
+      IMPORTING text          TYPE string
+        radix                 TYPE i DEFAULT 0
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
 
@@ -97,17 +99,20 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
         zcx_qjs_error.
 
     CLASS-METHODS equal
-      IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
 
     CLASS-METHODS less_than
-      IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
     CLASS-METHODS bitwise
-      IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
-        operation TYPE i
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
+        operation             TYPE i
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS bitwise_not
@@ -115,8 +120,9 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
     CLASS-METHODS shift
-      IMPORTING left TYPE zcl_qjs_value=>ty_value right TYPE zcl_qjs_value=>ty_value
-        operation TYPE i
+      IMPORTING left          TYPE zcl_qjs_value=>ty_value
+        right                 TYPE zcl_qjs_value=>ty_value
+        operation             TYPE i
       RETURNING VALUE(result) TYPE zcl_qjs_value=>ty_value
       RAISING zcx_qjs_error.
 

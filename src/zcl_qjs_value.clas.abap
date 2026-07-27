@@ -95,11 +95,13 @@ CLASS zcl_qjs_value DEFINITION PUBLIC FINAL CREATE PRIVATE.
         zcx_qjs_error.
 
     CLASS-METHODS strict_equal
-      IMPORTING left TYPE ty_value right TYPE ty_value
+      IMPORTING left          TYPE ty_value
+        right                 TYPE ty_value
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
     CLASS-METHODS abstract_equal
-      IMPORTING left TYPE ty_value right TYPE ty_value
+      IMPORTING left          TYPE ty_value
+        right                 TYPE ty_value
       RETURNING VALUE(result) TYPE abap_bool
       RAISING zcx_qjs_error.
 
