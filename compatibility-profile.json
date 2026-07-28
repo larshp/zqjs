@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "profileVersion": "0.1.0",
+  "languageTarget": {
+    "edition": "ES2025",
+    "sourceTypes": ["script"],
+    "quickjsRelease": "2026-06-04",
+    "serializedQuickjsBytecode": false
+  },
+  "hosts": {
+    "development": {
+      "runtime": "node",
+      "minimumVersion": "22.18.0"
+    },
+    "abap": {
+      "minimumSapBasis": "7.54",
+      "unicodeOnly": true,
+      "cloudProfile": "separate",
+      "releaseGate": "required-unverified"
+    },
+    "pcre": {
+      "engine": "PCRE2",
+      "minimumVersion": null,
+      "status": "probe-required"
+    }
+  },
+  "pins": {
+    "quickjsCommit": "3d5e064e9dd67c70f7962836505a7fa067bf0a4e",
+    "test262Commit": "9e61c12835c5e4a3bdba93850427e6742c4f64c4",
+    "openAbapCoreCommit": "f30a24120b6677e6cbf92210b59db9589c8be32f",
+    "unicodeVersion": "17.0.0",
+    "abaplintCli": "2.120.6",
+    "abaplintRuntime": "2.13.47",
+    "abaplintTranspiler": "2.13.47"
+  },
+  "features": {
+    "scripts": "enabled",
+    "globalObject": "enabled",
+    "strictMode": "partial",
+    "directEval": "deferred",
+    "dynamicFunction": "partial",
+    "withStatement": "unsupported",
+    "annexB": "unsupported",
+    "classes": "enabled",
+    "arrowFunctions": "partial",
+    "generators": "partial",
+    "promises": "partial",
+    "promiseRejectionTracking": "enabled",
+    "asyncFunctions": "partial",
+    "asyncGenerators": "partial",
+    "modules": "deferred",
+    "regexp": "partial",
+    "stringNormalization": "unsupported",
+    "bigInt": "unsupported",
+    "intl": "unsupported",
+    "sharedArrayBufferAtomics": "unsupported",
+    "properTailCalls": "unsupported",
+    "proxy": "deferred",
+    "typedArrays": "deferred",
+    "arrayBufferDataView": "deferred",
+    "date": "deferred",
+    "weakReferences": "conditional"
+  },
+  "conformance": {
+    "test262": {
+      "selectionFile": "test262-smoke.json",
+      "selected": 980,
+      "expected": {
+        "pass": 977,
+        "fail": 0,
+        "unsupported": 3,
+        "infrastructureSkip": 0
+      }
+    },
+    "quickjsOpcodes": 108,
+    "normalizedOracleCases": 1
+  }
+}

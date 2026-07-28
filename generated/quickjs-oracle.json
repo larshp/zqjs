@@ -1,0 +1,19 @@
+{
+  "cases": [
+    {
+      "name": "arithmetic-precedence",
+      "source": "1 + 2 * 3",
+      "normalized": {
+        "stackSize": 3,
+        "instructions": [
+          { "opcode": "push_i32", "operand": 1 },
+          { "opcode": "push_i32", "operand": 2 },
+          { "opcode": "push_i32", "operand": 3 },
+          { "opcode": "multiply" },
+          { "opcode": "add" },
+          { "opcode": "return" }
+        ]
+      }
+    }
+  ]
+}

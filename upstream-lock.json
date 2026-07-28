@@ -1,0 +1,18 @@
+{
+  "quickjs": {
+    "release": "2026-06-04",
+    "repository": "https://github.com/bellard/quickjs.git",
+    "commit": "3d5e064e9dd67c70f7962836505a7fa067bf0a4e"
+  },
+  "openAbapCore": {
+    "repository": "https://github.com/open-abap/open-abap-core.git",
+    "commit": "f30a24120b6677e6cbf92210b59db9589c8be32f"
+  },
+  "test262": {
+    "repository": "https://github.com/tc39/test262.git",
+    "commit": "9e61c12835c5e4a3bdba93850427e6742c4f64c4"
+  },
+  "unicode": {
+    "version": "17.0.0"
+  }
+}

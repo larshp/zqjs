@@ -1,0 +1,35 @@
+{
+  "name": "zqjs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A JavaScript engine implemented in ABAP",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "prepare:open-abap": "node scripts/prepare-open-abap.mjs",
+    "prepare:quickjs": "node scripts/prepare-quickjs.mjs",
+    "prepare:oracle": "npm run prepare:quickjs && node scripts/prepare-quickjs-oracle.mjs",
+    "prepare:test262": "node scripts/prepare-test262.mjs",
+    "verify:opcodes": "npm run prepare:quickjs && node scripts/verify-quickjs-opcodes.mjs",
+    "verify:oracle": "npm run prepare:oracle && node scripts/verify-quickjs-oracle.mjs",
+    "verify:profile": "node scripts/verify-profile.mjs",
+    "test262:run": "npm run prepare:test262 && node scripts/test262-execute.mjs",
+    "test262:selftest": "node scripts/test262-metadata.test.mjs",
+    "lint": "npm run prepare:open-abap && abaplint",
+    "transpile": "npm run prepare:open-abap && npm run clean && abap_transpile",
+    "unit": "npm run transpile && node --expose-gc output/index.mjs",
+    "test:zmjs-abaplint": "node scripts/zmjs-abaplint.test.mjs",
+    "test:core": "npm run lint && npm run unit && npm run test:zmjs-abaplint && npm run test262:selftest && npm run test262:run",
+    "test:without-oracle": "npm run verify:profile && npm run verify:opcodes && npm run test:core",
+    "test": "npm run verify:profile && npm run verify:opcodes && npm run verify:oracle && npm run test:core"
+  },
+  "devDependencies": {
+    "@abaplint/cli": "2.120.6",
+    "@abaplint/runtime": "2.13.47",
+    "@abaplint/transpiler-cli": "2.13.47"
+  }
+}

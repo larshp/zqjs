@@ -1,0 +1,62 @@
+{
+  "global": {
+    "files": "/src/**/*.*",
+    "skipGeneratedGatewayClasses": true,
+    "skipGeneratedPersistentClasses": true,
+    "skipGeneratedFunctionGroups": true,
+    "errorOnDuplicateFilenames": true
+  },
+  "dependencies": [
+    {
+      "url": "https://github.com/open-abap/open-abap-core",
+      "folder": "/.cache/open-abap-core",
+      "files": "/src/**/*.*"
+    }
+  ],
+  "syntax": {
+    "version": "open-abap",
+    "errorNamespace": "."
+  },
+  "rules": {
+    "parser_error": true,
+    "unknown_types": true,
+    "check_syntax": true,
+    "max_one_method_parameter_per_line": true,
+    "global_class": true,
+    "align_type_expressions": true,
+    "add_test_attributes": true,
+    "ambiguous_statement": true,
+    "call_transaction_authority_check": true,
+    "catch_and_raise": true,
+    "check_abstract": true,
+    "begin_end_names": true,
+    "cloud_types": true,
+    "cds_legacy_view": true,
+    "allowed_object_naming": true,
+    "align_parameters": true,
+    "aff_and_xml": true,
+    "unused_ddic": true,
+    "unused_methods": true,
+    "unused_variables": true,
+    "check_text_elements": true,
+    "cds_parser_error": true,
+    "check_transformation_exists": true,
+    "cds_field_order": true,
+    "chain_mainly_declarations": true,
+    "colon_missing_space": true,
+    "check_ddic": true,
+    "empty_statement": true,
+    "nrob_consistency": true,
+    "in_statement_indentation": true,
+    "no_exclamation_escape": true,
+    "redundant_conversion": true,
+    "uncaught_exception": true,
+    "implement_methods": true,
+    "local_testclass_consistency": true,
+    "main_file_contents": true,
+    "xml_consistency": true,
+    "whitespace_end": true,
+    "contains_tab": true,
+    "keyword_case": true
+  }
+}
