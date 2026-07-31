@@ -796,8 +796,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       name = 'length' value = zcl_qjs_value=>new_int( strlen( lv_text ) )
       writable = abap_false enumerable = abap_false configurable = abap_false ).
     WHILE lv_index < strlen( lv_text ).
-      lv_name = lv_index.
-      CONDENSE lv_name NO-GAPS.
+      lv_name = |{ lv_index }|.
       DATA(lv_wrapper_character) = lv_text+lv_index(1).
       object->define_property(
         name = lv_name value = zcl_qjs_value=>new_string( lv_wrapper_character )
@@ -982,8 +981,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     mo_runtime->get_limits( )->consume( source_length ).
     DATA(lv_flat_source_index) = CONV int8( 0 ).
     WHILE lv_flat_source_index < source_length.
-      DATA(lv_flat_source_name) = CONV string( lv_flat_source_index ).
-      CONDENSE lv_flat_source_name NO-GAPS.
+      DATA(lv_flat_source_name) = |{ lv_flat_source_index }|.
       IF source->has_property( lv_flat_source_name ) = abap_true.
         DATA(ls_flat_element) = source->get( lv_flat_source_name ).
         IF use_mapper = abap_true.
@@ -2476,8 +2474,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     DATA(lv_index) = CONV int8( 0 ).
     DATA lt_callback_args TYPE zif_qjs_callable=>ty_arguments.
     WHILE lv_index < lv_length.
-      DATA(lv_name) = CONV string( lv_index ).
-      CONDENSE lv_name NO-GAPS.
+      DATA(lv_name) = |{ lv_index }|.
       IF lo_object->has_property( lv_name ) = abap_true.
         CLEAR lt_callback_args.
         APPEND lo_object->get( lv_name ) TO lt_callback_args.
@@ -2515,8 +2512,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
       IF lo_object->is_array( ) = abap_true.
         lo_object->set_element( index = lv_length value = ls_argument ).
       ELSE.
-        DATA(lv_name) = CONV string( lv_length ).
-        CONDENSE lv_name NO-GAPS.
+        DATA(lv_name) = |{ lv_length }|.
         lo_object->set( name = lv_name value = ls_argument ).
       ENDIF.
       lv_length = lv_length + 1.
@@ -4266,8 +4262,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         mo_runtime->get_limits( )->consume( lv_array_of_length ).
         DATA(lv_array_of_index) = CONV int8( 0 ).
         LOOP AT arguments INTO DATA(ls_array_of_item).
-          DATA(lv_array_of_name) = CONV string( lv_array_of_index ).
-          CONDENSE lv_array_of_name NO-GAPS.
+          DATA(lv_array_of_name) = |{ lv_array_of_index }|.
           IF lo_array_of_object IS BOUND.
             lo_array_of_object->set(
               name = lv_array_of_name value = ls_array_of_item ).
@@ -4317,16 +4312,14 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               lo_object->set_element(
                 index = lv_array_length value = ls_argument ).
             ELSE.
-              lv_name = lv_array_length.
-              CONDENSE lv_name NO-GAPS.
+              lv_name = |{ lv_array_length }|.
               lo_object->set( name = lv_name value = ls_argument ).
             ENDIF.
             lv_array_length = lv_array_length + 1.
           ENDLOOP.
         ELSEIF lv_array_length > 0.
           lv_array_length = lv_array_length - 1.
-          lv_name = lv_array_length.
-          CONDENSE lv_name NO-GAPS.
+          lv_name = |{ lv_array_length }|.
           result = lo_object->get( lv_name ).
           IF lo_object->delete( lv_name ) = abap_false.
             RAISE EXCEPTION TYPE zcx_qjs_error
@@ -4363,8 +4356,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           IF lv_join_index > 0.
             lv_joined = lv_joined && lv_separator.
           ENDIF.
-          lv_name = lv_join_index.
-          CONDENSE lv_name NO-GAPS.
+          lv_name = |{ lv_join_index }|.
           DATA(ls_join_element) = lo_object->get( lv_name ).
           IF ls_join_element-tag <> zcl_qjs_value=>tag_undefined
               AND ls_join_element-tag <> zcl_qjs_value=>tag_null.
@@ -4469,8 +4461,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           mo_runtime->get_limits( )->consume(
             lv_search_length - lv_search_index ).
           WHILE lv_search_index < lv_search_length.
-            lv_name = lv_search_index.
-            CONDENSE lv_name NO-GAPS.
+            lv_name = |{ lv_search_index }|.
             IF mv_id = id_array_includes
                 OR lo_object->has_property( lv_name ) = abap_true.
               DATA(ls_search_value) = lo_object->get( lv_name ).
@@ -4515,10 +4506,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             WHILE lv_shift_index < lv_mutation_length.
               DATA(lv_shift_from) = lv_shift_index.
               DATA(lv_shift_to) = lv_shift_index - 1.
-              DATA(lv_shift_from_name) = CONV string( lv_shift_from ).
-              DATA(lv_shift_to_name) = CONV string( lv_shift_to ).
-              CONDENSE lv_shift_from_name NO-GAPS.
-              CONDENSE lv_shift_to_name NO-GAPS.
+              DATA(lv_shift_from_name) = |{ lv_shift_from }|.
+              DATA(lv_shift_to_name) = |{ lv_shift_to }|.
               IF lo_object->has_property( lv_shift_from_name ) = abap_true.
                 DATA(ls_shift_value) = lo_object->get( lv_shift_from_name ).
                 IF lo_object->is_array( ) = abap_true.
@@ -4535,8 +4524,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               lv_shift_index = lv_shift_index + 1.
             ENDWHILE.
             DATA(lv_shift_last) = lv_mutation_length - 1.
-            DATA(lv_shift_last_name) = CONV string( lv_shift_last ).
-            CONDENSE lv_shift_last_name NO-GAPS.
+            DATA(lv_shift_last_name) = |{ lv_shift_last }|.
             IF lo_object->delete( lv_shift_last_name ) = abap_false.
               RAISE EXCEPTION TYPE zcx_qjs_error
                 EXPORTING reason = 'TypeError: shifted property is not configurable'.
@@ -4558,10 +4546,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WHILE lv_unshift_index > 0.
             DATA(lv_unshift_from) = lv_unshift_index - 1.
             DATA(lv_unshift_to) = lv_unshift_from + lv_unshift_count.
-            DATA(lv_unshift_from_name) = CONV string( lv_unshift_from ).
-            DATA(lv_unshift_to_name) = CONV string( lv_unshift_to ).
-            CONDENSE lv_unshift_from_name NO-GAPS.
-            CONDENSE lv_unshift_to_name NO-GAPS.
+            DATA(lv_unshift_from_name) = |{ lv_unshift_from }|.
+            DATA(lv_unshift_to_name) = |{ lv_unshift_to }|.
             IF lo_object->has_property( lv_unshift_from_name ) = abap_true.
               DATA(ls_unshift_value) = lo_object->get( lv_unshift_from_name ).
               IF lo_object->is_array( ) = abap_true.
@@ -4583,8 +4569,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               lo_object->set_element(
                 index = lv_unshift_argument_index value = ls_argument ).
             ELSE.
-              DATA(lv_unshift_name) = CONV string( lv_unshift_argument_index ).
-              CONDENSE lv_unshift_name NO-GAPS.
+              DATA(lv_unshift_name) = |{ lv_unshift_argument_index }|.
               lo_object->set( name = lv_unshift_name value = ls_argument ).
             ENDIF.
             lv_unshift_argument_index = lv_unshift_argument_index + 1.
@@ -4610,10 +4595,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(lv_reverse_lower) = CONV int8( 0 ).
         WHILE lv_reverse_lower < lv_reverse_middle.
           DATA(lv_reverse_upper) = lv_reverse_length - lv_reverse_lower - 1.
-          DATA(lv_reverse_lower_name) = CONV string( lv_reverse_lower ).
-          DATA(lv_reverse_upper_name) = CONV string( lv_reverse_upper ).
-          CONDENSE lv_reverse_lower_name NO-GAPS.
-          CONDENSE lv_reverse_upper_name NO-GAPS.
+          DATA(lv_reverse_lower_name) = |{ lv_reverse_lower }|.
+          DATA(lv_reverse_upper_name) = |{ lv_reverse_upper }|.
           DATA(lv_reverse_lower_exists) = lo_object->has_property(
             lv_reverse_lower_name ).
           DATA(lv_reverse_upper_exists) = lo_object->has_property(
@@ -4735,8 +4718,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           IF mv_id = id_array_to_reversed.
             lv_array_copy_source = lv_array_copy_length - lv_array_copy_index - 1.
           ENDIF.
-          DATA(lv_array_copy_source_name) = CONV string( lv_array_copy_source ).
-          CONDENSE lv_array_copy_source_name NO-GAPS.
+          DATA(lv_array_copy_source_name) = |{ lv_array_copy_source }|.
           IF mv_id = id_array_with
               AND lv_array_copy_index = lv_array_with_index.
             DATA(ls_array_copy_value) = ls_array_with_value.
@@ -4813,8 +4795,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF lv_last_not_found = abap_false.
           mo_runtime->get_limits( )->consume( lv_last_index + 1 ).
           WHILE lv_last_index >= 0.
-            DATA(lv_last_name) = CONV string( lv_last_index ).
-            CONDENSE lv_last_name NO-GAPS.
+            DATA(lv_last_name) = |{ lv_last_index }|.
             IF lo_object->has_property( lv_last_name ) = abap_true.
               DATA(ls_last_value) = lo_object->get( lv_last_name ).
               IF zcl_qjs_value=>strict_equal(
@@ -4875,8 +4856,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           result = zcl_qjs_value=>new_undefined( ).
         ELSE.
           mo_runtime->get_limits( )->consume( 1 ).
-          DATA(lv_at_name) = CONV string( lv_at_index ).
-          CONDENSE lv_at_name NO-GAPS.
+          DATA(lv_at_name) = |{ lv_at_index }|.
           result = lo_object->get( lv_at_name ).
         ENDIF.
       WHEN id_array_slice.
@@ -4914,8 +4894,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(lv_slice_source) = lv_slice_start.
         DATA(lv_slice_target) = CONV int8( 0 ).
         WHILE lv_slice_source < lv_slice_end.
-          DATA(lv_slice_source_name) = CONV string( lv_slice_source ).
-          CONDENSE lv_slice_source_name NO-GAPS.
+          DATA(lv_slice_source_name) = |{ lv_slice_source }|.
           IF lo_object->has_property( lv_slice_source_name ) = abap_true.
             lo_slice_result->set_element(
               index = lv_slice_target value = lo_object->get( lv_slice_source_name ) ).
@@ -4958,8 +4937,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(lv_array_filter_index) = CONV int8( 0 ).
         DATA lt_array_callback_args TYPE zif_qjs_callable=>ty_arguments.
         WHILE lv_array_iteration_index < lv_array_iteration_length.
-          DATA(lv_array_iteration_name) = CONV string( lv_array_iteration_index ).
-          CONDENSE lv_array_iteration_name NO-GAPS.
+          DATA(lv_array_iteration_name) = |{ lv_array_iteration_index }|.
           IF lo_object->has_property( lv_array_iteration_name ) = abap_true.
             DATA(ls_array_iteration_value) = lo_object->get(
               lv_array_iteration_name ).
@@ -5024,8 +5002,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         WHILE ( lv_array_predicate_step > 0
               AND lv_array_predicate_index < lv_array_predicate_length )
             OR ( lv_array_predicate_step < 0 AND lv_array_predicate_index >= 0 ).
-          DATA(lv_array_predicate_name) = CONV string( lv_array_predicate_index ).
-          CONDENSE lv_array_predicate_name NO-GAPS.
+          DATA(lv_array_predicate_name) = |{ lv_array_predicate_index }|.
           DATA(lv_array_predicate_present) = lo_object->has_property(
             lv_array_predicate_name ).
           IF lv_array_predicate_present = abap_true
@@ -5102,8 +5079,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF lv_array_has_accumulator = abap_false.
           WHILE lv_array_reduce_index >= 0
               AND lv_array_reduce_index < lv_array_reduce_length.
-            DATA(lv_array_reduce_name) = CONV string( lv_array_reduce_index ).
-            CONDENSE lv_array_reduce_name NO-GAPS.
+            DATA(lv_array_reduce_name) = |{ lv_array_reduce_index }|.
             IF lo_object->has_property( lv_array_reduce_name ) = abap_true.
               ls_array_accumulator = lo_object->get( lv_array_reduce_name ).
               lv_array_has_accumulator = abap_true.
@@ -5120,8 +5096,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA lt_array_reduce_args TYPE zif_qjs_callable=>ty_arguments.
         WHILE lv_array_reduce_index >= 0
             AND lv_array_reduce_index < lv_array_reduce_length.
-          lv_array_reduce_name = CONV string( lv_array_reduce_index ).
-          CONDENSE lv_array_reduce_name NO-GAPS.
+          lv_array_reduce_name = |{ lv_array_reduce_index }|.
           IF lo_object->has_property( lv_array_reduce_name ) = abap_true.
             DATA(ls_array_reduce_value) = lo_object->get( lv_array_reduce_name ).
             CLEAR lt_array_reduce_args.
@@ -5173,8 +5148,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         mo_runtime->get_limits( )->consume( lv_array_fill_count ).
         DATA(lv_array_fill_index) = lv_array_fill_start.
         WHILE lv_array_fill_index < lv_array_fill_end.
-          DATA(lv_array_fill_name) = CONV string( lv_array_fill_index ).
-          CONDENSE lv_array_fill_name NO-GAPS.
+          DATA(lv_array_fill_name) = |{ lv_array_fill_index }|.
           lo_object->set( name = lv_array_fill_name value = ls_array_fill_value ).
           lv_array_fill_index = lv_array_fill_index + 1.
         ENDWHILE.
@@ -5226,10 +5200,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_copy_target = lv_copy_target + lv_copy_count - 1.
         ENDIF.
         WHILE lv_copy_count > 0.
-          DATA(lv_copy_from_name) = CONV string( lv_copy_from ).
-          CONDENSE lv_copy_from_name NO-GAPS.
-          DATA(lv_copy_target_name) = CONV string( lv_copy_target ).
-          CONDENSE lv_copy_target_name NO-GAPS.
+          DATA(lv_copy_from_name) = |{ lv_copy_from }|.
+          DATA(lv_copy_target_name) = |{ lv_copy_target }|.
           IF lo_object->has_property( lv_copy_from_name ) = abap_true.
             lo_object->set(
               name = lv_copy_target_name value = lo_object->get( lv_copy_from_name ) ).
@@ -5281,8 +5253,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             mo_runtime->get_limits( )->consume( lv_concat_length ).
             DATA(lv_concat_source) = CONV int8( 0 ).
             WHILE lv_concat_source < lv_concat_length.
-              DATA(lv_concat_source_name) = CONV string( lv_concat_source ).
-              CONDENSE lv_concat_source_name NO-GAPS.
+              DATA(lv_concat_source_name) = |{ lv_concat_source }|.
               IF lo_concat_object->has_property( lv_concat_source_name ) = abap_true.
                 lo_concat_result->set_element(
                   index = lv_concat_target
@@ -5357,8 +5328,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(lv_splice_index) = CONV int8( 0 ).
         WHILE lv_splice_index < lv_splice_delete_count.
           DATA(lv_splice_from) = lv_splice_start + lv_splice_index.
-          DATA(lv_splice_from_name) = CONV string( lv_splice_from ).
-          CONDENSE lv_splice_from_name NO-GAPS.
+          DATA(lv_splice_from_name) = |{ lv_splice_from }|.
           IF lo_object->has_property( lv_splice_from_name ) = abap_true.
             lo_splice_deleted->set_element(
               index = lv_splice_index value = lo_object->get( lv_splice_from_name ) ).
@@ -5371,10 +5341,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WHILE lv_splice_index < lv_splice_length - lv_splice_delete_count.
             lv_splice_from = lv_splice_index + lv_splice_delete_count.
             DATA(lv_splice_to) = lv_splice_index + lv_splice_insert_count.
-            lv_splice_from_name = CONV string( lv_splice_from ).
-            DATA(lv_splice_to_name) = CONV string( lv_splice_to ).
-            CONDENSE lv_splice_from_name NO-GAPS.
-            CONDENSE lv_splice_to_name NO-GAPS.
+            lv_splice_from_name = |{ lv_splice_from }|.
+            DATA(lv_splice_to_name) = |{ lv_splice_to }|.
             IF lo_object->has_property( lv_splice_from_name ) = abap_true.
               lo_object->set(
                 name = lv_splice_to_name value = lo_object->get( lv_splice_from_name ) ).
@@ -5387,8 +5355,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_splice_index = lv_splice_length.
           WHILE lv_splice_index > lv_splice_new_length.
             lv_splice_index = lv_splice_index - 1.
-            lv_splice_to_name = CONV string( lv_splice_index ).
-            CONDENSE lv_splice_to_name NO-GAPS.
+            lv_splice_to_name = |{ lv_splice_index }|.
             IF lo_object->delete( lv_splice_to_name ) = abap_false.
               RAISE EXCEPTION TYPE zcx_qjs_error
                 EXPORTING reason = 'TypeError: spliced property is not configurable'.
@@ -5399,10 +5366,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WHILE lv_splice_index > lv_splice_start.
             lv_splice_from = lv_splice_index + lv_splice_delete_count - 1.
             lv_splice_to = lv_splice_index + lv_splice_insert_count - 1.
-            lv_splice_from_name = CONV string( lv_splice_from ).
-            lv_splice_to_name = CONV string( lv_splice_to ).
-            CONDENSE lv_splice_from_name NO-GAPS.
-            CONDENSE lv_splice_to_name NO-GAPS.
+            lv_splice_from_name = |{ lv_splice_from }|.
+            lv_splice_to_name = |{ lv_splice_to }|.
             IF lo_object->has_property( lv_splice_from_name ) = abap_true.
               lo_object->set(
                 name = lv_splice_to_name value = lo_object->get( lv_splice_from_name ) ).
@@ -5418,8 +5383,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           READ TABLE arguments INDEX lv_splice_index + 3
             INTO DATA(ls_splice_insert_value).
           lv_splice_to = lv_splice_start + lv_splice_index.
-          lv_splice_to_name = CONV string( lv_splice_to ).
-          CONDENSE lv_splice_to_name NO-GAPS.
+          lv_splice_to_name = |{ lv_splice_to }|.
           lo_object->set(
             name = lv_splice_to_name value = ls_splice_insert_value ).
           lv_splice_index = lv_splice_index + 1.
@@ -5476,8 +5440,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         DATA(lo_to_spliced_result) = mo_runtime->create_array( ).
         DATA(lv_to_spliced_target) = CONV int8( 0 ).
         WHILE lv_to_spliced_target < lv_to_spliced_start.
-          DATA(lv_to_spliced_source_name) = CONV string( lv_to_spliced_target ).
-          CONDENSE lv_to_spliced_source_name NO-GAPS.
+          DATA(lv_to_spliced_source_name) = |{ lv_to_spliced_target }|.
           lo_to_spliced_result->set_element(
             index = lv_to_spliced_target
             value = lo_object->get( lv_to_spliced_source_name ) ).
@@ -5494,8 +5457,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDWHILE.
         DATA(lv_to_spliced_source) = lv_to_spliced_start + lv_to_spliced_skip.
         WHILE lv_to_spliced_source < lv_to_spliced_length.
-          lv_to_spliced_source_name = CONV string( lv_to_spliced_source ).
-          CONDENSE lv_to_spliced_source_name NO-GAPS.
+          lv_to_spliced_source_name = |{ lv_to_spliced_source }|.
           lo_to_spliced_result->set_element(
             index = lv_to_spliced_target
             value = lo_object->get( lv_to_spliced_source_name ) ).
@@ -5529,8 +5491,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WITH DEFAULT KEY.
         DATA(lv_sort_index) = CONV int8( 0 ).
         WHILE lv_sort_index < lv_sort_length.
-          DATA(lv_sort_name) = CONV string( lv_sort_index ).
-          CONDENSE lv_sort_name NO-GAPS.
+          DATA(lv_sort_name) = |{ lv_sort_index }|.
           IF lo_object->has_property( lv_sort_name ) = abap_true.
             APPEND lo_object->get( lv_sort_name ) TO lt_sort_values.
           ENDIF.
@@ -5556,14 +5517,12 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDWHILE.
         lv_sort_index = 0.
         LOOP AT lt_sort_values INTO ls_sort_value.
-          lv_sort_name = CONV string( lv_sort_index ).
-          CONDENSE lv_sort_name NO-GAPS.
+          lv_sort_name = |{ lv_sort_index }|.
           lo_object->set( name = lv_sort_name value = ls_sort_value ).
           lv_sort_index = lv_sort_index + 1.
         ENDLOOP.
         WHILE lv_sort_index < lv_sort_length.
-          lv_sort_name = CONV string( lv_sort_index ).
-          CONDENSE lv_sort_name NO-GAPS.
+          lv_sort_name = |{ lv_sort_index }|.
           IF lo_object->delete( lv_sort_name ) = abap_false.
             RAISE EXCEPTION TYPE zcx_qjs_error
               EXPORTING reason = 'TypeError: sorted property is not configurable'.
@@ -5602,8 +5561,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           WITH DEFAULT KEY.
         DATA(lv_to_sorted_index) = CONV int8( 0 ).
         WHILE lv_to_sorted_index < lv_to_sorted_length.
-          DATA(lv_to_sorted_name) = CONV string( lv_to_sorted_index ).
-          CONDENSE lv_to_sorted_name NO-GAPS.
+          DATA(lv_to_sorted_name) = |{ lv_to_sorted_index }|.
           APPEND lo_object->get( lv_to_sorted_name ) TO lt_to_sorted_values.
           lv_to_sorted_index = lv_to_sorted_index + 1.
         ENDWHILE.

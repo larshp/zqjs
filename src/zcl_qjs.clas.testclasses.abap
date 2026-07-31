@@ -3506,6 +3506,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 11 ) ).
     ls_result = zcl_qjs=>eval( '~0;' ).
     cl_abap_unit_assert=>assert_equals( act = ls_result-int_value exp = -1 ).
+    ls_result = zcl_qjs=>eval(
+      '~0x7fffffff === -2147483648'
+      && ' && ~0x80000000 === 2147483647 && ~-1 === 0;' ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( '(1 << 4) + (32 >> 2);' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 24 ) ).

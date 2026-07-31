@@ -291,8 +291,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
       WHEN tag_bool.
         IF value-int_value <> 0. result = 'true'. ELSE. result = 'false'. ENDIF.
       WHEN tag_int.
-        result = value-int_value.
-        CONDENSE result NO-GAPS.
+        result = |{ value-int_value }|.
       WHEN tag_number.
         CASE value-int_value.
           WHEN number_nan. result = 'NaN'.

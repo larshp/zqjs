@@ -551,8 +551,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             ELSE.
               IF ls_right-tag = zcl_qjs_value=>tag_int.
                 lv_element_index = ls_right-int_value.
-                lv_property_name = lv_element_index.
-                CONDENSE lv_property_name NO-GAPS.
+                lv_property_name = |{ lv_element_index }|.
               ELSE.
                 lv_property_name = zcl_qjs_value=>to_string( ls_right ).
                 lv_element_index = -1.
@@ -609,8 +608,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             CLEAR lv_property_name.
           ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
             lv_element_index = ls_right-int_value.
-            lv_property_name = lv_element_index.
-            CONDENSE lv_property_name NO-GAPS.
+            lv_property_name = |{ lv_element_index }|.
           ELSE.
             lv_property_name = zcl_qjs_value=>to_string( ls_right ).
           ENDIF.
@@ -662,8 +660,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             CLEAR lv_property_name.
           ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
             lv_element_index = ls_right-int_value.
-            lv_property_name = lv_element_index.
-            CONDENSE lv_property_name NO-GAPS.
+            lv_property_name = |{ lv_element_index }|.
           ELSE.
             lv_property_name = zcl_qjs_value=>to_string( ls_right ).
           ENDIF.
@@ -1156,8 +1153,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
             lv_element_index = 0.
             DATA(lv_copy_string_value) = ls_copy_source_value-string_ref->as_string( ).
             WHILE lv_element_index < strlen( lv_copy_string_value ).
-              lv_copy_name = lv_element_index.
-              CONDENSE lv_copy_name NO-GAPS.
+              lv_copy_name = |{ lv_element_index }|.
               IF lo_copy_exclude IS NOT BOUND
                   OR lo_copy_exclude->has_own( lv_copy_name ) = abap_false.
                 DATA lv_copy_character TYPE string.
@@ -1569,8 +1565,7 @@ CLASS zcl_qjs_vm IMPLEMENTATION.
           IF ls_right-tag = zcl_qjs_value=>tag_symbol.
             CLEAR lv_property_name.
           ELSEIF ls_right-tag = zcl_qjs_value=>tag_int.
-            lv_property_name = ls_right-int_value.
-            CONDENSE lv_property_name NO-GAPS.
+            lv_property_name = |{ ls_right-int_value }|.
           ELSE.
             lv_property_name = zcl_qjs_value=>to_string( ls_right ).
           ENDIF.

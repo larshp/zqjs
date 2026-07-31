@@ -34,8 +34,7 @@ CLASS zcl_qjs_template_site IMPLEMENTATION.
     DATA lv_name TYPE string.
     LOOP AT mt_parts INTO DATA(ls_part).
       lv_index = sy-tabix - 1.
-      lv_name = lv_index.
-      CONDENSE lv_name NO-GAPS.
+      lv_name = |{ lv_index }|.
       lo_raw->define_property(
         name = lv_name value = zcl_qjs_value=>new_string( ls_part-raw )
         writable = abap_false enumerable = abap_true configurable = abap_false ).

@@ -188,8 +188,7 @@ CLASS zcl_qjs_disasm IMPLEMENTATION.
           OR ls_instruction-opcode = zif_qjs_opcodes=>set_lexical
           OR ls_instruction-opcode = zif_qjs_opcodes=>initialize_lexical
           OR ls_instruction-opcode = zif_qjs_opcodes=>reset_lexical.
-        lv_operand = ls_instruction-operand.
-        CONDENSE lv_operand NO-GAPS.
+        lv_operand = |{ ls_instruction-operand }|.
         lv_line = lv_line && ` ` && lv_operand.
       ENDIF.
       IF result IS INITIAL.
