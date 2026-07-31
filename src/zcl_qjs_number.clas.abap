@@ -280,13 +280,8 @@ CLASS zcl_qjs_number IMPLEMENTATION.
               IF lv_test = value.
                 lv_candidate_digits = lv_rounded_text.
                 lv_exponent = lv_scale + strlen( lv_candidate_digits ) - 1.
-                WHILE strlen( lv_candidate_digits ) > 1.
-                  DATA(lv_last_offset) = strlen( lv_candidate_digits ) - 1.
-                  IF lv_candidate_digits+lv_last_offset(1) <> '0'.
-                    EXIT.
-                  ENDIF.
-                  lv_candidate_digits = lv_candidate_digits+0(lv_last_offset).
-                ENDWHILE.
+                lv_candidate_digits = shift_right(
+                  val = lv_candidate_digits sub = '0' ).
                 EXIT.
               ENDIF.
             CATCH cx_sy_conversion_no_number cx_sy_arithmetic_error.
@@ -409,21 +404,8 @@ CLASS zcl_qjs_number IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD trim_leading_whitespace.
-    DATA lv_first TYPE c LENGTH 1.
-    result = text.
-    WHILE result IS NOT INITIAL.
-      lv_first = result+0(1).
-      IF lv_first = space
-          OR lv_first = cl_abap_char_utilities=>horizontal_tab
-          OR lv_first = cl_abap_char_utilities=>vertical_tab
-          OR lv_first = cl_abap_char_utilities=>newline
-          OR lv_first = cl_abap_char_utilities=>form_feed
-          OR lv_first = cl_abap_char_utilities=>cr_lf+0(1).
-        result = result+1.
-      ELSE.
-        RETURN.
-      ENDIF.
-    ENDWHILE.
+    result = replace(
+      val = text pcre = `^[\x09-\x0D\x20]+` with = `` ).
   ENDMETHOD.
 
   METHOD parse_int.
@@ -546,41 +528,33 @@ CLASS zcl_qjs_number IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD bitwise.
-    DATA lv_left TYPE int8.
-    DATA lv_right TYPE int8.
-    DATA lv_unsigned TYPE int8.
-    DATA lv_factor TYPE int8 VALUE 1.
-    DATA lv_left_bit TYPE i.
-    DATA lv_right_bit TYPE i.
-    DATA lv_bit TYPE i.
+    CONSTANTS lc_sign_mask TYPE x LENGTH 4 VALUE '80000000'.
+    CONSTANTS lc_value_mask TYPE x LENGTH 4 VALUE '7FFFFFFF'.
+    DATA lv_left TYPE x LENGTH 4.
+    DATA lv_right TYPE x LENGTH 4.
+    DATA lv_bit_result TYPE x LENGTH 4.
+    DATA lv_sign TYPE x LENGTH 4.
+    DATA lv_signed TYPE int8.
     lv_left = to_uint32( left ).
     lv_right = to_uint32( right ).
-    DO 32 TIMES.
-      lv_left_bit = lv_left MOD 2.
-      lv_right_bit = lv_right MOD 2.
-      CLEAR lv_bit.
-      CASE operation.
-        WHEN 1.
-          IF lv_left_bit = 1 AND lv_right_bit = 1. lv_bit = 1. ENDIF.
-        WHEN 2.
-          IF lv_left_bit <> lv_right_bit. lv_bit = 1. ENDIF.
-        WHEN 3.
-          IF lv_left_bit = 1 OR lv_right_bit = 1. lv_bit = 1. ENDIF.
-        WHEN OTHERS.
-          RAISE EXCEPTION TYPE zcx_qjs_error
-            EXPORTING reason = 'Unknown bitwise operation'.
-      ENDCASE.
-      IF lv_bit = 1.
-        lv_unsigned = lv_unsigned + lv_factor.
-      ENDIF.
-      lv_left = trunc( lv_left / 2 ).
-      lv_right = trunc( lv_right / 2 ).
-      lv_factor = lv_factor * 2.
-    ENDDO.
-    IF lv_unsigned >= 2147483648.
-      lv_unsigned = lv_unsigned - 4294967296.
+    CASE operation.
+      WHEN 1.
+        lv_bit_result = lv_left BIT-AND lv_right.
+      WHEN 2.
+        lv_bit_result = lv_left BIT-XOR lv_right.
+      WHEN 3.
+        lv_bit_result = lv_left BIT-OR lv_right.
+      WHEN OTHERS.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Unknown bitwise operation'.
+    ENDCASE.
+    lv_sign = lv_bit_result BIT-AND lc_sign_mask.
+    lv_bit_result = lv_bit_result BIT-AND lc_value_mask.
+    lv_signed = lv_bit_result.
+    IF lv_sign IS NOT INITIAL.
+      lv_signed = lv_signed - 2147483648.
     ENDIF.
-    result = zcl_qjs_value=>new_int( CONV i( lv_unsigned ) ).
+    result = zcl_qjs_value=>new_int( CONV i( lv_signed ) ).
   ENDMETHOD.
 
   METHOD bitwise_not.
@@ -594,12 +568,10 @@ CLASS zcl_qjs_number IMPLEMENTATION.
 
   METHOD shift.
     DATA lv_count TYPE int8.
-    DATA lv_factor TYPE int8 VALUE 1.
+    DATA lv_factor TYPE int8.
     DATA lv_value TYPE int8.
     lv_count = to_uint32( right ) MOD 32.
-    DO lv_count TIMES.
-      lv_factor = lv_factor * 2.
-    ENDDO.
+    lv_factor = ipow( base = 2 exp = lv_count ).
     CASE operation.
       WHEN 1.
         lv_value = to_uint32( left ) * lv_factor MOD 4294967296.
