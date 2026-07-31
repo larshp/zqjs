@@ -114,10 +114,7 @@ CLASS zcl_qjs_string IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD equals.
-    result = abap_false.
-    IF other IS BOUND AND mv_value = other->as_string( ).
-      result = abap_true.
-    ENDIF.
+    result = xsdbool( other IS BOUND AND mv_value = other->as_string( ) ).
   ENDMETHOD.
 
   METHOD as_string.

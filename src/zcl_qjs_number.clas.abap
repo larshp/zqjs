@@ -127,6 +127,12 @@ CLASS zcl_qjs_number DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RAISING zcx_qjs_error.
 
   PRIVATE SECTION.
+    TYPES ty_uint32_bits TYPE x LENGTH 4.
+
+    CLASS-METHODS bits_to_int32
+      IMPORTING bits          TYPE ty_uint32_bits
+      RETURNING VALUE(result) TYPE i.
+
     CLASS-METHODS normalized
       IMPORTING
         value         TYPE zcl_qjs_value=>ty_value
@@ -242,8 +248,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
       IF lv_length < 18.
         lv_rounded = lv_candidate_digits.
         lv_rounded = lv_rounded + 1.
-        lv_rounded_text = lv_rounded.
-        CONDENSE lv_rounded_text NO-GAPS.
+        lv_rounded_text = |{ lv_rounded }|.
         IF strlen( lv_rounded_text ) = lv_length.
           lv_candidate_digits = lv_rounded_text.
           lv_first_digit = lv_candidate_digits+0(1).
@@ -267,8 +272,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
         ELSEIF strlen( lv_rounded_text ) = lv_length + 1.
           DATA(lv_scale) = lv_exponent - lv_length + 1.
           DATA(lv_absolute_scale) = abs( lv_scale ).
-          DATA(lv_scale_text) = CONV string( lv_absolute_scale ).
-          CONDENSE lv_scale_text NO-GAPS.
+          DATA(lv_scale_text) = |{ lv_absolute_scale }|.
           IF lv_scale < 0.
             lv_scale_text = '-' && lv_scale_text.
           ELSE.
@@ -280,13 +284,8 @@ CLASS zcl_qjs_number IMPLEMENTATION.
               IF lv_test = value.
                 lv_candidate_digits = lv_rounded_text.
                 lv_exponent = lv_scale + strlen( lv_candidate_digits ) - 1.
-                WHILE strlen( lv_candidate_digits ) > 1.
-                  DATA(lv_last_offset) = strlen( lv_candidate_digits ) - 1.
-                  IF lv_candidate_digits+lv_last_offset(1) <> '0'.
-                    EXIT.
-                  ENDIF.
-                  lv_candidate_digits = lv_candidate_digits+0(lv_last_offset).
-                ENDWHILE.
+                lv_candidate_digits = shift_right(
+                  val = lv_candidate_digits sub = '0' ).
                 EXIT.
               ENDIF.
             CATCH cx_sy_conversion_no_number cx_sy_arithmetic_error.
@@ -298,18 +297,12 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     lv_position = lv_exponent + 1.
     IF lv_exponent >= -6 AND lv_exponent < 21.
       IF lv_position <= 0.
-        CLEAR lv_zeros.
         lv_zero_count = 0 - lv_position.
-        DO lv_zero_count TIMES.
-          lv_zeros = lv_zeros && '0'.
-        ENDDO.
+        lv_zeros = repeat( val = '0' occ = lv_zero_count ).
         result = lv_sign && '0.' && lv_zeros && lv_candidate_digits.
       ELSEIF lv_position >= strlen( lv_candidate_digits ).
-        CLEAR lv_zeros.
         lv_zero_count = lv_position - strlen( lv_candidate_digits ).
-        DO lv_zero_count TIMES.
-          lv_zeros = lv_zeros && '0'.
-        ENDDO.
+        lv_zeros = repeat( val = '0' occ = lv_zero_count ).
         result = lv_sign && lv_candidate_digits && lv_zeros.
       ELSE.
         DATA(lv_fraction_length) = strlen( lv_candidate_digits ) - lv_position.
@@ -333,8 +326,7 @@ CLASS zcl_qjs_number IMPLEMENTATION.
         result = result && '+'.
       ENDIF.
       DATA(lv_normalized_exponent) = abs( lv_exponent ).
-      DATA(lv_normalized_exponent_text) = CONV string( lv_normalized_exponent ).
-      CONDENSE lv_normalized_exponent_text NO-GAPS.
+      DATA(lv_normalized_exponent_text) = |{ lv_normalized_exponent }|.
       IF lv_exponent < 0.
         lv_normalized_exponent_text = '-' && lv_normalized_exponent_text.
       ENDIF.
@@ -402,63 +394,21 @@ CLASS zcl_qjs_number IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD digit_value.
+    DATA lv_digits TYPE string
+      VALUE '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.
     result = -1.
-    CASE character.
-      WHEN '0'. result = 0.
-      WHEN '1'. result = 1.
-      WHEN '2'. result = 2.
-      WHEN '3'. result = 3.
-      WHEN '4'. result = 4.
-      WHEN '5'. result = 5.
-      WHEN '6'. result = 6.
-      WHEN '7'. result = 7.
-      WHEN '8'. result = 8.
-      WHEN '9'. result = 9.
-      WHEN 'a' OR 'A'. result = 10.
-      WHEN 'b' OR 'B'. result = 11.
-      WHEN 'c' OR 'C'. result = 12.
-      WHEN 'd' OR 'D'. result = 13.
-      WHEN 'e' OR 'E'. result = 14.
-      WHEN 'f' OR 'F'. result = 15.
-      WHEN 'g' OR 'G'. result = 16.
-      WHEN 'h' OR 'H'. result = 17.
-      WHEN 'i' OR 'I'. result = 18.
-      WHEN 'j' OR 'J'. result = 19.
-      WHEN 'k' OR 'K'. result = 20.
-      WHEN 'l' OR 'L'. result = 21.
-      WHEN 'm' OR 'M'. result = 22.
-      WHEN 'n' OR 'N'. result = 23.
-      WHEN 'o' OR 'O'. result = 24.
-      WHEN 'p' OR 'P'. result = 25.
-      WHEN 'q' OR 'Q'. result = 26.
-      WHEN 'r' OR 'R'. result = 27.
-      WHEN 's' OR 'S'. result = 28.
-      WHEN 't' OR 'T'. result = 29.
-      WHEN 'u' OR 'U'. result = 30.
-      WHEN 'v' OR 'V'. result = 31.
-      WHEN 'w' OR 'W'. result = 32.
-      WHEN 'x' OR 'X'. result = 33.
-      WHEN 'y' OR 'Y'. result = 34.
-      WHEN 'z' OR 'Z'. result = 35.
-    ENDCASE.
+    IF strlen( character ) <> 1. RETURN. ENDIF.
+    FIND FIRST OCCURRENCE OF character IN lv_digits MATCH OFFSET result.
+    IF sy-subrc <> 0.
+      result = -1.
+    ELSEIF result >= 36.
+      result = result - 26.
+    ENDIF.
   ENDMETHOD.
 
   METHOD trim_leading_whitespace.
-    DATA lv_first TYPE c LENGTH 1.
-    result = text.
-    WHILE result IS NOT INITIAL.
-      lv_first = result+0(1).
-      IF lv_first = space
-          OR lv_first = cl_abap_char_utilities=>horizontal_tab
-          OR lv_first = cl_abap_char_utilities=>vertical_tab
-          OR lv_first = cl_abap_char_utilities=>newline
-          OR lv_first = cl_abap_char_utilities=>form_feed
-          OR lv_first = cl_abap_char_utilities=>cr_lf+0(1).
-        result = result+1.
-      ELSE.
-        RETURN.
-      ENDIF.
-    ENDWHILE.
+    result = replace(
+      val = text pcre = `^[\x09-\x0D\x20]+` with = `` ).
   ENDMETHOD.
 
   METHOD parse_int.
@@ -580,61 +530,52 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD bits_to_int32.
+    CONSTANTS lc_sign_mask TYPE x LENGTH 4 VALUE '80000000'.
+    CONSTANTS lc_value_mask TYPE x LENGTH 4 VALUE '7FFFFFFF'.
+    DATA lv_magnitude TYPE ty_uint32_bits.
+    DATA(lv_sign) = bits BIT-AND lc_sign_mask.
+    lv_magnitude = bits BIT-AND lc_value_mask.
+    DATA(lv_signed) = CONV int8( lv_magnitude ).
+    IF lv_sign IS NOT INITIAL.
+      lv_signed = lv_signed - 2147483648.
+    ENDIF.
+    result = lv_signed.
+  ENDMETHOD.
+
   METHOD bitwise.
-    DATA lv_left TYPE int8.
-    DATA lv_right TYPE int8.
-    DATA lv_unsigned TYPE int8.
-    DATA lv_factor TYPE int8 VALUE 1.
-    DATA lv_left_bit TYPE i.
-    DATA lv_right_bit TYPE i.
-    DATA lv_bit TYPE i.
+    DATA lv_left TYPE x LENGTH 4.
+    DATA lv_right TYPE x LENGTH 4.
+    DATA lv_bit_result TYPE x LENGTH 4.
     lv_left = to_uint32( left ).
     lv_right = to_uint32( right ).
-    DO 32 TIMES.
-      lv_left_bit = lv_left MOD 2.
-      lv_right_bit = lv_right MOD 2.
-      CLEAR lv_bit.
-      CASE operation.
-        WHEN 1.
-          IF lv_left_bit = 1 AND lv_right_bit = 1. lv_bit = 1. ENDIF.
-        WHEN 2.
-          IF lv_left_bit <> lv_right_bit. lv_bit = 1. ENDIF.
-        WHEN 3.
-          IF lv_left_bit = 1 OR lv_right_bit = 1. lv_bit = 1. ENDIF.
-        WHEN OTHERS.
-          RAISE EXCEPTION TYPE zcx_qjs_error
-            EXPORTING reason = 'Unknown bitwise operation'.
-      ENDCASE.
-      IF lv_bit = 1.
-        lv_unsigned = lv_unsigned + lv_factor.
-      ENDIF.
-      lv_left = trunc( lv_left / 2 ).
-      lv_right = trunc( lv_right / 2 ).
-      lv_factor = lv_factor * 2.
-    ENDDO.
-    IF lv_unsigned >= 2147483648.
-      lv_unsigned = lv_unsigned - 4294967296.
-    ENDIF.
-    result = zcl_qjs_value=>new_int( CONV i( lv_unsigned ) ).
+    CASE operation.
+      WHEN 1.
+        lv_bit_result = lv_left BIT-AND lv_right.
+      WHEN 2.
+        lv_bit_result = lv_left BIT-XOR lv_right.
+      WHEN 3.
+        lv_bit_result = lv_left BIT-OR lv_right.
+      WHEN OTHERS.
+        RAISE EXCEPTION TYPE zcx_qjs_error
+          EXPORTING reason = 'Unknown bitwise operation'.
+    ENDCASE.
+    result = zcl_qjs_value=>new_int( bits_to_int32( lv_bit_result ) ).
   ENDMETHOD.
 
   METHOD bitwise_not.
-    DATA lv_value TYPE int8.
-    lv_value = 4294967295 - to_uint32( value ).
-    IF lv_value >= 2147483648.
-      lv_value = lv_value - 4294967296.
-    ENDIF.
-    result = zcl_qjs_value=>new_int( CONV i( lv_value ) ).
+    DATA lv_bits TYPE ty_uint32_bits.
+    lv_bits = to_uint32( value ).
+    lv_bits = BIT-NOT lv_bits.
+    result = zcl_qjs_value=>new_int( bits_to_int32( lv_bits ) ).
   ENDMETHOD.
 
   METHOD shift.
     DATA lv_count TYPE int8.
-    DATA lv_factor TYPE int8 VALUE 1.
+    DATA lv_factor TYPE int8.
     DATA lv_value TYPE int8.
     lv_count = to_uint32( right ) MOD 32.
-    DO lv_count TIMES.
-      lv_factor = lv_factor * 2.
-    ENDDO.
+    lv_factor = ipow( base = 2 exp = lv_count ).
     CASE operation.
       WHEN 1.
         lv_value = to_uint32( left ) * lv_factor MOD 4294967296.

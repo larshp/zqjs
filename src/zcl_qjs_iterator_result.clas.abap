@@ -74,8 +74,7 @@ CLASS zcl_qjs_iterator_result IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~get_symbol_property.
-    DATA(lv_name) = CONV string( identity ).
-    CONDENSE lv_name NO-GAPS.
+    DATA(lv_name) = |{ identity }|.
     READ TABLE mt_properties WITH TABLE KEY kind = 1 name = lv_name
       INTO DATA(ls_property).
     IF sy-subrc = 0.
@@ -88,8 +87,7 @@ CLASS zcl_qjs_iterator_result IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~set_symbol_property.
-    DATA(lv_name) = CONV string( identity ).
-    CONDENSE lv_name NO-GAPS.
+    DATA(lv_name) = |{ identity }|.
     DATA(ls_property) = VALUE ty_property(
       kind = 1 name = lv_name value = value ).
     DELETE TABLE mt_properties WITH TABLE KEY kind = 1 name = lv_name.
@@ -97,8 +95,7 @@ CLASS zcl_qjs_iterator_result IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_qjs_property_container~delete_symbol_property.
-    DATA(lv_name) = CONV string( identity ).
-    CONDENSE lv_name NO-GAPS.
+    DATA(lv_name) = |{ identity }|.
     DELETE TABLE mt_properties WITH TABLE KEY kind = 1 name = lv_name.
     result = abap_true.
   ENDMETHOD.

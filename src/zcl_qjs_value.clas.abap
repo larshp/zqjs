@@ -192,10 +192,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_number.
-    result = abap_false.
-    IF value-tag = tag_int OR value-tag = tag_number.
-      result = abap_true.
-    ENDIF.
+    result = xsdbool( value-tag = tag_int OR value-tag = tag_number ).
   ENDMETHOD.
 
   METHOD as_finite_number.
@@ -291,8 +288,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
       WHEN tag_bool.
         IF value-int_value <> 0. result = 'true'. ELSE. result = 'false'. ENDIF.
       WHEN tag_int.
-        result = value-int_value.
-        CONDENSE result NO-GAPS.
+        result = |{ value-int_value }|.
       WHEN tag_number.
         CASE value-int_value.
           WHEN number_nan. result = 'NaN'.

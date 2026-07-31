@@ -1291,8 +1291,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
       IF index >= mv_length. mv_length = index + 1. ENDIF.
       RETURN.
     ENDIF.
-    lv_name = index.
-    CONDENSE lv_name NO-GAPS.
+    lv_name = |{ index }|.
     IF mv_is_array = abap_true AND index >= 0 AND index < lv_max_array_length
         AND index <= lv_element_slots + 64
         AND mo_shape->lookup( lv_name )-found = abap_false.
@@ -1319,8 +1318,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDIF.
-    DATA(lv_name) = CONV string( index ).
-    CONDENSE lv_name NO-GAPS.
+    DATA(lv_name) = |{ index }|.
     result = has_property( lv_name ).
   ENDMETHOD.
 
@@ -1333,8 +1331,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDIF.
-    lv_name = index.
-    CONDENSE lv_name NO-GAPS.
+    lv_name = |{ index }|.
     result = get( lv_name ).
   ENDMETHOD.
 
@@ -1364,8 +1361,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         DATA(lv_canonical_name) = ``.
         TRY.
             lv_index = ls_property-name.
-            lv_canonical_name = lv_index.
-            CONDENSE lv_canonical_name NO-GAPS.
+            lv_canonical_name = |{ lv_index }|.
             IF lv_index >= length AND lv_index >= 0
                 AND lv_index < lv_max_array_length
                 AND lv_canonical_name = ls_property-name.
@@ -1397,8 +1393,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         APPEND CONV int8( sy-tabix - 1 ) TO lt_indices.
       ENDLOOP.
       LOOP AT lt_indices INTO DATA(lv_key_index).
-        DATA(lv_key_name) = CONV string( lv_key_index ).
-        CONDENSE lv_key_name NO-GAPS.
+        DATA(lv_key_name) = |{ lv_key_index }|.
         INSERT lv_key_name INTO result INDEX sy-tabix.
       ENDLOOP.
     ENDIF.
@@ -1412,8 +1407,7 @@ CLASS zcl_qjs_object IMPLEMENTATION.
         APPEND CONV int8( sy-tabix - 1 ) TO lt_indices.
       ENDLOOP.
       LOOP AT lt_indices INTO DATA(lv_key_index).
-        DATA(lv_key_name) = CONV string( lv_key_index ).
-        CONDENSE lv_key_name NO-GAPS.
+        DATA(lv_key_name) = |{ lv_key_index }|.
         APPEND lv_key_name TO result.
       ENDLOOP.
     ENDIF.

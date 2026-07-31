@@ -2822,6 +2822,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       '"bananas".indexOf("na") === 2 && "bananas".indexOf("na", 3) === 4'
       && ' && "bananas".lastIndexOf("na") === 4'
+      && ' && "aaa".lastIndexOf("aa") === 1'
       && ' && "bananas".includes("ana") && !"bananas".includes("xyz")'
       && ' && "bananas".startsWith("ban") && "bananas".startsWith("ana", 1)'
       && ' && "bananas".endsWith("nas") && "bananas".endsWith("ana", 4);' ).
@@ -3505,6 +3506,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 11 ) ).
     ls_result = zcl_qjs=>eval( '~0;' ).
     cl_abap_unit_assert=>assert_equals( act = ls_result-int_value exp = -1 ).
+    ls_result = zcl_qjs=>eval(
+      '~0x7fffffff === -2147483648'
+      && ' && ~0x80000000 === 2147483647 && ~-1 === 0;' ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
     ls_result = zcl_qjs=>eval( '(1 << 4) + (32 >> 2);' ).
     cl_abap_unit_assert=>assert_equals(
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 24 ) ).
@@ -3513,6 +3518,13 @@ CLASS ltcl_qjs IMPLEMENTATION.
       act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 2147483647 ) ).
     ls_result = zcl_qjs=>eval( '1 + 2 << 2;' ).
     cl_abap_unit_assert=>assert_equals( act = ls_result-int_value exp = 12 ).
+    ls_result = zcl_qjs=>eval(
+      '(-1 & 0x80000000) === -2147483648'
+      && ' && (-1 ^ 0xffffffff) === 0'
+      && ' && (0x80000000 | 1) === -2147483647'
+      && ' && (1 << 31) === -2147483648'
+      && ' && (-1 >>> 31) === 1;' ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
   ENDMETHOD.
 
   METHOD assignment_updates.
@@ -3763,6 +3775,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval( `JSON.parse('"\\u0041"');` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = 'A' ).
+
+    ls_result = zcl_qjs=>eval(
+      `JSON.parse('"\\u00aF"').charCodeAt(0) === 175;` ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
     ls_result = zcl_qjs=>eval( `JSON.parse('"line\\nnext"');` ).
     cl_abap_unit_assert=>assert_equals(
@@ -4068,7 +4084,8 @@ CLASS ltcl_qjs IMPLEMENTATION.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval(
       'parseInt("  -0xFtail") === -15 && parseInt("11", 2) === 3'
-      && ' && parseInt("z", 36) === 35 && isNaN(parseInt("10", 1))'
+      && ' && parseInt("z", 36) === 35 && parseInt("Z", 36) === 35'
+      && ' && isNaN(parseInt("10", 1))'
       && ' && 1 / parseInt("-0") === -Infinity;' ).
     cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
@@ -4077,6 +4094,21 @@ CLASS ltcl_qjs IMPLEMENTATION.
       && ' && parseFloat(".5") === 0.5 && parseFloat("1e") === 1'
       && ' && parseFloat("Infinity-and-beyond") === Infinity;' ).
     cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
+
+    DATA(lv_numeric_whitespace) =
+      cl_abap_char_utilities=>horizontal_tab
+      && cl_abap_char_utilities=>vertical_tab
+      && cl_abap_char_utilities=>newline
+      && cl_abap_char_utilities=>form_feed
+      && cl_abap_char_utilities=>cr_lf+0(1).
+    ls_result = zcl_qjs_number=>parse_int(
+      text = lv_numeric_whitespace && ` 42` ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( 42 ) ).
+    ls_result = zcl_qjs_number=>parse_float(
+      lv_numeric_whitespace && ` -0.5tail` ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_qjs_value=>as_finite_number( ls_result ) exp = CONV f( '-0.5' ) ).
 
     ls_result = zcl_qjs=>eval(
       'isFinite("42") && isFinite(null) && !isFinite("not numeric")'
