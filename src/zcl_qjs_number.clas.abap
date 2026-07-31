@@ -298,18 +298,12 @@ CLASS zcl_qjs_number IMPLEMENTATION.
     lv_position = lv_exponent + 1.
     IF lv_exponent >= -6 AND lv_exponent < 21.
       IF lv_position <= 0.
-        CLEAR lv_zeros.
         lv_zero_count = 0 - lv_position.
-        DO lv_zero_count TIMES.
-          lv_zeros = lv_zeros && '0'.
-        ENDDO.
+        lv_zeros = repeat( val = '0' occ = lv_zero_count ).
         result = lv_sign && '0.' && lv_zeros && lv_candidate_digits.
       ELSEIF lv_position >= strlen( lv_candidate_digits ).
-        CLEAR lv_zeros.
         lv_zero_count = lv_position - strlen( lv_candidate_digits ).
-        DO lv_zero_count TIMES.
-          lv_zeros = lv_zeros && '0'.
-        ENDDO.
+        lv_zeros = repeat( val = '0' occ = lv_zero_count ).
         result = lv_sign && lv_candidate_digits && lv_zeros.
       ELSE.
         DATA(lv_fraction_length) = strlen( lv_candidate_digits ) - lv_position.
@@ -402,45 +396,16 @@ CLASS zcl_qjs_number IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD digit_value.
+    DATA lv_digits TYPE string
+      VALUE '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.
     result = -1.
-    CASE character.
-      WHEN '0'. result = 0.
-      WHEN '1'. result = 1.
-      WHEN '2'. result = 2.
-      WHEN '3'. result = 3.
-      WHEN '4'. result = 4.
-      WHEN '5'. result = 5.
-      WHEN '6'. result = 6.
-      WHEN '7'. result = 7.
-      WHEN '8'. result = 8.
-      WHEN '9'. result = 9.
-      WHEN 'a' OR 'A'. result = 10.
-      WHEN 'b' OR 'B'. result = 11.
-      WHEN 'c' OR 'C'. result = 12.
-      WHEN 'd' OR 'D'. result = 13.
-      WHEN 'e' OR 'E'. result = 14.
-      WHEN 'f' OR 'F'. result = 15.
-      WHEN 'g' OR 'G'. result = 16.
-      WHEN 'h' OR 'H'. result = 17.
-      WHEN 'i' OR 'I'. result = 18.
-      WHEN 'j' OR 'J'. result = 19.
-      WHEN 'k' OR 'K'. result = 20.
-      WHEN 'l' OR 'L'. result = 21.
-      WHEN 'm' OR 'M'. result = 22.
-      WHEN 'n' OR 'N'. result = 23.
-      WHEN 'o' OR 'O'. result = 24.
-      WHEN 'p' OR 'P'. result = 25.
-      WHEN 'q' OR 'Q'. result = 26.
-      WHEN 'r' OR 'R'. result = 27.
-      WHEN 's' OR 'S'. result = 28.
-      WHEN 't' OR 'T'. result = 29.
-      WHEN 'u' OR 'U'. result = 30.
-      WHEN 'v' OR 'V'. result = 31.
-      WHEN 'w' OR 'W'. result = 32.
-      WHEN 'x' OR 'X'. result = 33.
-      WHEN 'y' OR 'Y'. result = 34.
-      WHEN 'z' OR 'Z'. result = 35.
-    ENDCASE.
+    IF strlen( character ) <> 1. RETURN. ENDIF.
+    FIND FIRST OCCURRENCE OF character IN lv_digits MATCH OFFSET result.
+    IF sy-subrc <> 0.
+      result = -1.
+    ELSEIF result >= 36.
+      result = result - 26.
+    ENDIF.
   ENDMETHOD.
 
   METHOD trim_leading_whitespace.

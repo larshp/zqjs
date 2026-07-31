@@ -225,33 +225,18 @@ CLASS zcl_qjs_json IMPLEMENTATION.
   METHOD parse_hex_quad.
     DATA lv_char TYPE string.
     DATA lv_digit TYPE i.
+    DATA lv_hex_digits TYPE string VALUE '0123456789ABCDEFabcdef'.
     DO 4 TIMES.
       IF mv_offset >= strlen( mv_source ).
         fail( ).
       ENDIF.
       lv_char = current( ).
-      IF lv_char CO '0123456789'.
-        lv_digit = CONV i( lv_char ).
-      ELSEIF lv_char CO 'abcdef'.
-        CASE lv_char.
-          WHEN 'a'. lv_digit = 10.
-          WHEN 'b'. lv_digit = 11.
-          WHEN 'c'. lv_digit = 12.
-          WHEN 'd'. lv_digit = 13.
-          WHEN 'e'. lv_digit = 14.
-          WHEN 'f'. lv_digit = 15.
-        ENDCASE.
-      ELSEIF lv_char CO 'ABCDEF'.
-        CASE lv_char.
-          WHEN 'A'. lv_digit = 10.
-          WHEN 'B'. lv_digit = 11.
-          WHEN 'C'. lv_digit = 12.
-          WHEN 'D'. lv_digit = 13.
-          WHEN 'E'. lv_digit = 14.
-          WHEN 'F'. lv_digit = 15.
-        ENDCASE.
-      ELSE.
+      FIND FIRST OCCURRENCE OF lv_char IN lv_hex_digits
+        MATCH OFFSET lv_digit.
+      IF sy-subrc <> 0.
         fail( ).
+      ELSEIF lv_digit >= 16.
+        lv_digit = lv_digit - 6.
       ENDIF.
       result = result * 16 + lv_digit.
       mv_offset = mv_offset + 1.

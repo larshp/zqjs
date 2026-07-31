@@ -519,15 +519,6 @@ CLASS zcl_qjs_native_function DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS math_log10_f
       IMPORTING value         TYPE f
       RETURNING VALUE(result) TYPE f.
-    METHODS math_reduce_angle
-      IMPORTING value         TYPE f
-      RETURNING VALUE(result) TYPE f.
-    METHODS math_sin_f
-      IMPORTING value         TYPE f
-      RETURNING VALUE(result) TYPE f.
-    METHODS math_cos_f
-      IMPORTING value         TYPE f
-      RETURNING VALUE(result) TYPE f.
     METHODS math_pow_value
       IMPORTING base          TYPE zcl_qjs_value=>ty_value
         exponent              TYPE zcl_qjs_value=>ty_value
@@ -1531,82 +1522,6 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ELSE.
       result = math_log_f( value ) / CONV f( '2.302585092994046' ).
     ENDIF.
-  ENDMETHOD.
-
-  METHOD math_reduce_angle.
-    DATA lv_pi TYPE f.
-    DATA lv_two_pi TYPE f.
-    lv_pi = '3.141592653589793'.
-    lv_two_pi = '6.283185307179586'.
-    result = value - trunc( value / lv_two_pi ) * lv_two_pi.
-    IF result > lv_pi.
-      result = result - lv_two_pi.
-    ELSEIF result < 0 - lv_pi.
-      result = result + lv_two_pi.
-    ENDIF.
-  ENDMETHOD.
-
-  METHOD math_sin_f.
-    DATA lv_pi TYPE f.
-    DATA lv_half_pi TYPE f.
-    DATA lv_reduced TYPE f.
-    DATA lv_square TYPE f.
-    DATA lv_term TYPE f.
-    DATA lv_sum TYPE f.
-    DATA lv_left_factor TYPE i.
-    DATA lv_right_factor TYPE i.
-    lv_pi = '3.141592653589793'.
-    lv_half_pi = '1.5707963267948966'.
-    lv_reduced = math_reduce_angle( value ).
-    IF lv_reduced > lv_half_pi.
-      lv_reduced = lv_pi - lv_reduced.
-    ELSEIF lv_reduced < 0 - lv_half_pi.
-      lv_reduced = 0 - lv_pi - lv_reduced.
-    ENDIF.
-    lv_square = lv_reduced * lv_reduced.
-    lv_term = lv_reduced.
-    lv_sum = lv_reduced.
-    DO 12 TIMES.
-      lv_left_factor = 2 * sy-index.
-      lv_right_factor = lv_left_factor + 1.
-      lv_term = ( 0 - lv_term ) * lv_square
-        / ( lv_left_factor * lv_right_factor ).
-      lv_sum = lv_sum + lv_term.
-    ENDDO.
-    result = lv_sum.
-  ENDMETHOD.
-
-  METHOD math_cos_f.
-    DATA lv_pi TYPE f.
-    DATA lv_half_pi TYPE f.
-    DATA lv_reduced TYPE f.
-    DATA lv_square TYPE f.
-    DATA lv_term TYPE f.
-    DATA lv_sum TYPE f.
-    DATA lv_sign TYPE i VALUE 1.
-    DATA lv_left_factor TYPE i.
-    DATA lv_right_factor TYPE i.
-    lv_pi = '3.141592653589793'.
-    lv_half_pi = '1.5707963267948966'.
-    lv_reduced = math_reduce_angle( value ).
-    IF lv_reduced > lv_half_pi.
-      lv_reduced = lv_pi - lv_reduced.
-      lv_sign = -1.
-    ELSEIF lv_reduced < 0 - lv_half_pi.
-      lv_reduced = 0 - lv_pi - lv_reduced.
-      lv_sign = -1.
-    ENDIF.
-    lv_square = lv_reduced * lv_reduced.
-    lv_term = 1.
-    lv_sum = 1.
-    DO 12 TIMES.
-      lv_left_factor = 2 * sy-index - 1.
-      lv_right_factor = lv_left_factor + 1.
-      lv_term = ( 0 - lv_term ) * lv_square
-        / ( lv_left_factor * lv_right_factor ).
-      lv_sum = lv_sum + lv_term.
-    ENDDO.
-    result = lv_sign * lv_sum.
   ENDMETHOD.
 
   METHOD math_pow_value.
@@ -3380,16 +3295,14 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF strlen( lv_needle_string ) = 0.
           lv_string_offset = nmax( val1 = 0 val2 = lv_string_start ).
         ELSEIF lv_string_start >= 0.
-          lv_string_offset = lv_string_start.
-          lv_string_count = strlen( lv_needle_string ).
-          WHILE lv_string_offset >= 0.
-            DATA(lv_string_candidate) =
-              lv_text_string+lv_string_offset(lv_string_count).
-            IF lv_string_candidate = lv_needle_string.
-              EXIT.
-            ENDIF.
-            lv_string_offset = lv_string_offset - 1.
-          ENDWHILE.
+          lv_string_count = lv_string_start + strlen( lv_needle_string ).
+          lv_string_offset = find(
+            val = reverse( val = lv_text_string(lv_string_count) )
+            sub = reverse( val = lv_needle_string ) ).
+          IF lv_string_offset >= 0.
+            lv_string_offset = lv_string_count - lv_string_offset
+              - strlen( lv_needle_string ).
+          ENDIF.
         ENDIF.
         result = zcl_qjs_value=>new_int( lv_string_offset ).
       WHEN id_string_ends_with.
@@ -3658,11 +3571,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           RAISE EXCEPTION TYPE zcx_qjs_error
             EXPORTING reason = 'RangeError: repeated string exceeds implementation limit'.
         ENDIF.
-        CLEAR lv_string_result.
         lv_string_count = ls_string_integer-value.
-        DO lv_string_count TIMES.
-          lv_string_result = lv_string_result && lv_text_string.
-        ENDDO.
+        lv_string_result = repeat(
+          val = lv_text_string occ = lv_string_count ).
         result = zcl_qjs_value=>new_string( lv_string_result ).
       WHEN id_string_to_lower.
         lv_text_string = string_receiver( this_value ).
@@ -6003,13 +5914,11 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             AND ls_number-int_value = zcl_qjs_value=>number_neg_zero.
           result = ls_number.
         ELSEIF mv_id = id_math_cos.
-          result = zcl_qjs_value=>new_finite( math_cos_f( ls_number-float_value ) ).
+          result = zcl_qjs_value=>new_finite( cos( ls_number-float_value ) ).
         ELSEIF mv_id = id_math_sin.
-          result = zcl_qjs_value=>new_finite( math_sin_f( ls_number-float_value ) ).
+          result = zcl_qjs_value=>new_finite( sin( ls_number-float_value ) ).
         ELSE.
-          result = zcl_qjs_value=>new_finite(
-            math_sin_f( ls_number-float_value )
-              / math_cos_f( ls_number-float_value ) ).
+          result = zcl_qjs_value=>new_finite( tan( ls_number-float_value ) ).
         ENDIF.
       WHEN id_math_pow.
         READ TABLE arguments INDEX 2 INTO DATA(ls_pow_exponent).

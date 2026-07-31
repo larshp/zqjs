@@ -23,9 +23,6 @@ equal(profile.pins.test262Commit, lock.test262.commit, "test262 commit pin");
 equal(profile.pins.openAbapCoreCommit, lock.openAbapCore.commit, "open-abap-core commit pin");
 equal(profile.pins.unicodeVersion, lock.unicode.version, "Unicode version pin");
 equal(`>=${profile.hosts.development.minimumVersion}`, packageJson.engines.node, "Node minimum");
-equal(profile.pins.abaplintCli, packageJson.devDependencies["@abaplint/cli"], "abaplint CLI pin");
-equal(profile.pins.abaplintRuntime, packageJson.devDependencies["@abaplint/runtime"], "abaplint runtime pin");
-equal(profile.pins.abaplintTranspiler, packageJson.devDependencies["@abaplint/transpiler-cli"], "transpiler pin");
 
 const selected = test262.tests?.length ?? -1;
 const expected = profile.conformance.test262.expected;

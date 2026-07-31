@@ -2822,6 +2822,7 @@ CLASS ltcl_qjs IMPLEMENTATION.
     ls_result = zcl_qjs=>eval(
       '"bananas".indexOf("na") === 2 && "bananas".indexOf("na", 3) === 4'
       && ' && "bananas".lastIndexOf("na") === 4'
+      && ' && "aaa".lastIndexOf("aa") === 1'
       && ' && "bananas".includes("ana") && !"bananas".includes("xyz")'
       && ' && "bananas".startsWith("ban") && "bananas".startsWith("ana", 1)'
       && ' && "bananas".endsWith("nas") && "bananas".endsWith("ana", 4);' ).
@@ -3764,6 +3765,10 @@ CLASS ltcl_qjs IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( ) exp = 'A' ).
 
+    ls_result = zcl_qjs=>eval(
+      `JSON.parse('"\\u00aF"').charCodeAt(0) === 175;` ).
+    cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
+
     ls_result = zcl_qjs=>eval( `JSON.parse('"line\\nnext"');` ).
     cl_abap_unit_assert=>assert_equals(
       act = ls_result-string_ref->as_string( )
@@ -4068,7 +4073,8 @@ CLASS ltcl_qjs IMPLEMENTATION.
     DATA ls_result TYPE zcl_qjs_value=>ty_value.
     ls_result = zcl_qjs=>eval(
       'parseInt("  -0xFtail") === -15 && parseInt("11", 2) === 3'
-      && ' && parseInt("z", 36) === 35 && isNaN(parseInt("10", 1))'
+      && ' && parseInt("z", 36) === 35 && parseInt("Z", 36) === 35'
+      && ' && isNaN(parseInt("10", 1))'
       && ' && 1 / parseInt("-0") === -Infinity;' ).
     cl_abap_unit_assert=>assert_true( zcl_qjs_value=>as_boolean( ls_result ) ).
 
