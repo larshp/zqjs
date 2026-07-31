@@ -192,10 +192,7 @@ CLASS zcl_qjs_value IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_number.
-    result = abap_false.
-    IF value-tag = tag_int OR value-tag = tag_number.
-      result = abap_true.
-    ENDIF.
+    result = xsdbool( value-tag = tag_int OR value-tag = tag_number ).
   ENDMETHOD.
 
   METHOD as_finite_number.

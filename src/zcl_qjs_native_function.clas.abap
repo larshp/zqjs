@@ -1268,9 +1268,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         lo_constructor ?= value-object_ref.
       CATCH cx_sy_move_cast_error.
     ENDTRY.
-    IF lo_constructor IS BOUND.
-      result = abap_true.
-    ENDIF.
+    result = xsdbool( lo_constructor IS BOUND ).
   ENDMETHOD.
 
   METHOD get_callable_property.
@@ -2543,8 +2541,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
     ELSE.
       lv_start = 0.
     ENDIF.
-    IF lv_start < 0. lv_start = 0. ENDIF.
-    IF lv_start > lv_length. lv_start = lv_length. ENDIF.
+    lv_start = nmin(
+      val1 = nmax( val1 = 0 val2 = lv_start )
+      val2 = lv_length ).
     DATA(lv_offset) = -1.
     IF strlen( lv_needle ) = 0.
       lv_offset = lv_start.
@@ -2982,9 +2981,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF sy-subrc <> 0.
           ls_this_argument = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        LOOP AT arguments INTO ls_argument FROM 2.
-          APPEND ls_argument TO lt_forwarded.
-        ENDLOOP.
+        APPEND LINES OF arguments FROM 2 TO lt_forwarded.
         result = mo_runtime->invoke_callable(
           callable = this_value this_value = ls_this_argument arguments = lt_forwarded ).
       WHEN id_function_apply.
@@ -3036,9 +3033,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         IF sy-subrc <> 0.
           ls_this_argument = zcl_qjs_value=>new_undefined( ).
         ENDIF.
-        LOOP AT arguments INTO ls_argument FROM 2.
-          APPEND ls_argument TO lt_forwarded.
-        ENDLOOP.
+        APPEND LINES OF arguments FROM 2 TO lt_forwarded.
         CREATE OBJECT lo_bound
           EXPORTING id = id_bound_function runtime = mo_runtime
             bound_target = this_value bound_this = ls_this_argument
@@ -3047,10 +3042,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           value = this_value name = 'length' ).
         DATA(lv_bound_length) = 0.
         IF ls_target_length-tag = zcl_qjs_value=>tag_int.
-          lv_bound_length = ls_target_length-int_value - lines( lt_forwarded ).
-          IF lv_bound_length < 0.
-            lv_bound_length = 0.
-          ENDIF.
+          lv_bound_length = nmax(
+            val1 = 0
+            val2 = ls_target_length-int_value - lines( lt_forwarded ) ).
         ENDIF.
         lo_bound->set_property(
           name = 'length' value = zcl_qjs_value=>new_int( lv_bound_length ) ).
@@ -3232,10 +3226,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_string_start = 0.
         ENDIF.
-        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
-        IF lv_string_start > lv_string_length.
-          lv_string_start = lv_string_length.
-        ENDIF.
+        lv_string_start = nmin(
+          val1 = nmax( val1 = 0 val2 = lv_string_start )
+          val2 = lv_string_length ).
         lv_string_offset = -1.
         IF strlen( lv_needle_string ) = 0.
           lv_string_offset = lv_string_start.
@@ -3280,10 +3273,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_string_start = lv_string_length.
         ENDIF.
-        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
-        IF lv_string_start > lv_string_length.
-          lv_string_start = lv_string_length.
-        ENDIF.
+        lv_string_start = nmin(
+          val1 = nmax( val1 = 0 val2 = lv_string_start )
+          val2 = lv_string_length ).
         lv_string_start = nmin(
           val1 = lv_string_start
           val2 = lv_string_length - strlen( lv_needle_string ) ).
@@ -3323,8 +3315,9 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_string_end = lv_string_length.
         ENDIF.
-        IF lv_string_end < 0. lv_string_end = 0. ENDIF.
-        IF lv_string_end > lv_string_length. lv_string_end = lv_string_length. ENDIF.
+        lv_string_end = nmin(
+          val1 = nmax( val1 = 0 val2 = lv_string_end )
+          val2 = lv_string_length ).
         lv_string_start = lv_string_end - strlen( lv_needle_string ).
         IF lv_string_start < 0.
           result = zcl_qjs_value=>new_boolean( abap_false ).
@@ -3351,8 +3344,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_string_end = lv_string_length.
         ENDIF.
-        lv_string_count = lv_string_end - lv_string_start.
-        IF lv_string_count < 0. lv_string_count = 0. ENDIF.
+        lv_string_count = nmax(
+          val1 = 0 val2 = lv_string_end - lv_string_start ).
         lv_string_result = lv_text_string+lv_string_start(lv_string_count).
         result = zcl_qjs_value=>new_string( lv_string_result ).
       WHEN id_string_substring.
@@ -3384,10 +3377,12 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_string_end = lv_string_length.
         ENDIF.
-        IF lv_string_start < 0. lv_string_start = 0. ENDIF.
-        IF lv_string_end < 0. lv_string_end = 0. ENDIF.
-        IF lv_string_start > lv_string_length. lv_string_start = lv_string_length. ENDIF.
-        IF lv_string_end > lv_string_length. lv_string_end = lv_string_length. ENDIF.
+        lv_string_start = nmin(
+          val1 = nmax( val1 = 0 val2 = lv_string_start )
+          val2 = lv_string_length ).
+        lv_string_end = nmin(
+          val1 = nmax( val1 = 0 val2 = lv_string_end )
+          val2 = lv_string_length ).
         IF lv_string_start > lv_string_end.
           lv_string_offset = lv_string_start.
           lv_string_start = lv_string_end.
@@ -3415,8 +3410,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         READ TABLE arguments INDEX 2 INTO ls_argument.
         IF sy-subrc = 0 AND ls_argument-tag <> zcl_qjs_value=>tag_undefined.
           ls_string_integer = string_integer( ls_argument ).
-          lv_string_count = ls_string_integer-value.
-          IF lv_string_count < 0. lv_string_count = 0. ENDIF.
+          lv_string_count = nmax(
+            val1 = 0 val2 = ls_string_integer-value ).
           lv_string_count = nmin(
             val1 = lv_string_count val2 = lv_string_length - lv_string_start ).
         ELSE.
@@ -4449,9 +4444,7 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ENDIF.
         IF lv_search_index < 0.
           lv_search_index = lv_search_length + lv_search_index.
-          IF lv_search_index < 0.
-            lv_search_index = 0.
-          ENDIF.
+          lv_search_index = nmax( val1 = 0 val2 = lv_search_index ).
         ENDIF.
         IF lv_search_index >= lv_search_length.
           lv_search_past_end = abap_true.
@@ -4884,10 +4877,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
         ELSE.
           lv_slice_end = lv_slice_length.
         ENDIF.
-        DATA(lv_slice_count) = lv_slice_end - lv_slice_start.
-        IF lv_slice_count < 0.
-          lv_slice_count = 0.
-        ENDIF.
+        DATA(lv_slice_count) = CONV int8( nmax(
+          val1 = 0 val2 = lv_slice_end - lv_slice_start ) ).
         mo_runtime->get_limits( )->consume( lv_slice_count ).
         DATA(lo_slice_result) = mo_runtime->create_array( ).
         lo_slice_result->set_array_length( lv_slice_count ).
@@ -5141,10 +5132,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
           lv_array_fill_end = array_slice_index(
             value = ls_array_fill_end_value length = lv_array_fill_length ).
         ENDIF.
-        DATA(lv_array_fill_count) = lv_array_fill_end - lv_array_fill_start.
-        IF lv_array_fill_count < 0.
-          lv_array_fill_count = 0.
-        ENDIF.
+        DATA(lv_array_fill_count) = CONV int8( nmax(
+          val1 = 0 val2 = lv_array_fill_end - lv_array_fill_start ) ).
         mo_runtime->get_limits( )->consume( lv_array_fill_count ).
         DATA(lv_array_fill_index) = lv_array_fill_start.
         WHILE lv_array_fill_index < lv_array_fill_end.
@@ -5185,12 +5174,11 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
             value = ls_copy_end_value length = lv_copy_length ).
         ENDIF.
         DATA(lv_copy_count) = lv_copy_end - lv_copy_from.
-        IF lv_copy_length - lv_copy_target < lv_copy_count.
-          lv_copy_count = lv_copy_length - lv_copy_target.
-        ENDIF.
-        IF lv_copy_count < 0.
-          lv_copy_count = 0.
-        ENDIF.
+        lv_copy_count = nmax(
+          val1 = 0
+          val2 = nmin(
+            val1 = lv_copy_count
+            val2 = lv_copy_length - lv_copy_target ) ).
         mo_runtime->get_limits( )->consume( lv_copy_count ).
         DATA(lv_copy_direction) = CONV int8( 1 ).
         IF lv_copy_from < lv_copy_target
@@ -5303,10 +5291,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               maximum = lv_splice_length - lv_splice_start ).
           ENDIF.
         ENDIF.
-        DATA(lv_splice_insert_count) = CONV int8( lv_splice_arg_count - 2 ).
-        IF lv_splice_insert_count < 0.
-          lv_splice_insert_count = 0.
-        ENDIF.
+        DATA(lv_splice_insert_count) = CONV int8( nmax(
+          val1 = 0 val2 = lv_splice_arg_count - 2 ) ).
         DATA(lv_splice_new_length) = lv_splice_length
           - lv_splice_delete_count + lv_splice_insert_count.
         DATA lv_splice_max_safe TYPE int8.
@@ -5418,10 +5404,8 @@ CLASS zcl_qjs_native_function IMPLEMENTATION.
               maximum = lv_to_spliced_length - lv_to_spliced_start ).
           ENDIF.
         ENDIF.
-        DATA(lv_to_spliced_insert_count) = CONV int8( lv_to_spliced_arg_count - 2 ).
-        IF lv_to_spliced_insert_count < 0.
-          lv_to_spliced_insert_count = 0.
-        ENDIF.
+        DATA(lv_to_spliced_insert_count) = CONV int8( nmax(
+          val1 = 0 val2 = lv_to_spliced_arg_count - 2 ) ).
         DATA(lv_to_spliced_new_length) = lv_to_spliced_length
           - lv_to_spliced_skip + lv_to_spliced_insert_count.
         DATA lv_to_spliced_max_safe TYPE int8.
